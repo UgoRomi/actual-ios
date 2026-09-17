@@ -19,3 +19,7 @@ Use the existing budget's formatting preferences where supported; do not silentl
 ## Validation
 
 First prove: create a disposable Actual budget, add/edit a transaction offline, stop and recreate the runtime, reopen and verify exact balances, then round-trip through a temporary Actual sync server. Test rollback, parameter binding, Unicode SQL functions, missing files, encryption compatibility and invalid server responses. Build an iOS simulator app and visually inspect the three tabs and editing sheet. Document any unverified feature without presenting it as complete.
+
+## Delivered Decisions
+
+The JavaScriptCore approach passed the native storage and encrypted sync tests, so no WebKit fallback was needed. Sync is explicit from Settings in this first build. Reconciled entries join splits/transfers as view only; existing rules can still create valid linked transfers through Actual. Default currency code is respected, with device-locale separators and two decimals. Password authentication and a single server are supported. See `../validation.md` and the root README for tested behavior and remaining limitations.

@@ -25,7 +25,7 @@ struct TransactionEditor: View {
                 if !editable {
                     Section {
                         Label("View only", systemImage: "lock")
-                        Text("Edit transfers and split transactions in the Actual web or desktop app to preserve their linked entries.")
+                        Text("Edit transfers, split transactions, and reconciled transactions in the Actual web or desktop app.")
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
                 }
@@ -109,7 +109,7 @@ struct TransactionEditor: View {
     private func initialize() {
         guard !initialized else { return }
         initialized = true
-        account = accountID ?? model.snapshot?.openAccounts.first?.id ?? ""
+        account = transaction?.accountId ?? accountID ?? model.snapshot?.openAccounts.first?.id ?? ""
         guard let transaction else { return }
         amount = Money.editable(abs(transaction.amount))
         isOutflow = transaction.amount < 0

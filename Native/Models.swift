@@ -43,6 +43,7 @@ struct BudgetSnapshot: Decodable, Sendable {
     let budgetName: String
     let month: String
     let currencyCode: String
+    let syncWarning: String?
     let toBudget: Int
     let totalBudgeted: Int
     let totalSpent: Int
@@ -93,7 +94,9 @@ struct Transaction: Decodable, Identifiable, Sendable {
     let isChild: Bool
     let isTransfer: Bool
 
-    var canEdit: Bool { !isParent && !isChild && !isTransfer }
+    let reconciled: Bool?
+
+    var canEdit: Bool { !isParent && !isChild && !isTransfer && reconciled != true }
     var title: String { payeeName.flatMap { $0.isEmpty ? nil : $0 } ?? "No payee" }
     var detail: String { categoryName ?? "Uncategorized" }
 }

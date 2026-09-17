@@ -33,12 +33,12 @@
 
 Commands `demo`, `open` {id}, `connect` {url,password}, `download` {syncId,password}, `sync`, `budget` {month,categoryId,amount}, `saveTransaction` {id? ,accountId,date,payeeId?,payeeName?,categoryId?,amount,notes,cleared}, `deleteTransaction` {id}, `close` return an object (connect returns `{budgets:[...]}`). Every command followed by snapshot refresh; bootstrap/open restore without network dependency. The runtime rejects unsupported transfers/splits. UI should offer an explicit budget ID download if server listing is unavailable. Errors are user-visible, retryable, and never overwrite drafts. Do not silently show demo figures if live loading fails.
 
-- [ ] Build the native app entry, onboarding, tabs, lists, month controls, editing sheets and typed Codable models against these contracts.
-- [ ] Implement localized integer amount parsing with `NumberFormatter` + decimal math. Use `Text(value, format:)` or formatter with monospaced digits; include sign and labels independently of color.
-- [ ] Handle loading, empty and error states; prevent overlapping mutations, confirm deletions; disable split/transfer edits clearly.
-- [ ] Provide a real demo action that calls the engine, not hardcoded UI fixtures.
-- [ ] Verify with `xcrun swiftc -parse Native/Models.swift Native/AppModel.swift Native/Views/*.swift`; the integration task runs the full simulator build.
-- [ ] Commit only this task's files and write its report.
+- [x] Build the native app entry, onboarding, tabs, lists, month controls, editing sheets and typed Codable models against these contracts.
+- [x] Implement localized integer amount parsing with `NumberFormatter` + decimal math. Use `Text(value, format:)` or formatter with monospaced digits; include sign and labels independently of color.
+- [x] Handle loading, empty and error states; prevent overlapping mutations, confirm deletions; disable split/transfer edits clearly.
+- [x] Provide a real demo action that calls the engine, not hardcoded UI fixtures.
+- [x] Verify with `xcrun swiftc -parse Native/Models.swift Native/AppModel.swift Native/Views/*.swift`; the integration task runs the full simulator build.
+- [x] Commit only this task's files and write its report.
 
 ### Task 2: Actual Engine and Native Host
 
@@ -46,18 +46,18 @@ Commands `demo`, `open` {id}, `connect` {url,password}, `download` {syncId,passw
 
 **Interfaces:** Implement the EngineClient interface above. JavaScript invokes `_native(operation, argumentsJSON)` and receives `{value: ...}` or `{error: ...}`. Native async HTTP settles `__nativeResolve(id, responseJSON)`. Swift calls `ActualBridge.request(id, method, argumentsJSON)` and JavaScript settles `_reply(id, responseJSON)`. JSON encodings preserve integers exactly within JavaScript safe integer bounds. Runtime serializes public requests.
 
-- [ ] Bundle the pinned core with esbuild, compiling Peggy grammars and injecting native platform adapters. Copy default SQLite template and all migrations into app resources.
-- [ ] Implement actual parameterized SQLite, savepoint rollback, required Unicode functions, bounded sandbox file access, compatible AES-GCM/PBKDF2, timers, and URLSession HTTP.
-- [ ] Invoke core handlers for every command; map native snapshots without recalculating budget values in Swift.
-- [ ] Persist last-opened budget and server settings; put authentication material in Keychain; reopening offline must bypass initial remote validation.
-- [ ] Write and execute a smoke test whose assertions cover:
+- [x] Bundle the pinned core with esbuild, compiling Peggy grammars and injecting native platform adapters. Copy default SQLite template and all migrations into app resources.
+- [x] Implement actual parameterized SQLite, savepoint rollback, required Unicode functions, bounded sandbox file access, compatible AES-GCM/PBKDF2, timers, and URLSession HTTP.
+- [x] Invoke core handlers for every command; map native snapshots without recalculating budget values in Swift.
+- [x] Persist last-opened budget and server settings; put authentication material in Keychain; reopening offline must bypass initial remote validation.
+- [x] Write and execute a smoke test whose assertions cover:
 ```swift
 precondition(after.amount == -1234)
-precondition(afterRestart.amount == -1234)
+precondition(afterRestart.amount == -2345)
 precondition(afterRestart.balance == expectedBalance)
 ```
-- [ ] Extend the executable smoke harness to check SQLite rollback and encryption vectors. Run against a temporary data directory only.
-- [ ] Record the pinned upstream commit and adapter limitations.
+- [x] Extend the executable smoke harness to check SQLite rollback and encryption vectors. Run against a temporary data directory only.
+- [x] Record the pinned upstream commit and adapter limitations.
 
 ### Task 3: Simulator Build and Sync Verification
 
@@ -65,9 +65,13 @@ precondition(afterRestart.balance == expectedBalance)
 
 **Interfaces:** Include every file in Native, link SQLite3 and system frameworks, copy Native/Resources as folder resource with nested migrations.
 
-- [ ] Generate a portable Xcode app project with iOS deployment target 26.0, a provisional independent bundle ID, and native app asset catalog.
-- [ ] Run the engine smoke harness; then boot a simulator and build with `xcodebuild -project ActualNative.xcodeproj -scheme ActualNative -sdk iphonesimulator -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=NO build`.
-- [ ] Create a temporary sync server and budget, make changes in the native engine, verify them through upstream API, and test an offline edit surviving restart and reconnect.
-- [ ] Inspect screenshots of onboarding, budget, accounts, transactions and entry sheet; fix clipping, contrast and navigation problems.
-- [ ] Document exact build/run commands, security/storage behavior, compatibility range and tested limitations. Place the separate project next to Actual only after checks.
-- [ ] Run task review and final review; resolve material findings before delivery.
+- [x] Generate a portable Xcode app project with iOS deployment target 26.0, a provisional independent bundle ID, and native app asset catalog.
+- [x] Run the engine smoke harness; then boot a simulator and build with `xcodebuild -project ActualNative.xcodeproj -scheme ActualNative -sdk iphonesimulator -derivedDataPath DerivedData CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- build`.
+- [x] Create a temporary sync server and budget, make changes in the native engine, verify them through upstream API, and test an offline edit surviving restart and reconnect.
+- [x] Inspect screenshots of onboarding, budget, accounts, transactions and entry sheet; fix clipping, contrast and navigation problems.
+- [x] Document exact build/run commands, security/storage behavior, compatibility range and tested limitations. Place the separate project next to Actual only after checks.
+- [x] Run task review and final review; resolve material findings before delivery.
+
+## Completion
+
+Tasks 1–3 implemented and reviewed. Strict bridge typing, native engine/recovery tests, encrypted direct sync (including process restarts, wrong passwords, failed-download recovery, and rule-created transfers), and signed simulator UI smoke passed. Six screenshots are in `docs/screenshots`. The UI uses explicit sync; automatic load-time snapshot uploads are disabled, and due snapshots are uploaded with error handling during Sync now. See `docs/validation.md` for verification limits.

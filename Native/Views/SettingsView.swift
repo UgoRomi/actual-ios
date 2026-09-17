@@ -32,7 +32,7 @@ struct SettingsView: View {
                 } footer: { Text("Your saved budget stays on this device.") }
                 Section {
                     Label("Actual", systemImage: "chart.pie.fill").foregroundStyle(ActualTheme.purple).font(.headline)
-                    Text("Your money. Your plan.").font(.subheadline).foregroundStyle(.secondary)
+                    Text("Unofficial client for Actual Budget.").font(.subheadline).foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("Settings")

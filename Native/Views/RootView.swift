@@ -87,8 +87,10 @@ struct SettingsButton: View {
 struct SyncFooter: View {
     @Environment(AppModel.self) private var model
     var body: some View {
-        Label(model.syncStatus, systemImage: model.syncStatus == "Sync needs attention" ? "exclamationmark.icloud" : "internaldrive")
-            .font(.footnote).foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity).padding(.vertical, 12)
+        VStack(spacing: 12) {
+            if let warning = model.snapshot?.syncWarning { ErrorNotice(message: warning) }
+            Label(model.syncStatus, systemImage: model.syncStatus == "Sync needs attention" ? "exclamationmark.icloud" : "internaldrive")
+                .font(.footnote).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity).padding(.vertical, 12)
     }
 }

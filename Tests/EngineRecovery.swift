@@ -1,0 +1,91 @@
+import Foundation
+
+@main struct EngineRecovery {
+  static let resources = URL(fileURLWithPath: CommandLine.arguments[1])
+  static func main() async throws {
+    let data = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "native-review-resolution-\(UUID().uuidString)")
+    defer { try? FileManager.default.removeItem(at: data) }
+    try cleanupProbe(data: data.appendingPathComponent("cleanup"))
+    let budgetData = data.appendingPathComponent("budget")
+    try await createFixture(data: budgetData)
+    try injectPending(data: budgetData)
+    try await verifyWarning(data: budgetData)
+    try await verifyWarning(data: budgetData)
+    print(
+      "PASS: discarded replay warning remains visible and blocks writes across fresh engine lifetimes"
+    )
+  }
+  static func cleanupProbe(data: URL) throws {
+    let raw = try Data(contentsOf: resources.appendingPathComponent("default-db.sqlite"))
+      .base64EncodedString()
+    do {
+      let host = try NativeHost(
+        dataDirectory: data, resourceDirectory: resources, useKeychain: false)
+      let id = try host.perform("sql.open", ["data": raw]) as! Int
+      let openedFiles = try FileManager.default.contentsOfDirectory(atPath: data.path)
+      precondition(openedFiles.contains(where: { $0.hasPrefix(".import-") }))
+      _ = try host.perform("sql.close", ["id": id])
+      let remainingFiles = try FileManager.default.contentsOfDirectory(atPath: data.path)
+      precondition(remainingFiles.isEmpty)
+      _ = try host.perform("sql.open", ["data": raw])
+    }
+    let remainingFiles = try FileManager.default.contentsOfDirectory(atPath: data.path)
+    precondition(remainingFiles.isEmpty)
+    print("PASS: buffer database files removed on close and host deinitialization")
+  }
+  static func createFixture(data: URL) async throws {
+    let engine = try EngineClient(
+      dataDirectory: data, resourceDirectory: resources, useKeychain: false)
+    _ = try await engine.call("demo")
+  }
+  static func injectPending(data: URL) throws {
+    let host = try NativeHost(dataDirectory: data, resourceDirectory: resources, useKeychain: false)
+    var settings = try host.perform("settings.read", [:]) as! [String: Any]
+    let budgetId = settings["native-last-budget"] as! String
+    settings["server-url"] = "http://127.0.0.1:1"
+    _ = try host.perform("settings.write", settings)
+    let id = try host.perform("sql.open", ["path": "/documents/\(budgetId)/db.sqlite"]) as! Int
+    _ = try host.perform(
+      "sql.exec",
+      [
+        "id": id,
+        "sql":
+          "CREATE TABLE review_constraint (id TEXT PRIMARY KEY, value INTEGER CHECK(value > 0)); CREATE TABLE IF NOT EXISTS messages_pending (timestamp TEXT, dataset TEXT, row TEXT, column TEXT, value TEXT, UNIQUE(dataset,row,column));",
+      ])
+    _ = try host.perform(
+      "sql.query",
+      [
+        "id": id,
+        "sql":
+          "INSERT INTO messages_pending (timestamp,dataset,row,column,value) VALUES (?, ?, ?, ?, ?)",
+        "params": [
+          "2026-09-17T00:00:00.000Z-0000-0000000000000000", "review_constraint", "row1", "value",
+          "N:-1",
+        ],
+      ])
+    _ = try host.perform("sql.close", ["id": id])
+  }
+  static func verifyWarning(data: URL) async throws {
+    let engine = try EngineClient(
+      dataDirectory: data, resourceDirectory: resources, useKeychain: false)
+    _ = try await engine.call("bootstrap")
+    let snapshot = try JSONDecoder().decode(
+      BudgetSnapshot.self,
+      from: await engine.call("snapshot", arguments: ["month": .string("2026-09")]))
+    guard snapshot.syncWarning?.contains("could not be applied") == true else {
+      throw EngineFailure("Unexpected warning: \(snapshot.syncWarning ?? "nil")")
+    }
+    do {
+      _ = try await engine.call("saveTransaction")
+      throw EngineFailure("Mutation was not blocked")
+    } catch {
+      precondition(error.localizedDescription.contains("could not be applied"))
+    }
+    let settings =
+      try JSONSerialization.jsonObject(
+        with: Data(contentsOf: data.appendingPathComponent("test-settings.json"))) as! [String: Any]
+    let budgetId = settings["native-last-budget"] as! String
+    precondition(settings["native-dropped-sync:\(budgetId)"] as? Bool == true)
+  }
+}

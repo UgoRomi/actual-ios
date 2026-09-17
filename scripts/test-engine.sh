@@ -17,3 +17,9 @@ xcrun swiftc -parse-as-library \
   -module-cache-path "${project_root}/.build/ModuleCache" \
   -lsqlite3 -o .build/engine-smoke
 .build/engine-smoke "${project_root}/Native/Resources"
+
+xcrun swiftc -parse-as-library \
+  Native/Models.swift Native/Core/*.swift Tests/EngineRecovery.swift \
+  -module-cache-path "${project_root}/.build/ModuleCache" \
+  -lsqlite3 -o .build/engine-recovery
+.build/engine-recovery "${project_root}/Native/Resources"

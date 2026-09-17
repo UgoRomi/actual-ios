@@ -59,10 +59,10 @@ final class AppModel {
         isBusy = true
         errorMessage = nil
         defer { isBusy = false }
+        let switchesBudget = ["open", "download", "demo"].contains(method)
         do {
             _ = try await client().call(method, arguments: arguments)
-            if ["open", "download", "demo"].contains(method) {
-                snapshot = nil
+            if switchesBudget {
                 lastSyncedAt = nil
                 syncStatus = "On this device"
             }
@@ -74,14 +74,23 @@ final class AppModel {
             }
             do { try await loadSnapshot() }
             catch {
+                if switchesBudget { snapshot = nil }
                 // The write succeeded. Do not invite a duplicate transaction by reporting it as unsaved.
                 let action = ["open", "download", "demo"].contains(method) ? "Budget opened" : method == "sync" ? "Synced" : "Saved"
                 errorMessage = "\(action), but the latest view could not load. Refresh to try again. \(error.localizedDescription)"
             }
             return true
         } catch {
+            let operationError = error.localizedDescription
+            if switchesBudget {
+                // The bridge restores the previous budget before failing. Keep
+                // the sheet and its draft alive while reloading that budget.
+                // isBusy prevents writes until the engine state is confirmed.
+                do { try await loadSnapshot() }
+                catch { snapshot = nil; lastSyncedAt = nil; syncStatus = "On this device" }
+            }
             if method == "sync" { syncStatus = "Sync needs attention" }
-            errorMessage = error.localizedDescription
+            errorMessage = operationError
             return false
         }
     }
@@ -98,6 +107,7 @@ final class AppModel {
         guard !isBusy else { return false }
         isBusy = true
         defer { isBusy = false }
+        serverBudgets = []
         do {
             let result = try await client().call("connect", arguments: ["url": .string(url), "password": .string(password)])
             serverBudgets = try JSONDecoder().decode(BudgetListing.self, from: result).budgets

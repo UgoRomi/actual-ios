@@ -7,6 +7,9 @@ struct BudgetView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
+                    Text(model.snapshot?.budgetName ?? "Actual")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                     monthControl
                     if let error = model.errorMessage { ErrorNotice(message: error) { Task { await model.refresh() } } }
                     if let snapshot = model.snapshot {
@@ -34,9 +37,6 @@ struct BudgetView: View {
             .background(ActualTheme.background)
             .navigationTitle("Budget")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Text(model.snapshot?.budgetName ?? "Actual").font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
-                }
                 ToolbarItem(placement: .topBarTrailing) { SettingsButton() }
             }
             .refreshable { await model.refresh() }
