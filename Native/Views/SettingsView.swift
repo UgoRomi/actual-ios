@@ -84,12 +84,12 @@ struct ConnectionView: View {
                     Section("Server budgets") {
                         ForEach(model.serverBudgets) { budget in
                             Button {
-                                syncID = budget.cloudFileId ?? budget.id
+                                syncID = budget.id
                             } label: {
                                 HStack {
                                     Label(budget.name, systemImage: "folder")
                                     Spacer()
-                                    if syncID == (budget.cloudFileId ?? budget.id) { Image(systemName: "checkmark") }
+                                    if syncID == budget.id { Image(systemName: "checkmark") }
                                 }
                             }
                         }

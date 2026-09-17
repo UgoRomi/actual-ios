@@ -114,7 +114,7 @@ struct TransactionEditor: View {
         amount = Money.editable(abs(transaction.amount))
         isOutflow = transaction.amount < 0
         date = BudgetDate.date(transaction.date) ?? Date()
-        payee = transaction.payeeName ?? ""
+        payee = transaction.payeeId == nil ? "" : (transaction.payeeName ?? "")
         category = transaction.categoryId ?? ""
         notes = transaction.notes ?? ""
         cleared = transaction.cleared

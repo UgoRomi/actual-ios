@@ -121,10 +121,17 @@ final class AppModel {
         defer { isBusy = false }
         do {
             _ = try await client().call("close")
-            let data = try await client().call("bootstrap")
-            localBudgets = try JSONDecoder().decode(Bootstrap.self, from: data).budgets
+            // The engine is closed even if the subsequent budget listing fails.
             snapshot = nil
-            errorMessage = nil
+            lastSyncedAt = nil
+            syncStatus = "On this device"
+            do {
+                let data = try await client().call("bootstrap")
+                localBudgets = try JSONDecoder().decode(Bootstrap.self, from: data).budgets
+                errorMessage = nil
+            } catch {
+                errorMessage = "Budget closed, but saved budgets could not be loaded. Tap Try again to reload them. \(error.localizedDescription)"
+            }
             return true
         } catch { errorMessage = error.localizedDescription; return false }
     }
