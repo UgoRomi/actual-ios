@@ -1,0 +1,10 @@
+.build/
+DerivedData/
+node_modules/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+Native/Resources/engine.js
+Native/Resources/default-db.sqlite
+Native/Resources/migrations/
+.superpowers/
