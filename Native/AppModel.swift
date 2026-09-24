@@ -31,6 +31,7 @@ final class AppModel {
     var bankSyncResult: BankSyncResult?
     var bankSyncErrorMessage: String?
     var bankSyncAccountID: String?
+    var reconciliation: Reconciliation?
     private var syncTask: Task<Bool, Never>?
     private var syncRequested = false
     private var budgetGeneration = 0
@@ -256,10 +257,12 @@ final class AppModel {
         if bankSyncResult?.accounts.isEmpty == false { beginBudgetSync() }
     }
 
-    private func clearBankSyncState() {
+    /// Bank refresh results and reconciliation belong to the open budget.
+    private func clearAccountState() {
         bankSyncResult = nil
         bankSyncErrorMessage = nil
         bankSyncAccountID = nil
+        reconciliation = nil
     }
 
     @discardableResult
@@ -269,7 +272,8 @@ final class AppModel {
         errorMessage = nil
         defer { finishOperation() }
         let switchesBudget = ["open", "download", "demo"].contains(method)
-        let isEdit = ["saveTransaction", "deleteTransaction", "budget"].contains(method)
+        let isEdit = ["saveTransaction", "deleteTransaction", "budget", "setCleared", "unlockTransaction",
+                      "createReconciliationTransaction", "finishReconciliation"].contains(method)
         if method == "sync" {
             guard let task = beginBudgetSync() else {
                 errorMessage = "This budget is local only. Open a synced budget to synchronize."
@@ -284,13 +288,19 @@ final class AppModel {
         do {
             _ = try await client().call(method, arguments: arguments)
             if switchesBudget {
-                clearBankSyncState()
+                clearAccountState()
                 resetBudgetSyncState()
             }
             if isEdit { syncStatus = "Saved on this device" }
-            // An allocation changes only the month. Transactions also change
-            // balances, payees, and the register.
-            do { try await load(method == "budget" ? [.month] : BudgetPart.all) }
+            // An allocation changes only the month. Cleared and reconciled
+            // states change only balances and the register. Other transaction
+            // changes also affect the month and payees.
+            let parts: Set<BudgetPart> = switch method {
+            case "budget": [.month]
+            case "setCleared", "unlockTransaction", "finishReconciliation": [.overview, .register]
+            default: BudgetPart.all
+            }
+            do { try await load(parts) }
             catch {
                 if switchesBudget { clearBudget() }
                 // The write succeeded. Do not invite a duplicate transaction by reporting it as unsaved.
@@ -307,7 +317,7 @@ final class AppModel {
                 // the sheet and its draft alive while reloading that budget.
                 // isBusy prevents writes until the engine state is confirmed.
                 do { try await load() }
-                catch { clearBudget(); resetBudgetSyncState(); clearBankSyncState() }
+                catch { clearBudget(); resetBudgetSyncState(); clearAccountState() }
             }
             errorMessage = operationError
             return false
@@ -329,6 +339,29 @@ final class AppModel {
             return
         }
         beginBudgetSync()
+    }
+
+    func startReconciliation(accountID: String, targetBalance: Int) {
+        reconciliation = Reconciliation(accountID: accountID, targetBalance: targetBalance)
+    }
+
+    /// Adds a cleared transaction for the difference from the bank balance.
+    func createReconciliationTransaction() async {
+        guard let reconciliation else { return }
+        await perform("createReconciliationTransaction", arguments: [
+            "accountId": .string(reconciliation.accountID), "targetBalance": .number(reconciliation.targetBalance),
+        ])
+    }
+
+    /// Ends reconciliation. As in Actual, cleared transactions are locked only
+    /// when they match the bank balance, and the time is recorded either way.
+    func finishReconciliation(lock: Bool) async {
+        guard let current = reconciliation else { return }
+        let finished = await perform("finishReconciliation", arguments: [
+            "accountId": .string(current.accountID), "targetBalance": .number(current.targetBalance),
+            "lock": .bool(lock),
+        ])
+        if finished && reconciliation == current { reconciliation = nil }
     }
 
     func openBudget(_ id: String) async {
@@ -370,7 +403,7 @@ final class AppModel {
             _ = try await client().call("close")
             // The engine is closed even if the subsequent budget listing fails.
             clearBudget()
-            clearBankSyncState()
+            clearAccountState()
             resetBudgetSyncState()
             do {
                 localBudgets = try await client().call("bootstrap", as: Bootstrap.self).budgets

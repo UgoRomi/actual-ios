@@ -13,6 +13,13 @@ import { setSyncingMode, fullSync, clearFullSyncTimeout } from "@actual/sync";
 import { native } from "./native";
 import { uploadSnapshotIfDue } from "./adapters/cloud-storage";
 import { canSyncBank, syncBankAccounts } from "./bank-sync";
+import {
+  clearedBalance,
+  createReconciliationTransaction,
+  finishReconciliation,
+  setCleared,
+  unlockTransaction,
+} from "./reconcile";
 
 declare function _reply(id: string, ok: boolean, payload: string): void;
 type Obj = Record<string, unknown>;
@@ -141,6 +148,10 @@ async function overview() {
       bankSyncEnabled: canSyncBank(account),
       bankSyncStatus: account.bank_sync_status,
       lastBankSync: account.last_sync,
+      clearedBalance: await clearedBalance(account.id),
+      // The latest balance reported by a linked bank, offered when reconciling.
+      bankBalance: account.balance_current,
+      lastReconciled: account.last_reconciled,
     });
   }
   return {
@@ -231,21 +242,29 @@ async function register() {
   });
   return transactions.sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
 }
-async function editable(id: string) {
+// Reconciled transactions need the user's confirmation, as in Actual. It must
+// be given for the transaction as it is now, not as it was when an editor opened.
+async function editable(id: string, allowReconciled: boolean) {
   const { data: rows } = await lib.send(
     "query",
     lib.q("transactions").filter({ id }).select("*").serialize(),
   );
   const row = rows[0];
   if (!row) throw new Error("Transaction no longer exists");
-  if (row.reconciled) throw new Error("Edit reconciled transactions in Actual for now.");
   if (row.is_parent || row.is_child || row.transfer_id)
     throw new Error("Edit split transactions and transfers in Actual for now.");
+  if (row.reconciled && !allowReconciled)
+    throw new Error("This transaction was reconciled after you opened it. Close it and open it again to review your change.");
   return row;
 }
 async function perform(method: string, args: Obj): Promise<unknown> {
   await start();
-  if (["saveTransaction", "deleteTransaction", "budget", "sync", "syncAccounts"].includes(method)) {
+  if (
+    [
+      "saveTransaction", "deleteTransaction", "budget", "sync", "syncAccounts", "setCleared",
+      "unlockTransaction", "createReconciliationTransaction", "finishReconciliation",
+    ].includes(method)
+  ) {
     const warning = syncWarning();
     if (warning) throw new Error(warning.message);
   }
@@ -377,7 +396,7 @@ async function perform(method: string, args: Obj): Promise<unknown> {
     }
     case "saveTransaction": {
       const id = text(args.id);
-      const existing = id ? await editable(id) : null;
+      const existing = id ? await editable(id, args.allowReconciled === true) : null;
       const accountId = text(args.accountId),
         date = text(args.date);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Choose a valid date.");
@@ -395,7 +414,8 @@ async function perform(method: string, args: Obj): Promise<unknown> {
         category: account?.offbudget ? null : text(args.categoryId) || null,
         amount: integer(args.amount),
         notes: text(args.notes),
-        cleared: Boolean(args.cleared),
+        // A reconciled transaction stays cleared until it is unlocked.
+        cleared: existing?.reconciled ? Boolean(existing.cleared) : Boolean(args.cleared),
       };
       if (existing) {
         // Like Actual's editors, send only changed fields. Rewriting unchanged
@@ -406,6 +426,8 @@ async function perform(method: string, args: Obj): Promise<unknown> {
             key === "notes" ? (existing.notes || "") !== value : (existing[key] ?? null) !== value,
           ),
         );
+        // Like Actual's desktop editor, moving a transaction to another account unlocks it.
+        if (existing.reconciled && "account" in changes) Object.assign(changes, { reconciled: false });
         if (Object.keys(changes).length)
           await lib.send("transactions-batch-update", { updated: [{ id, ...changes }] });
       } else {
@@ -447,8 +469,25 @@ async function perform(method: string, args: Obj): Promise<unknown> {
     }
     case "deleteTransaction": {
       const id = text(args.id);
-      await editable(id);
+      await editable(id, args.allowReconciled === true);
       await lib.send("transactions-batch-update", { deleted: [{ id }] });
+      return {};
+    }
+    case "setCleared": {
+      if (typeof args.cleared !== "boolean") throw new Error("Choose whether the transaction is cleared.");
+      await setCleared(text(args.id), args.cleared);
+      return {};
+    }
+    case "unlockTransaction": {
+      await unlockTransaction(text(args.id));
+      return {};
+    }
+    case "createReconciliationTransaction": {
+      await createReconciliationTransaction(text(args.accountId), integer(args.targetBalance));
+      return {};
+    }
+    case "finishReconciliation": {
+      await finishReconciliation(text(args.accountId), integer(args.targetBalance), args.lock === true);
       return {};
     }
     case "close":

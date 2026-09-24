@@ -15,9 +15,15 @@ struct TransactionEditor: View {
     @State private var cleared = false
     @State private var validation: String?
     @State private var showDeleteConfirmation = false
+    @State private var confirmsReconciledSave = false
     @State private var initialized = false
 
     private var editable: Bool { transaction?.canEdit ?? true }
+    /// Uses the latest load: the transaction may have been reconciled since the editor opened.
+    private var isReconciled: Bool {
+        guard let transaction else { return false }
+        return (model.transactions.first { $0.id == transaction.id } ?? transaction).isReconciled
+    }
     /// Actual never categorizes off-budget transactions.
     private var isOffBudget: Bool { model.overview?.accounts.first { $0.id == account }?.offbudget == true }
     private var categoryName: String {
@@ -34,7 +40,13 @@ struct TransactionEditor: View {
                 if !editable {
                     Section {
                         Label("View only", systemImage: "lock")
-                        Text("Edit transfers, split transactions, and reconciled transactions in the Actual web or desktop app.")
+                        Text("Edit transfers and split transactions in the Actual web or desktop app.")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }
+                } else if isReconciled {
+                    Section {
+                        Label("Reconciled", systemImage: "lock")
+                        Text("Changing this transaction may bring your reconciliation out of balance. To change whether it’s cleared, unlock it while reconciling the account.")
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
                 }
@@ -70,7 +82,8 @@ struct TransactionEditor: View {
                     } label: {
                         LabeledContent("Category", value: categoryName)
                     }.disabled(isOffBudget).accessibilityIdentifier("category-row")
-                    Toggle("Cleared", isOn: $cleared)
+                    if isReconciled { Toggle("Reconciled", isOn: .constant(true)).disabled(true) }
+                    else { Toggle("Cleared", isOn: $cleared) }
                     TextField("Notes", text: $notes, axis: .vertical).lineLimit(2...5)
                 }.disabled(!editable || model.isBusy)
                 if let validation { Section { Text(validation).foregroundStyle(.red) } }
@@ -93,18 +106,30 @@ struct TransactionEditor: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(editable ? "Cancel" : "Done") { dismiss() }.disabled(model.isBusy) }
                 if editable {
-                    ToolbarItem(placement: .confirmationAction) { Button("Save") { save() }.bold().disabled(model.isBusy) }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") { if isReconciled { confirmsReconciledSave = true } else { save() } }
+                            .bold().disabled(model.isBusy)
+                    }
                 }
             }
             .interactiveDismissDisabled(model.isBusy)
             .confirmationDialog("Delete this transaction?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
                 Button("Delete transaction", role: .destructive) {
                     if let transaction {
-                        Task { if await model.perform("deleteTransaction", arguments: ["id": .string(transaction.id)]) { dismiss() } }
+                        let arguments: [String: JSONValue] = ["id": .string(transaction.id), "allowReconciled": .bool(isReconciled)]
+                        Task { if await model.perform("deleteTransaction", arguments: arguments) { dismiss() } }
                     }
                 }
                 Button("Cancel", role: .cancel) { }
-            } message: { Text("This removes the transaction from your budget and updates your balances.") }
+            } message: {
+                Text(isReconciled ? "Deleting reconciled transactions may bring your reconciliation out of balance."
+                     : "This removes the transaction from your budget and updates your balances.")
+            }
+            // As in Actual's mobile editor, any save of a reconciled transaction warns first.
+            .confirmationDialog("Save this reconciled transaction?", isPresented: $confirmsReconciledSave, titleVisibility: .visible) {
+                Button("Save changes") { save(allowReconciled: true) }
+                Button("Cancel", role: .cancel) { }
+            } message: { Text("Saving your changes to this reconciled transaction may bring your reconciliation out of balance.") }
             .onAppear { initialize() }
         }
     }
@@ -123,7 +148,7 @@ struct TransactionEditor: View {
         cleared = transaction.cleared
     }
 
-    private func save() {
+    private func save(allowReconciled: Bool = false) {
         guard !account.isEmpty else { validation = "Choose an account before saving."; return }
         guard let parsed = Money.parse(amount), parsed >= 0 else { validation = "Enter a positive amount with no more than two decimal places."; return }
         validation = nil
@@ -132,7 +157,10 @@ struct TransactionEditor: View {
             "amount": .number(isOutflow ? -parsed : parsed), "notes": .string(notes), "cleared": .bool(cleared),
             "categoryId": category.isEmpty ? .null : .string(category)
         ]
-        if let transaction { arguments["id"] = .string(transaction.id) }
+        if let transaction {
+            arguments["id"] = .string(transaction.id)
+            arguments["allowReconciled"] = .bool(allowReconciled)
+        }
         let cleanedPayee = payee.trimmingCharacters(in: .whitespacesAndNewlines)
         if let match = model.overview?.payees.first(where: { $0.name == cleanedPayee }) {
             arguments["payeeId"] = .string(match.id)

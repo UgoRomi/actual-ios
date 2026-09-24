@@ -139,10 +139,76 @@ final class ActualNativeUITests: XCTestCase {
                       "Foreground handling must preserve an open editor's draft")
     }
 
+    /// Reconciles a demo account to zero: toggle cleared, adjust, lock, then review a locked transaction.
+    @MainActor
+    func testDemoReconciliation() {
+        let app = XCUIApplication()
+        app.launch()
+        let demoButton = app.buttons["Explore a demo budget"]
+        let accountsTab = app.tabBars.buttons["Accounts"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        XCTAssertTrue(accountsTab.waitForExistence(timeout: 60), "The demo budget should open")
+        accountsTab.tap()
+        let account = app.staticTexts["Capital One Checking"]
+        XCTAssertTrue(account.waitForExistence(timeout: 10))
+        account.tap()
+        XCTAssertTrue(app.navigationBars["Capital One Checking"].waitForExistence(timeout: 10))
+
+        app.navigationBars["Capital One Checking"].buttons["Reconcile"].tap()
+        let sheet = app.navigationBars["Reconcile"]
+        XCTAssertTrue(sheet.waitForExistence(timeout: 10))
+        let balance = app.textFields["Bank balance"]
+        XCTAssertTrue(balance.waitForExistence(timeout: 5))
+        let prefilled = balance.value as? String ?? ""
+        XCTAssertFalse(prefilled.isEmpty, "The cleared balance should be prefilled")
+        balance.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: prefilled.count + 2) + "0")
+        capture("08-reconcile-sheet")
+        sheet.buttons["Reconcile"].tap()
+
+        let create = app.buttons["Create reconciliation transaction"]
+        XCTAssertTrue(create.waitForExistence(timeout: 10), "An unbalanced reconciliation offers an adjustment")
+        let unclear = app.buttons["Mark uncleared"].firstMatch
+        XCTAssertTrue(unclear.waitForExistence(timeout: 5), "Rows offer a cleared toggle while reconciling")
+        unclear.tap()
+        let clear = app.buttons["Mark cleared"].firstMatch
+        XCTAssertTrue(clear.waitForExistence(timeout: 10))
+        clear.tap()
+        XCTAssertTrue(wait(for: create, enabled: true))
+        capture("09-reconciling")
+        create.tap()
+
+        let lock = app.buttons["Lock transactions"]
+        XCTAssertTrue(lock.waitForExistence(timeout: 10), "The adjustment should balance the account")
+        XCTAssertTrue(app.staticTexts["All reconciled!"].exists)
+        capture("10-reconciled")
+        lock.tap()
+        let locked = app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Reconciled'")).firstMatch
+        XCTAssertTrue(locked.waitForExistence(timeout: 10), "Cleared transactions should lock")
+        XCTAssertFalse(lock.exists)
+        capture("11-locked")
+
+        // A reconciled transaction is editable after a warning.
+        app.staticTexts["Reconciliation balance adjustment"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Transaction"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.switches["Reconciled"].exists)
+        app.navigationBars["Transaction"].buttons["Save"].tap()
+        let confirm = app.buttons["Save changes"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Saving a reconciled transaction warns first")
+        capture("12-reconciled-edit")
+        confirm.tap()
+        XCTAssertTrue(app.navigationBars["Capital One Checking"].waitForExistence(timeout: 10))
+    }
+
     /// A row's label and value, as VoiceOver reads them.
     @MainActor
     private func describes(_ element: XCUIElement, _ text: String) -> Bool {
         element.label.contains(text) || (element.value as? String)?.contains(text) == true
+    }
+
+    @MainActor
+    private func wait(for element: XCUIElement, enabled: Bool) -> Bool {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == %@", NSNumber(value: enabled)), object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: 10) == .completed
     }
 
     @MainActor

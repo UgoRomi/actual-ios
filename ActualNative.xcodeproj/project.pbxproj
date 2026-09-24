@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		014B35C0E59A05E50245606A /* Native/Views/SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33B550F88C0FAFC47CAA9B5 /* Native/Views/SettingsView.swift */; };
 		02E6863D200C189845137667 /* Native/Views/TransactionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F19188F7225770AF6FD525C0 /* Native/Views/TransactionsView.swift */; };
+		A7E3C1D95B2F4E8061C4D2A1 /* Native/Views/ReconcileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8F4D2EA6C305F9172D5E3B2 /* Native/Views/ReconcileView.swift */; };
 		0AED486DC5028236E648FC8C /* Native/Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66177DE593ACD3F7FBE818F7 /* Native/Models.swift */; };
 		2A6FB75C0E638CB7BA4B4263 /* Native/Views/TransactionEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35ADAC2A7B4B204230C2E4AE /* Native/Views/TransactionEditor.swift */; };
 		2EDA2189B4348994B63A09C1 /* Native/Core/EngineClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A2A897C9FC5F69A2DAC930 /* Native/Core/EngineClient.swift */; };
@@ -68,6 +69,7 @@
 		D33B550F88C0FAFC47CAA9B5 /* Native/Views/SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/SettingsView.swift; sourceTree = "<group>"; };
 		E3D9589739A3279854188C92 /* Native/ActualNativeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/ActualNativeApp.swift; sourceTree = "<group>"; };
 		F19188F7225770AF6FD525C0 /* Native/Views/TransactionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/TransactionsView.swift; sourceTree = "<group>"; };
+		B8F4D2EA6C305F9172D5E3B2 /* Native/Views/ReconcileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ReconcileView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -109,6 +111,7 @@
 				3D1C8D9F0C3BC17165ACEE19 /* Native/Theme.swift */,
 				443F99244216BE707150CE77 /* Native/Views/AccountsView.swift */,
 				83416C8B7281940A2D331143 /* Native/Views/BudgetView.swift */,
+				B8F4D2EA6C305F9172D5E3B2 /* Native/Views/ReconcileView.swift */,
 				22F448B416504426D44ADE65 /* Native/Views/RootView.swift */,
 				D33B550F88C0FAFC47CAA9B5 /* Native/Views/SettingsView.swift */,
 				35ADAC2A7B4B204230C2E4AE /* Native/Views/TransactionEditor.swift */,
@@ -229,6 +232,7 @@
 				AF716BBB3F56F5E55D747809 /* Native/Views/AccountsView.swift in Sources */,
 				AB1BDB58B28CF1FDFFC17C52 /* Native/Views/BudgetView.swift in Sources */,
 				C08A978F6160C98BB61BF18C /* Native/Views/RootView.swift in Sources */,
+				A7E3C1D95B2F4E8061C4D2A1 /* Native/Views/ReconcileView.swift in Sources */,
 				014B35C0E59A05E50245606A /* Native/Views/SettingsView.swift in Sources */,
 				2A6FB75C0E638CB7BA4B4263 /* Native/Views/TransactionEditor.swift in Sources */,
 				02E6863D200C189845137667 /* Native/Views/TransactionsView.swift in Sources */,

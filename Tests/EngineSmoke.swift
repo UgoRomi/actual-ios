@@ -52,6 +52,7 @@ import Foundation
     precondition(!deleted.transactions.contains(where: { $0.id == saved.id }))
     try await trackingBudget(data: data.appendingPathComponent("budget"), resources: resources)
     try await newTransactions(data: data.appendingPathComponent("budget"), resources: resources)
+    try await reconciliation(data: data.appendingPathComponent("budget"), resources: resources)
     print(
       "PASS: actual engine demo, add, edit, budget allocation, offline reopen, exact balances, delete"
     )

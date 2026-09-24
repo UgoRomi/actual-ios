@@ -163,6 +163,8 @@ private struct BankRequest: Decodable {
         let simpleFinRequest = try await requests().last
         precondition(simpleFinRequest?.accountIds == ["bank-sf-a"])
         precondition(model.bankSyncResult?.accounts.first?.added == 0)
+        // Refreshes after the first record the bank's balance, offered when reconciling.
+        precondition(model.snapshot?.accounts.first { $0.id == "bank-sf-a" }?.bankBalance == 98766)
         try await mode("reauth")
         await model.refreshAccounts(accountID: "bank-rate")
         precondition(model.bankSyncResult?.accounts.first?.error?.contains("Reconnect this account") == true)
@@ -177,15 +179,18 @@ private struct BankRequest: Decodable {
         precondition(model.bankSyncResult?.accounts.first?.error == nil)
         precondition(model.snapshot?.accounts.first { $0.id == "bank-rate" }?.bankSyncStatus == "ok")
         precondition(model.snapshot?.accounts.first { $0.id == "bank-rate" }?.balance == 98766)
+        try await verifyReconciliation(model)
+
         let busyRequests = try await requests().count
         model.isBusy = true
         await model.refreshAccounts()
         let afterBusy = try await requests().count
         precondition(afterBusy == busyRequests)
         model.isBusy = false
+        model.startReconciliation(accountID: "bank-checking", targetBalance: 0)
         let closed = await model.closeBudget()
         precondition(closed)
-        precondition(model.bankSyncResult == nil && model.bankSyncErrorMessage == nil)
+        precondition(model.bankSyncResult == nil && model.bankSyncErrorMessage == nil && model.reconciliation == nil)
         print("PASS: retry, expired authentication, missing bank data, busy guard, and budget-switch state")
 
         let reopened = try self.engine()
@@ -196,6 +201,30 @@ private struct BankRequest: Decodable {
         precondition(restored.accounts.first { $0.id == "bank-sf-a" }?.bankSyncNeedsAttention == true)
         _ = try await reopened.call("close")
         print("PASS: imported transactions, balances, last refresh, and failure status persist after reopen")
+    }
+
+    /// Reconciliation state stays until it finishes, and a refused lock keeps it.
+    @MainActor static func verifyReconciliation(_ model: AppModel) async throws {
+        func account() -> Account? { model.snapshot?.accounts.first { $0.id == "bank-sf-a" } }
+        guard let cleared = account()?.clearedBalance, let bankBalance = account()?.bankBalance
+        else { throw EngineFailure("Linked account has no balances") }
+        precondition(cleared == bankBalance, "A SimpleFIN import should match the bank's balance")
+        // The bank now reports 5.00 more than has cleared.
+        model.startReconciliation(accountID: "bank-sf-a", targetBalance: bankBalance + 500)
+        let target = model.reconciliation
+        await model.finishReconciliation(lock: true)
+        precondition(model.reconciliation == target && model.errorMessage?.contains("cleared balance changed") == true)
+        precondition(account()?.lastReconciledDate == nil)
+        await model.createReconciliationTransaction()
+        precondition(account()?.clearedBalance == bankBalance + 500 && model.reconciliation == target)
+        precondition(model.snapshot?.transactions.contains {
+            $0.accountId == "bank-sf-a" && $0.amount == 500 && $0.notes == "Reconciliation balance adjustment"
+        } == true)
+        await model.finishReconciliation(lock: true)
+        precondition(model.reconciliation == nil && model.errorMessage == nil && account()?.lastReconciledDate != nil)
+        precondition(model.snapshot?.transactions.filter { $0.accountId == "bank-sf-a" && $0.cleared }
+            .allSatisfy(\.isReconciled) == true)
+        print("PASS: reconciling a linked account against its bank balance adjusts, locks, and ends its state")
     }
 
     static func sync(_ engine: EngineClient, id: String) async throws -> BankSyncResult {

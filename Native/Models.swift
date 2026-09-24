@@ -90,11 +90,18 @@ struct Account: Decodable, Identifiable, Sendable {
     var bankSyncEnabled: Bool? = nil
     var bankSyncStatus: String? = nil
     var lastBankSync: String? = nil
+    var clearedBalance: Int? = nil
+    /// The latest balance reported by a linked bank.
+    var bankBalance: Int? = nil
+    var lastReconciled: String? = nil
 
     var canSyncBank: Bool { bankSyncEnabled == true && !closed }
-    var lastBankSyncDate: Date? {
-        guard let lastBankSync, let milliseconds = Double(lastBankSync), milliseconds.isFinite else { return nil }
-        return Date(timeIntervalSince1970: milliseconds / 1000)
+    var lastBankSyncDate: Date? { Self.date(lastBankSync) }
+    var lastReconciledDate: Date? { Self.date(lastReconciled) }
+    /// Actual stores these times as milliseconds in a string.
+    private static func date(_ milliseconds: String?) -> Date? {
+        guard let milliseconds, let value = Double(milliseconds), value.isFinite else { return nil }
+        return Date(timeIntervalSince1970: value / 1000)
     }
     var bankSyncNeedsAttention: Bool {
         guard let bankSyncStatus else { return false }
@@ -146,12 +153,20 @@ struct Transaction: Decodable, Identifiable, Sendable {
 
     let reconciled: Bool?
 
-    var canEdit: Bool { !isParent && !isChild && !isTransfer && reconciled != true }
+    /// Reconciled transactions can be edited too, after a warning.
+    var canEdit: Bool { !isParent && !isChild && !isTransfer }
+    var isReconciled: Bool { reconciled == true }
     var title: String { payeeName.flatMap { $0.isEmpty ? nil : $0 } ?? "No payee" }
     var detail: String { categoryName ?? "Uncategorized" }
 }
 
 struct Payee: Decodable, Identifiable, Sendable { let id: String; let name: String }
+
+/// An account being compared with a balance from the bank. As in Actual, it is not saved.
+struct Reconciliation: Equatable, Sendable {
+    let accountID: String
+    let targetBalance: Int
+}
 
 struct TransactionSection: Identifiable {
     let date: String

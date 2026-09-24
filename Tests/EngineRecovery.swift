@@ -125,11 +125,15 @@ import Foundation
     guard snapshot.syncWarning?.contains("could not be applied") == true else {
       throw EngineFailure("Unexpected warning: \(snapshot.syncWarning ?? "nil")")
     }
-    do {
-      _ = try await engine.call("saveTransaction")
-      throw EngineFailure("Mutation was not blocked")
-    } catch {
-      precondition(error.localizedDescription.contains("could not be applied"))
+    for method in [
+      "saveTransaction", "setCleared", "unlockTransaction", "createReconciliationTransaction",
+      "finishReconciliation",
+    ] {
+      var blocked = false
+      do { _ = try await engine.call(method) } catch {
+        blocked = error.localizedDescription.contains("could not be applied")
+      }
+      precondition(blocked, "\(method) was not blocked")
     }
     let settings =
       try JSONSerialization.jsonObject(

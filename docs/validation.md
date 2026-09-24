@@ -157,3 +157,19 @@ Strict bridge type checking, native engine/recovery tests, encrypted budget sync
 - **Formatters.** Number formatters are cached per purpose, currency, and locale, including separators; date formatters are created once.
 
 Strict bridge type checking, native engine/recovery tests, encrypted budget sync, automatic sync, bank-sync regressions, the 10,000-transaction regression, the signed simulator build, and the demo UI test on new iPhone 17 Pro simulators passed.
+
+## Reconciliation (2026-09-24)
+
+`./scripts/test-engine.sh` reconciles a demo account through the native bridge and checks the database directly:
+
+- The reported cleared balance matches the register. Clearing a split carries to its children. Clearing one side of a transfer leaves the other side unchanged.
+- An adjustment covers the exact difference, is cleared, is dated today, and is created only when needed.
+- A lock requested after the balance changed is refused, and nothing is locked or recorded. A balanced lock marks every cleared transaction in the account reconciled, including split children, leaves uncleared ones unlocked, and records the time.
+- Reconciled transactions must be unlocked before their cleared state changes. Unlocking a split unlocks its children. Edits and deletions need confirmation for the transaction as it is now; a confirmed edit keeps it cleared and locked. Moving one to another account unlocks it.
+- Exiting an unbalanced reconciliation locks nothing but records the time, as Actual does.
+
+The recovery test checks that the new commands are blocked by a sync warning. `./scripts/test-bank-sync.sh` checks that SimpleFIN refreshes after the first record the bank's balance. It then reconciles that account through the app model: a refused lock keeps the reconciliation, an adjustment balances it, locking ends it, and closing the budget clears it.
+
+The UI test `testDemoReconciliation` reconciles a demo account to zero: prefilled cleared balance, clearing and unclearing a row, adjustment, lock, and the warning before saving a locked transaction. It passed with the demo navigation test on a new iPhone 17 Pro / iOS 26.0 simulator, run with `-parallel-testing-enabled NO`; it opens the demo itself when needed. Screenshots of the reconcile sheet, both banner states, the locked register, and the save warning were inspected.
+
+Strict bridge type checking, the encrypted sync, automatic sync, and 10,000-transaction regressions also passed. `./scripts/test-sync.sh` needs `rg` on `PATH`. Reconciliation against a live bank connection and on a physical device was not verified.
