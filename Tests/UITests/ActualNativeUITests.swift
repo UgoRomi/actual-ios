@@ -1,6 +1,38 @@
 import XCTest
 
 final class ActualNativeUITests: XCTestCase {
+    /// Opt-in: install a disposable local budget named "Large Budget Regression" first.
+    @MainActor
+    func testLargeBudgetTransactionsStayResponsive() throws {
+        let app = XCUIApplication()
+        app.launch()
+        let fixture = app.buttons["Large Budget Regression"]
+        if fixture.waitForExistence(timeout: 10) {
+            fixture.tap()
+        } else if !app.staticTexts["Large Budget Regression"].exists {
+            throw XCTSkip("Requires the disposable large-budget fixture; see docs/validation.md")
+        }
+        let transactions = app.tabBars.buttons["Transactions"]
+        XCTAssertTrue(transactions.waitForExistence(timeout: 60))
+        transactions.tap()
+        XCTAssertTrue(app.navigationBars["Transactions"].waitForExistence(timeout: 10))
+        app.swipeUp()
+        app.swipeDown()
+        let add = app.buttons["Add transaction"]
+        add.tap()
+        XCTAssertTrue(app.navigationBars["New transaction"].waitForExistence(timeout: 10))
+        app.buttons["Cancel"].tap()
+
+        let search = app.searchFields.firstMatch
+        if !search.isHittable { app.swipeDown() }
+        search.tap()
+        search.typeText("no-match-unique-search-token")
+        XCTAssertTrue(app.staticTexts["No matching transactions"].waitForExistence(timeout: 10))
+        search.buttons["Clear text"].tap()
+        XCTAssertTrue(app.cells.firstMatch.waitForExistence(timeout: 10))
+        XCTAssertFalse(app.staticTexts["No matching transactions"].exists)
+    }
+
     @MainActor
     func testDemoBudgetNavigationAndTransactionEditor() {
         let app = XCUIApplication()

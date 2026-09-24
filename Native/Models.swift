@@ -103,14 +103,45 @@ struct Transaction: Decodable, Identifiable, Sendable {
 
 struct Payee: Decodable, Identifiable, Sendable { let id: String; let name: String }
 
+struct TransactionSection: Identifiable {
+    let date: String
+    let transactions: [Transaction]
+    var id: String { date }
+
+    /// Filter once, then group once. Section rendering must never rescan the full register.
+    static func grouped(_ transactions: [Transaction], accountID: String? = nil,
+                        search: String = "", currency: String = "", locale: Locale = .current) -> [Self] {
+        let formatter = search.isEmpty ? nil : Money.formatter(currency: currency, locale: locale)
+        let matching = transactions.filter { transaction in
+            guard !transaction.isChild, accountID == nil || transaction.accountId == accountID else { return false }
+            guard let formatter else { return true }
+            return transaction.title.localizedCaseInsensitiveContains(search)
+                || transaction.detail.localizedCaseInsensitiveContains(search)
+                || (transaction.notes ?? "").localizedCaseInsensitiveContains(search)
+                || Money.formatted(transaction.amount, formatter: formatter).localizedCaseInsensitiveContains(search)
+        }
+        let grouped = Dictionary(grouping: matching, by: \.date)
+        // Preserve the engine's ordering within each day, including its ID tie-breaker.
+        return grouped.keys.sorted(by: >).map { Self(date: $0, transactions: grouped[$0] ?? []) }
+    }
+}
+
 enum Money {
     static func formatted(_ minorUnits: Int, currency: String = "", locale: Locale = .current) -> String {
+        formatted(minorUnits, formatter: formatter(currency: currency, locale: locale))
+    }
+
+    fileprivate static func formatter(currency: String, locale: Locale) -> NumberFormatter {
         let formatter = NumberFormatter()
         formatter.locale = locale
         formatter.numberStyle = currency.isEmpty ? .decimal : .currency
         if !currency.isEmpty { formatter.currencyCode = currency }
         formatter.minimumFractionDigits = 2
         formatter.maximumFractionDigits = 2
+        return formatter
+    }
+
+    fileprivate static func formatted(_ minorUnits: Int, formatter: NumberFormatter) -> String {
         return formatter.string(from: NSDecimalNumber(decimal: Decimal(minorUnits) / 100)) ?? "—"
     }
 

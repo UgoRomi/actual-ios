@@ -16,6 +16,8 @@ Budget is the default tab, with month navigation, available-to-budget summary, g
 
 Use the existing budget's formatting preferences where supported; do not silently assign a different currency. Store values in integer cents and parse text with locale awareness. Scope excludes reports, bank-link setup, rule editors, widgets and Shortcuts for the first deliverable.
 
+Transaction registers filter and group the snapshot once per view update, then render each day's stored rows. Only date keys are sorted; same-day engine ordering is preserved. Account filters and searches apply before grouping, with one localized amount formatter reused per search. Do not rescan or sort the entire history inside individual date sections: that stalls the main thread on older budgets with thousands of dates.
+
 ## Validation
 
 First prove: create a disposable Actual budget, add/edit a transaction offline, stop and recreate the runtime, reopen and verify exact balances, then round-trip through a temporary Actual sync server. Test rollback, parameter binding, Unicode SQL functions, missing files, encryption compatibility and invalid server responses. Build an iOS simulator app and visually inspect the three tabs and editing sheet. Document any unverified feature without presenting it as complete.

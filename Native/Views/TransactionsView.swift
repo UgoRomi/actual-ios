@@ -9,36 +9,29 @@ struct TransactionsView: View {
     @State private var selectedTransaction: Transaction?
     @State private var isAdding = false
 
-    private var transactions: [Transaction] {
-        (model.snapshot?.transactions ?? []).filter { transaction in
-            !transaction.isChild && (accountID == nil || transaction.accountId == accountID)
-                && (search.isEmpty || [transaction.title, transaction.detail, transaction.notes ?? "", Money.formatted(transaction.amount, currency: model.currency)]
-                    .contains { $0.localizedCaseInsensitiveContains(search) })
-        }.sorted { $0.date > $1.date }
-    }
-    private var dates: [String] { Array(Set(transactions.map(\.date))).sorted(by: >) }
-
     var body: some View {
         if embedsNavigation { NavigationStack { content } }
         else { content }
     }
 
     private var content: some View {
-        List {
+        let sections = TransactionSection.grouped(model.snapshot?.transactions ?? [], accountID: accountID,
+                                                  search: search, currency: model.currency)
+        return List {
             if let error = model.errorMessage { Section { ErrorNotice(message: error) { Task { await model.refresh() } } } }
-            if transactions.isEmpty {
+            if sections.isEmpty {
                 ContentUnavailableView(search.isEmpty ? "A fresh start" : "No matching transactions", systemImage: search.isEmpty ? "list.bullet.rectangle" : "magnifyingglass", description: Text(search.isEmpty ? "Your transactions will appear here. Add one to keep your budget up to date." : "Try a different payee, category, or amount."))
             }
-            ForEach(dates, id: \.self) { date in
+            ForEach(sections) { section in
                 Section {
-                    ForEach(transactions.filter { $0.date == date }) { transaction in
+                    ForEach(section.transactions) { transaction in
                         Button { selectedTransaction = transaction } label: {
                             TransactionRow(transaction: transaction, currency: model.currency)
                         }.buttonStyle(.plain)
                     }
                 } header: {
-                    if let parsed = BudgetDate.date(date) { Text(parsed, format: .dateTime.weekday(.wide).month(.abbreviated).day()) }
-                    else { Text(date) }
+                    if let parsed = BudgetDate.date(section.date) { Text(parsed, format: .dateTime.weekday(.wide).month(.abbreviated).day()) }
+                    else { Text(section.date) }
                 }
             }
             Section { SyncFooter() }.listRowBackground(Color.clear)
