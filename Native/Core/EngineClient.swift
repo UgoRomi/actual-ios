@@ -24,7 +24,8 @@ final class EngineClient: @unchecked Sendable {
       dataDirectory: data, resourceDirectory: resources, useKeychain: useKeychain)
     let config = URLSessionConfiguration.ephemeral
     config.timeoutIntervalForRequest = 30
-    config.timeoutIntervalForResource = 60
+    // Actual permits up to five minutes for a SimpleFIN batch refresh.
+    config.timeoutIntervalForResource = 300
     session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
     try queue.sync { try setup() }
   }
@@ -149,6 +150,9 @@ final class EngineClient: @unchecked Sendable {
         let args = try JSONSerialization.jsonObject(with: bytes) as? [String: Any]
       else { throw EngineFailure("Invalid network request") }
       var request = URLRequest(url: try host.validatedURL(args.requiredString("url")))
+      if request.url?.path.hasSuffix("/simplefin/transactions") == true {
+        request.timeoutInterval = 300
+      }
       request.httpMethod = args["method"] as? String ?? "GET"
       request.allHTTPHeaderFields = args["headers"] as? [String: String]
       if let body = args["body"] as? String { request.httpBody = Data(base64Encoded: body) }

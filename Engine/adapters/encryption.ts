@@ -28,15 +28,16 @@ export async function encrypt(key: Key, value: Uint8Array) {
 export async function decrypt(
   key: Key,
   value: Uint8Array,
-  meta: { algorithm: string; iv: string; authTag: string },
+  meta: { algorithm: string; iv: string | Uint8Array; authTag: string | Uint8Array },
 ) {
   if (meta.algorithm !== "aes-256-gcm") throw new Error("Unsupported encryption algorithm");
   return Buffer.from(
     native<string>("crypto.decrypt", {
       key: bytes(key.getValue().raw),
       data: bytes(value),
-      iv: meta.iv,
-      authTag: meta.authTag,
+      // File downloads carry base64 strings; CRDT messages carry raw buffers.
+      iv: typeof meta.iv === "string" ? meta.iv : bytes(meta.iv),
+      authTag: typeof meta.authTag === "string" ? meta.authTag : bytes(meta.authTag),
     }),
     "base64",
   );

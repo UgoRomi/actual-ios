@@ -16,3 +16,7 @@ Separate sync errors from local save errors. A failed upload must never make a c
 4. Update existing documentation to describe automatic budget sync and its offline/suspension limits.
 
 The follow-on `writing-plans` skill remains unavailable; this plan covers the implementation steps.
+
+## Delivered
+
+Implemented the tracked bridge dispatch, native coordinator, opening/foreground gate, edit and bank-import scheduling, separate retryable errors, and budget-switch barriers. Incoming encrypted CRDT metadata now accepts raw buffers as well as file-download base64 strings. The delayed/offline encrypted-server harness verifies completion ordering, durable concurrent edits, coalescing, foreground exchange, switching, and local-only budgets. Engine, bank-import, encrypted-sync, and signed simulator UI regressions pass; see [validation](../validation.md) for scope and remaining device checks.

@@ -41,6 +41,7 @@ struct BudgetListing: Decodable, Sendable { let budgets: [BudgetFile] }
 
 struct BudgetSnapshot: Decodable, Sendable {
     let budgetName: String
+    let cloudFileId: String?
     let month: String
     let currencyCode: String
     let syncWarning: String?
@@ -62,6 +63,31 @@ struct Account: Decodable, Identifiable, Sendable {
     let balance: Int
     let offbudget: Bool
     let closed: Bool
+    var bankSyncEnabled: Bool? = nil
+    var bankSyncStatus: String? = nil
+    var lastBankSync: String? = nil
+
+    var canSyncBank: Bool { bankSyncEnabled == true && !closed }
+    var lastBankSyncDate: Date? {
+        guard let lastBankSync, let milliseconds = Double(lastBankSync), milliseconds.isFinite else { return nil }
+        return Date(timeIntervalSince1970: milliseconds / 1000)
+    }
+    var bankSyncNeedsAttention: Bool {
+        guard let bankSyncStatus else { return false }
+        return !["ok", "pending", "sync-requested"].contains(bankSyncStatus)
+    }
+}
+
+struct BankSyncResult: Decodable, Sendable {
+    let accounts: [BankSyncAccountResult]
+}
+
+struct BankSyncAccountResult: Decodable, Identifiable, Sendable {
+    let accountId: String
+    let added: Int
+    let updated: Int
+    let error: String?
+    var id: String { accountId }
 }
 
 struct CategoryGroup: Decodable, Identifiable, Sendable {

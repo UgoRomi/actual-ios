@@ -4,10 +4,11 @@ import { setServer } from "@actual/server-config";
 import { loadKey } from "@actual/source/server/encryption/index.ts";
 import { runMutator } from "@actual/source/server/mutators.ts";
 import * as storage from "@actual/storage";
-import { setSyncingMode, fullSync } from "@actual/sync";
+import { setSyncingMode, fullSync, clearFullSyncTimeout } from "@actual/sync";
 
 import { native } from "./native";
 import { uploadSnapshotIfDue } from "./adapters/cloud-storage";
+import { canSyncBank, syncBankAccounts } from "./bank-sync";
 
 declare function _reply(id: string, response: string): void;
 type Obj = Record<string, unknown>;
@@ -82,7 +83,7 @@ async function snapshot(month: string) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error("Invalid budget month");
   const budget = await lib.send("api/budget-month", { month });
   const preferences = await lib.send("preferences/get");
-  const rawAccounts = await lib.send("api/accounts-get");
+  const rawAccounts = await lib.send("accounts-get");
   const payees = await lib.send("api/payees-get");
   const rawCategories = [
     ...(await lib.send("api/categories-get", {})),
@@ -94,10 +95,15 @@ async function snapshot(month: string) {
   const transactions = [];
   for (const account of rawAccounts) {
     accounts.push({
-      ...account,
-      balance: await lib.send("api/account-balance", { id: account.id }),
+      id: account.id,
+      name: account.name,
+      // The public API wrapper acquires a mutator; snapshot already holds it.
+      balance: await lib.send("account-balance", { id: account.id, cutoff: new Date() }),
       closed: Boolean(account.closed),
       offbudget: Boolean(account.offbudget),
+      bankSyncEnabled: canSyncBank(account),
+      bankSyncStatus: account.bank_sync_status,
+      lastBankSync: account.last_sync,
     });
     const rows = await lib.send("api/transactions-get", {
       accountId: account.id,
@@ -143,6 +149,7 @@ async function snapshot(month: string) {
         })),
     }));
   return {
+    cloudFileId: getPrefs()?.cloudFileId ?? null,
     budgetName: getPrefs()?.budgetName || "Budget",
     month,
     currencyCode: /^[A-Z]{3}$/.test(preferences.defaultCurrencyCode || "")
@@ -172,7 +179,7 @@ async function editable(id: string) {
 }
 async function perform(method: string, args: Obj): Promise<unknown> {
   await start();
-  if (["saveTransaction", "deleteTransaction", "budget", "sync"].includes(method)) {
+  if (["saveTransaction", "deleteTransaction", "budget", "sync", "syncAccounts"].includes(method)) {
     const warning = syncWarning();
     if (warning) throw new Error(warning);
   }
@@ -199,7 +206,15 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       return {};
     }
     case "snapshot":
-      return snapshot(text(args.month));
+      // Incoming sync messages can apply between awaits. Read one coherent
+      // snapshot using the same serialization as upstream mutations.
+      return runMutator(() => snapshot(text(args.month)));
+    case "syncAccounts": {
+      if (!getPrefs()?.id) throw new Error("Open a budget before refreshing bank accounts.");
+      if (args.accountId !== undefined && (typeof args.accountId !== "string" || !args.accountId))
+        throw new Error("Choose a valid account to refresh.");
+      return syncBankAccounts(typeof args.accountId === "string" ? args.accountId : undefined);
+    }
     case "connect": {
       const url = text(args.url).replace(/\/+$/, "");
       native("validate.url", { url });
@@ -250,11 +265,25 @@ async function perform(method: string, args: Obj): Promise<unknown> {
         throw new Error("This budget is local only. Open a synced budget to synchronize.");
       setSyncingMode("enabled");
       try {
-        fail(await fullSync());
+        const result = await fullSync();
+        // Stop upstream scheduling before the snapshot upload: fullSync's
+        // single-flight guard has settled, but upload may still be waiting.
+        setSyncingMode("offline");
+        clearFullSyncTimeout();
+        if (result && "error" in result) {
+          const { reason, message } = result.error;
+          if (reason === "network-failure") throw new Error("Could not reach your Actual server. Check your connection and try again.");
+          if (reason === "unauthorized" || reason === "token-expired")
+            throw new Error("Reconnect to your Actual server in Settings, then try again.");
+          throw new Error(message || reason || "Budget sync could not finish. Try again.");
+        }
         const warning = syncWarning();
         if (warning) throw new Error(warning);
         await uploadSnapshotIfDue();
       } finally {
+        // Local edits during the request may schedule upstream's fire-and-forget
+        // timer. Native owns follow-up passes and must observe every failure.
+        clearFullSyncTimeout();
         setSyncingMode("offline");
       }
       return {};
@@ -340,17 +369,26 @@ async function execute(method: string, args: Obj): Promise<unknown> {
   }
 }
 let queue: Promise<unknown> = Promise.resolve();
+let activeSync: Promise<unknown> | null = null;
 export function request(id: string, method: string, argsJSON: string) {
-  queue = queue
-    .then(() => execute(method, object(JSON.parse(argsJSON))))
-    .then(
-      (value) => _reply(id, JSON.stringify({ value: value ?? null })),
-      (error) =>
-        _reply(
-          id,
-          JSON.stringify({
-            error: error instanceof Error ? error.message : String(error),
-          }),
-        ),
-    );
+  const reply = (value: unknown) => _reply(id, JSON.stringify({ value: value ?? null }));
+  const reject = (error: unknown) => _reply(id, JSON.stringify({
+    error: error instanceof Error ? error.message : String(error),
+  }));
+  queue = queue.then(async () => {
+    const args = object(JSON.parse(argsJSON));
+    if (method === "sync") {
+      await start();
+      if (!activeSync) activeSync = execute(method, args).finally(() => { activeSync = null; });
+      // Release the command queue during network waits. Actual serializes
+      // incoming messages with local mutations on this same JS runtime.
+      void activeSync.then(reply, reject);
+      return;
+    }
+    if (["bootstrap", "open", "download", "demo", "close", "connect"].includes(method)) {
+      // A sync must finish against the budget/server with which it started.
+      await activeSync?.catch(() => {});
+    }
+    reply(await execute(method, args));
+  }).catch(reject);
 }

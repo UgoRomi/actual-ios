@@ -4,19 +4,27 @@ struct RootView: View {
     @Environment(AppModel.self) private var model
     var body: some View {
         Group {
-            if model.snapshot != nil {
+            if !model.hasStarted {
+                openingBudget
+            } else if model.snapshot != nil {
                 TabView {
                     Tab("Budget", systemImage: "chart.pie") { BudgetView() }
                     Tab("Accounts", systemImage: "creditcard") { AccountsView() }
                     Tab("Transactions", systemImage: "list.bullet.rectangle") { TransactionsView() }
                 }
-            } else if !model.hasStarted {
-                VStack(spacing: 18) {
-                    Image(systemName: "chart.pie.fill").font(.system(size: 44)).foregroundStyle(ActualTheme.purple)
-                    ProgressView("Opening your budget…")
-                }.frame(maxWidth: .infinity, maxHeight: .infinity).background(ActualTheme.background)
             } else { WelcomeView() }
         }
+        .disabled(model.isOpeningBudget)
+        .overlay {
+            if model.hasStarted && model.isOpeningBudget { openingBudget }
+        }
+    }
+
+    private var openingBudget: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "chart.pie.fill").font(.system(size: 44)).foregroundStyle(ActualTheme.purple)
+            ProgressView(model.isSyncingBudget ? "Syncing your budget…" : "Opening your budget…")
+        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(ActualTheme.background)
     }
 }
 
@@ -89,6 +97,9 @@ struct SyncFooter: View {
     var body: some View {
         VStack(spacing: 12) {
             if let warning = model.snapshot?.syncWarning { ErrorNotice(message: warning) }
+            if let error = model.syncErrorMessage {
+                ErrorNotice(message: error) { Task { await model.perform("sync") } }
+            }
             Label(model.syncStatus, systemImage: model.syncStatus == "Sync needs attention" ? "exclamationmark.icloud" : "internaldrive")
                 .font(.footnote).foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity).padding(.vertical, 12)

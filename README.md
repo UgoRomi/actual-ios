@@ -8,14 +8,20 @@ This is a development build, with no App Store submission or distribution signin
 
 - Open a real demo or download a budget from your Actual server.
 - Browse monthly budgets, adjust category allocations, and see account balances.
+- Pull to refresh Accounts to fetch bank transactions for all linked, open accounts, or refresh one account from its transaction register. Shows bank refresh status and account-specific errors; existing rules and import preferences apply.
 - Search transactions; add, edit, categorize, clear, and delete ordinary transactions.
-- Reopen and edit downloaded budgets offline. **Settings → Sync now** sends and receives changes explicitly.
+- Sync a server-backed budget before opening it on launch or returning from the background. If sync fails, open the saved budget with a retry message.
+- Save edits locally, then sync asynchronously with the server. Rapid edits are coalesced; **Settings → Sync now** remains available for an immediate retry.
 - Open end-to-end encrypted budgets using their encryption password.
 - Native light/dark appearances, system glass controls, and locale-aware integer-cent entry.
 
 Transfers, splits, and reconciled transactions are view only. Account/category creation, reconciliation, bank setup, reports, schedules/rule editors, widgets, and Shortcuts remain in Actual web/desktop. Existing Actual transaction rules still run through its engine.
 
-Server connection supports password authentication and one server per installation. Use HTTPS with a valid certificate; HTTP is allowed only for localhost development. OpenID Connect, custom certificate trust, and automatic/background sync are not implemented. Your server password and budget encryption password are separate.
+Server connection supports password authentication and one server per installation. Use HTTPS with a valid certificate; HTTP is allowed only for localhost development. OpenID Connect, custom certificate trust, and periodic syncing while the app is closed are not implemented. Your server password and budget encryption password are separate.
+
+Bank refresh uses connections already set up in Actual web/desktop. Imported transactions are saved on this device and trigger asynchronous budget sync, just like transaction and allocation edits. Reconnect expired bank authorizations in Actual web/desktop. Unlinked and closed accounts refresh locally without contacting a bank.
+
+Failed syncs keep local edits intact and retry on the next edit, app opening, or **Sync now**. Sync is not guaranteed to finish while iOS suspends the app; saved changes remain available for the next attempt. Local/demo budgets stay local.
 
 The budget's default currency code is used when present; otherwise amounts have no currency symbol. Separators follow the device locale and amounts always show two decimals. Other Actual formatting preferences are not yet mirrored.
 
@@ -73,9 +79,13 @@ Simulator UI checks are in `Tests/UITests`. See [docs/validation.md](docs/valida
 
 Run `./scripts/test-transactions.sh` for register grouping/search regressions and a 10,000-transaction fixture. Optionally pass a local `db.sqlite` path to test it read-only, with `--baseline` to compare the previous section-preparation cost. See the validation notes for the opt-in large-budget simulator test.
 
+Run `./scripts/test-bank-sync.sh` for native bank-import regressions using a disposable local HTTP fixture. It checks account selection, SimpleFIN batching, exact amounts, duplicate prevention, rules/preferences, partial failures, authentication errors, retries, and persistence. No live bank credentials are used.
+
+Run `./scripts/test-auto-sync.sh` after building the upstream core/API/server artifacts listed above. It uses an encrypted disposable budget and a local proxy to hold or reject sync responses, verifying opening sync, local saves during network waits, automatic uploads, offline restart/retry, and safe budget switching.
+
 ## Implementation and storage
 
-SwiftUI owns the visible UI. `Engine/entry.ts` exposes a small command interface to Actual's pinned handlers. `Native/Core` supplies SQLite, sandboxed files, URLSession HTTP, cryptography, timers, and a serial JavaScriptCore runtime. The engine is the sole budget writer; amounts cross the bridge as exact integer cents.
+SwiftUI owns the visible UI. `Engine/entry.ts` exposes a small command interface to Actual's pinned handlers. `Native/Core` supplies SQLite, sandboxed files, URLSession HTTP, cryptography, timers, and a serial JavaScriptCore runtime. Tracked budget sync releases the command queue during network waits; Actual serializes incoming changes, local mutations, and coherent snapshots. Budget/server switching waits for active sync. The engine is the sole budget writer; amounts cross the bridge as exact integer cents.
 
 Downloaded budget data is stored locally as SQLite in the app sandbox, using iOS data protection; the local database is not separately encrypted by this app. Server tokens and imported encryption keys are in Keychain. Actual's optional end-to-end encryption protects synced budget data using its existing format. The app never sends data to a separate intermediary service.
 

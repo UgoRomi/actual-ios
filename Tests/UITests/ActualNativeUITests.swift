@@ -1,6 +1,36 @@
 import XCTest
 
 final class ActualNativeUITests: XCTestCase {
+    /// Opt-in: a disposable linked-account fixture with no server credentials.
+    @MainActor
+    func testBankRefreshRequiresConnection() throws {
+        let app = XCUIApplication()
+        app.launch()
+        let fixture = app.buttons["Bank Sync Regression"]
+        if fixture.waitForExistence(timeout: 10) {
+            fixture.tap()
+        } else if !app.staticTexts["Bank Sync Regression"].exists {
+            throw XCTSkip("Requires the disposable bank-sync fixture; see docs/validation.md")
+        }
+        let accounts = app.tabBars.buttons["Accounts"]
+        XCTAssertTrue(accounts.waitForExistence(timeout: 60))
+        accounts.tap()
+        let checking = app.staticTexts["bank-checking"]
+        XCTAssertTrue(checking.waitForExistence(timeout: 10))
+        pullToRefresh(app)
+        let error = app.staticTexts["Connect to your Actual server in Settings before refreshing bank accounts."]
+        XCTAssertTrue(error.waitForExistence(timeout: 10))
+        XCTAssertTrue(checking.exists, "Refresh errors must preserve account balances and navigation")
+        capture("bank-sync-accounts-error")
+        checking.tap()
+        XCTAssertTrue(app.navigationBars["bank-checking"].waitForExistence(timeout: 10))
+        pullToRefresh(app)
+        XCTAssertTrue(error.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Try again"].exists)
+        XCTAssertTrue(app.buttons["Add transaction"].isEnabled)
+        capture("bank-sync-account-error")
+    }
+
     /// Opt-in: install a disposable local budget named "Large Budget Regression" first.
     @MainActor
     func testLargeBudgetTransactionsStayResponsive() throws {
@@ -53,6 +83,8 @@ final class ActualNativeUITests: XCTestCase {
         accountsTab.tap()
         XCTAssertTrue(app.navigationBars["Accounts"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["On budget"].exists, "The demo should show its accounts")
+        pullToRefresh(app)
+        XCTAssertFalse(app.staticTexts["Something needs attention"].exists, "Unlinked accounts should refresh locally")
         capture("03-accounts")
 
         let transactionsTab = app.tabBars.buttons["Transactions"]
@@ -69,6 +101,21 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(app.textFields["Payee"].exists)
         XCTAssertTrue(app.buttons["Save"].exists)
         capture("05-transaction-editor")
+        let payee = app.textFields["Payee"]
+        payee.tap()
+        payee.typeText("Resume draft")
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        XCTAssertTrue(app.navigationBars["New transaction"].waitForExistence(timeout: 10))
+        XCTAssertEqual(payee.value as? String, "Resume draft", "Foreground handling must preserve an open editor's draft")
+    }
+
+    @MainActor
+    private func pullToRefresh(_ app: XCUIApplication) {
+        let list = app.collectionViews.firstMatch
+        let start = list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.4))
+        let end = list.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.85))
+        start.press(forDuration: 0.1, thenDragTo: end)
     }
 
     @MainActor

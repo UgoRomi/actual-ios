@@ -9,7 +9,7 @@ Validated on 2026-09-17 with Actual 26.9.0, commit `5bb7d6f6fdae21cb35425a3d444f
 - Recovery regression: deterministic replay discard produces a warning, blocks writes, and retains both behaviors across recreated engine lifetimes.
 - Real Actual demo: transaction creation/edit/deletion, exact account balances, category allocation, and reopening with another runtime.
 - Failed budget download restores the previous usable budget; the connection form stays mounted during recovery. Draft retention was checked in code, not by a separate UI failure test.
-- Automatic load-time cloud uploads are disabled by the adapter. Due snapshot uploads are awaited inside explicit sync; the error path was reviewed statically.
+- Untracked upstream load-time cloud uploads are disabled by the adapter. Due snapshot uploads are awaited inside tracked sync, now coordinated by the native app on opening and after edits.
 - Incorrect server and encryption passwords are rejected; retrying with the correct passwords succeeds.
 - An existing rule that turns a new native entry into a transfer creates both reciprocal entries and exact account balances; linked transfer editing/deletion remains blocked.
 - Encrypted sync integration: new temporary server and encrypted upstream fixture; native download/add/sync; offline edit in a second process; third-process reopen/sync; upstream API verifies `-2345` cents and resulting `97655`-cent account balance.
@@ -76,3 +76,49 @@ xcodebuild test -project ActualNative.xcodeproj -scheme ActualNative \
 ```
 
 The test opens Transactions, scrolls, opens/cancels the editor, searches and clears the query. It passed with a disposable copy of the supplied database on the iPhone 17 Pro / iOS 26.0 simulator. It skips when the fixture is absent. Use a fresh simulator for the separate demo smoke test, and delete the disposable fixture simulator after testing.
+
+## Manual bank sync (2026-09-24)
+
+Run `./scripts/test-bank-sync.sh`. This compiles the real JavaScriptCore bridge and native app model, creates a disposable budget, and serves simulated GoCardless/SimpleFIN responses over localhost. It uses no live bank credentials and removes its fixture after the run.
+
+Verified: only selected linked/open accounts reach the provider; empty, unlinked, closed, deleted, invalid, and incomplete connections cannot accidentally trigger a full sync. SimpleFIN uses one batch request, including for a single selected account. Imports preserve exact cents and cleared state, run existing rules, respect pending/notes preferences, and do not duplicate on repeated refresh. Successful imports remain visible during partial failures. Rate limits, expired authorization/server tokens, missing data, retries, overlapping-command guards, and persisted balances/status/last-refresh timestamps are covered. Missing credentials and existing recovery warnings prevent bank requests.
+
+Strict bridge type checking, the signed simulator build, native engine/recovery tests, 10,000-transaction regression, and encrypted budget-sync integration also passed. The latter still verifies offline edits and rule-created transfers through the upstream Actual API. Bank imports and connection-status changes now request asynchronous budget sync through the native coordinator; untracked upstream sync timers remain disabled.
+
+The optional `testBankRefreshRequiresConnection` UI test uses a local budget named `Bank Sync Regression` with fake linked accounts and no server credentials. After running the bank test script, create its fixture in an empty directory:
+
+```sh
+fixture_dir="$(mktemp -d "${TMPDIR:-/tmp}/actual-bank-ui.XXXXXX")"
+.build/engine-bank-sync Native/Resources "${fixture_dir}" unused seed-ui
+```
+
+Install the app on a **fresh disposable simulator**. Use `xcrun simctl get_app_container SIMULATOR_ID com.ugoromi.actualnative data` to find its data directory, and copy `${fixture_dir}/bank-sync-regression` into `Library/Application Support/ActualNative/`. Do not copy `test-settings.json`; simulator credentials stay empty. Run only this test with `-parallel-testing-enabled NO`:
+
+```sh
+xcodebuild test -project ActualNative.xcodeproj -scheme ActualNative \
+  -destination 'platform=iOS Simulator,id=SIMULATOR_ID' \
+  -derivedDataPath DerivedData -parallel-testing-enabled NO \
+  -only-testing:ActualNativeUITests/ActualNativeUITests/testBankRefreshRequiresConnection \
+  CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
+```
+
+The fixture test passed on iPhone 17 Pro / iOS 26.0: pull-to-refresh on Accounts and an individual register, a visible connection error/retry, and continued access to transactions. Screenshots of both error states were visually checked. The test uses an explicit drag within the list because XCTest's application-wide swipe did not activate the refresh control. It skips without its fixture. The demo navigation test also passed on a separate fresh simulator session; it exercises local refresh of unlinked accounts.
+
+Live provider connections, provider-specific reauthorization flows, and bank-sync UI on a physical device remain unverified. The timeout allowance follows upstream's five-minute SimpleFIN batch limit; that full-duration timeout was not exercised.
+
+## Automatic budget sync (2026-09-24)
+
+Run `./scripts/test-auto-sync.sh` with the pinned upstream core/API/server artifacts built as described in the README. It compiles the real JavaScriptCore bridge and native app model, creates an encrypted disposable budget on a temporary Actual server, and uses a local proxy to hold or reject sync responses. Temporary data and server logs are retained for inspection; the fixture shuts down its own processes.
+
+Verified:
+
+- Cold launch and foreground return wait for sync and snapshot refresh before allowing edits. Incoming encrypted remote changes appear in the opened budget. Duplicate activation notifications do not resync.
+- Transaction additions, edits, deletions, and category allocations save locally while a previous sync response is held. Follow-up changes coalesce, requests never overlap, and the upstream API verifies exact amounts and allocations.
+- A failed automatic sync preserves the completed local edit and last successful sync time, with a separate sync error. Offline opening remains usable. The edit survives engine recreation; returning to the foreground exchanges both offline and remote changes.
+- Budget switching waits for active sync and resets its status. Local/demo edits and foreground returns make no server sync requests.
+
+The incoming-message test exposed an encryption-adapter mismatch: encrypted CRDT metadata contains raw IV/tag buffers, whereas file downloads provide base64 strings. The adapter now handles both formats. Existing encrypted download, offline-restart, recovery, transfer, and bank-import regressions also pass, as does strict bridge type checking.
+
+The signed iPhone 17 Pro / iOS 26.0 simulator build and demo UI smoke passed. The UI test also backgrounds and reactivates the app with an unfinished transaction, verifying that the sheet and payee draft remain intact. The opening-sync gate is verified with delayed responses in the native integration harness; the UI draft test uses a local demo budget.
+
+No periodic closed-app sync or iOS background-task service is implemented. Completion while iOS suspends the app, physical-device lifecycle behavior, and live provider/server deployment behavior remain unverified. Saved edits retry on the next opening, edit, or explicit **Sync now**.

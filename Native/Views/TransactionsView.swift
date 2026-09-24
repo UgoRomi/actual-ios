@@ -19,6 +19,7 @@ struct TransactionsView: View {
                                                   search: search, currency: model.currency)
         return List {
             if let error = model.errorMessage { Section { ErrorNotice(message: error) { Task { await model.refresh() } } } }
+            if let accountID { BankSyncNotice(accountID: accountID) }
             if sections.isEmpty {
                 ContentUnavailableView(search.isEmpty ? "A fresh start" : "No matching transactions", systemImage: search.isEmpty ? "list.bullet.rectangle" : "magnifyingglass", description: Text(search.isEmpty ? "Your transactions will appear here. Add one to keep your budget up to date." : "Try a different payee, category, or amount."))
             }
@@ -44,7 +45,10 @@ struct TransactionsView: View {
                     .disabled(model.isBusy || model.snapshot?.openAccounts.isEmpty != false)
             }
         }
-        .refreshable { await model.refresh() }
+        .refreshable {
+            if let accountID { await model.refreshAccounts(accountID: accountID) }
+            else { await model.refresh() }
+        }
         .sheet(isPresented: $isAdding) { TransactionEditor(accountID: accountID) }
         .sheet(item: $selectedTransaction) { transaction in TransactionEditor(transaction: transaction, accountID: transaction.accountId) }
     }

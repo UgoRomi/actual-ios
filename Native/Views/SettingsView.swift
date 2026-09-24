@@ -18,12 +18,15 @@ struct SettingsView: View {
                         LabeledContent("Last synced") { Text(date, format: .dateTime.hour().minute()) }
                     }
                     Button { Task { await model.perform("sync") } } label: {
-                        HStack { Text("Sync now"); Spacer(); if model.isBusy { ProgressView() } }
-                    }.disabled(model.isBusy)
+                        HStack { Text("Sync now"); Spacer(); if model.isSyncingBudget { ProgressView() } }
+                    }.disabled(model.isBusy || model.isSyncingBudget || !model.canSyncBudget)
                     Button("Connect to a server") { showConnection = true }.disabled(model.isBusy)
                 } header: { Text("Sync") } footer: {
-                    Text("Local changes are kept on this device. Sync sends and receives updates with your Actual server.")
+                    Text(model.canSyncBudget
+                         ? "Your budget syncs when you open the app and after changes. Edits are saved on this device first. Sync now retries immediately."
+                         : "This budget is saved only on this device. Open a budget from your server to sync it.")
                 }
+                if let error = model.syncErrorMessage { Section { ErrorNotice(message: error) } }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
                 Section {
                     Button("Choose another budget") {

@@ -4,7 +4,7 @@ Approved on 2026-09-24. Pull to refresh Accounts to fetch transactions for all l
 
 Use Actual 26.9.0 at the revision in `Engine/upstream.json`. Its `accounts-get` handler exposes bank linkage and status; the public accounts API omits some of this metadata. Call `simplefin-batch-sync` once for selected SimpleFIN accounts and `accounts-bank-sync` for each other selected account, matching the upstream UI. Never pass an empty ID list: upstream treats it as all accounts. Keep imports, matching, rules, account preferences, and balance calculations inside Actual's engine.
 
-Bank refresh is explicit and separate from Settings → Sync now, which exchanges budget changes with the server. Imported transactions are saved locally and included in the next budget sync. Require a connected server and token before requesting bank data. Existing compatibility/recovery warnings also block bank imports.
+Bank refresh is explicit and separate from budget sync. Imported transactions are saved locally and trigger asynchronous budget sync under the subsequent `2026-09-24-automatic-budget-sync-design.md` extension. Settings → Sync now remains an immediate retry. Require a connected server and token before requesting bank data. Existing compatibility/recovery warnings also block bank imports.
 
 Show linked-account status, progress, last successful bank refresh, and actionable account-specific failures. A failed account must not hide successful imports from other accounts. Refresh the snapshot after both successful and failed attempts; preserve bank errors until another attempt or a budget switch. Disable overlapping commands using the existing busy state. Return structured results instead of treating a partial import as an all-or-nothing failure.
 
@@ -16,3 +16,7 @@ Show linked-account status, progress, last successful bank refresh, and actionab
 4. Update the README, existing design, and validation notes with delivered behavior and test limits.
 
 The brainstorming skill's follow-on `writing-plans` skill is unavailable in this installation; this concise implementation plan serves that step.
+
+## Delivered behavior
+
+The engine returns typed per-account results and snapshots expose bank eligibility, persisted status, and last refresh. Native pull-to-refresh uses these results, retains successful imports during partial failures, and keeps budget sync status separate. Account setup/reconnection stays in Actual web/desktop. SimpleFIN requests have the upstream five-minute allowance. The native bank fixture, engine/recovery tests, type check, encrypted budget-sync integration, and simulator build pass; detailed coverage and remaining live-provider limits are recorded in `../validation.md`.

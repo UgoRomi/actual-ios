@@ -81,7 +81,9 @@ struct TransactionEditor: View {
                     }
                 }
                 Section {
-                    Label("Changes are saved on this device. Sync with your server from Settings.", systemImage: "internaldrive")
+                    Label(model.canSyncBudget
+                          ? "Changes are saved on this device, then synced automatically with your server."
+                          : "Changes are saved on this device.", systemImage: "internaldrive")
                         .font(.footnote).foregroundStyle(.secondary)
                 }
             }
