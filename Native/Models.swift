@@ -45,7 +45,12 @@ struct BudgetSnapshot: Decodable, Sendable {
     let month: String
     let currencyCode: String
     let syncWarning: String?
-    let toBudget: Int
+    let budgetType: BudgetType
+    /// Envelope budgets only.
+    let toBudget: Int?
+    /// Tracking budgets only: projected savings for current and future months, otherwise actual savings.
+    let saved: Int?
+    let savedIsProjected: Bool
     let totalBudgeted: Int
     let totalSpent: Int
     let accounts: [Account]
@@ -56,6 +61,8 @@ struct BudgetSnapshot: Decodable, Sendable {
     var categories: [BudgetCategory] { groups.flatMap(\.categories) }
     var openAccounts: [Account] { accounts.filter { !$0.closed } }
 }
+
+enum BudgetType: String, Decodable, Sendable { case envelope, tracking }
 
 struct Account: Decodable, Identifiable, Sendable {
     let id: String

@@ -9,7 +9,7 @@ Validated on 2026-09-17 with Actual 26.9.0, commit `5bb7d6f6fdae21cb35425a3d444f
 - Recovery regression: deterministic replay discard produces a warning, blocks writes, and retains both behaviors across recreated engine lifetimes.
 - Real Actual demo: transaction creation/edit/deletion, exact account balances, category allocation, and reopening with another runtime.
 - Failed budget download restores the previous usable budget; the connection form stays mounted during recovery. Draft retention was checked in code, not by a separate UI failure test.
-- Untracked upstream load-time cloud uploads are disabled by the adapter. Due snapshot uploads are awaited inside tracked sync, now coordinated by the native app on opening and after edits.
+- Untracked upstream load-time cloud uploads are disabled by the adapter. Due snapshot uploads are awaited inside tracked sync, now coordinated by the native app on opening and after edits. As upstream does, a failed snapshot upload does not fail sync; it retries on the next due sync.
 - Incorrect server and encryption passwords are rejected; retrying with the correct passwords succeeds.
 - An existing rule that turns a new native entry into a transfer creates both reciprocal entries and exact account balances; linked transfer editing/deletion remains blocked.
 - Encrypted sync integration: new temporary server and encrypted upstream fixture; native download/add/sync; offline edit in a second process; third-process reopen/sync; upstream API verifies `-2345` cents and resulting `97655`-cent account balance.
@@ -122,3 +122,14 @@ The incoming-message test exposed an encryption-adapter mismatch: encrypted CRDT
 The signed iPhone 17 Pro / iOS 26.0 simulator build and demo UI smoke passed. The UI test also backgrounds and reactivates the app with an unfinished transaction, verifying that the sheet and payee draft remain intact. The opening-sync gate is verified with delayed responses in the native integration harness; the UI draft test uses a local demo budget.
 
 No periodic closed-app sync or iOS background-task service is implemented. Completion while iOS suspends the app, physical-device lifecycle behavior, and live provider/server deployment behavior remain unverified. Saved edits retry on the next opening, edit, or explicit **Sync now**.
+
+## Review fixes (2026-09-24)
+
+A review against the pinned upstream source found four bridge defects. Each has a regression test that fails on the previous code:
+
+- **Tracking budgets.** Opening a tracking budget failed because it has no to-budget amount, and its budgeted total was negated as if it were an envelope budget. The snapshot now reports the budget type. Tracking budgets show projected savings for the current and future months, and saved or overspent for past months, as Actual's mobile web app does. `./scripts/test-engine.sh` switches the demo to tracking and checks both summaries, the positive budgeted total, and projected savings equal to budgeted income minus budgeted expenses. A simulator screenshot of a tracking demo was inspected.
+- **Changed-field edits.** Saving a transaction rewrote every column, so an edit could overwrite another device's unsynced change to a different field, or restore a transaction deleted elsewhere. Edits now send only changed fields through `transactions-batch-update`, like Actual's editors. An unchanged save writes nothing. Off-budget transactions are saved without a category, as upstream does. `./scripts/test-auto-sync.sh` edits a note through the upstream API while this device changes the amount offline. It then verifies that both changes survive sync.
+- **Mutation serialization.** Updates and deletes were wrapped in a second `runMutator`, which let queued mutations, such as incoming sync changes, run concurrently. They now call the mutator handler once, under Actual's own lock.
+- **Snapshot upload failures.** A rejected weekly snapshot upload failed every sync, and the error showed as "[object Object]" because upstream throws plain objects. The upload is still awaited within tracked sync, but its failure is logged and retried on the next due sync. Plain-object errors now show their reason. The automatic-sync harness rejects a due upload and verifies that sync still succeeds, that the upload date does not advance, and that the next sync uploads successfully.
+
+Strict bridge type checking, native engine/recovery tests, encrypted budget sync, bank-sync regressions, the 10,000-transaction regression, the signed simulator build, and the demo UI smoke test on a new iPhone 17 Pro simulator also passed.

@@ -1,10 +1,34 @@
 import Foundation
 
 @main struct EngineSmoke {
-  static func snapshot(_ engine: EngineClient) async throws -> BudgetSnapshot {
+  static func snapshot(_ engine: EngineClient, month: String = "2026-09") async throws
+    -> BudgetSnapshot
+  {
     try JSONDecoder().decode(
       BudgetSnapshot.self,
-      from: await engine.call("snapshot", arguments: ["month": .string("2026-09")]))
+      from: await engine.call("snapshot", arguments: ["month": .string(month)]))
+  }
+  static func expenseBudgeted(_ snapshot: BudgetSnapshot) -> Int {
+    snapshot.categories.filter { !$0.isIncome }.reduce(0) { $0 + $1.budgeted }
+  }
+  /// Reads the budget database through a separate connection, as a second process would.
+  static func query(data: URL, resources: URL, budget: String, _ sql: String, _ params: [Any] = [])
+    throws -> [[String: Any]]
+  {
+    let host = try NativeHost(dataDirectory: data, resourceDirectory: resources, useKeychain: false)
+    guard let db = try host.perform("sql.open", ["path": "/documents/\(budget)/db.sqlite"]) as? Int
+    else { throw EngineFailure("Budget database did not open") }
+    defer { _ = try? host.perform("sql.close", ["id": db]) }
+    return try host.perform(
+      "sql.query", ["id": db, "sql": sql, "params": params, "fetchAll": true]) as? [[String: Any]]
+      ?? []
+  }
+  static func activeBudget(_ engine: EngineClient) async throws -> String {
+    guard
+      let id = try JSONDecoder().decode(Bootstrap.self, from: await engine.call("bootstrap"))
+        .activeBudgetId
+    else { throw EngineFailure("No active budget") }
+    return id
   }
   static func main() async throws {
     let resources = URL(fileURLWithPath: CommandLine.arguments[1])
@@ -30,6 +54,7 @@ import Foundation
     _ = try await restarted.call("deleteTransaction", arguments: ["id": .string(saved.id)])
     let deleted = try await snapshot(restarted)
     precondition(!deleted.transactions.contains(where: { $0.id == saved.id }))
+    try await trackingBudget(data: data.appendingPathComponent("budget"), resources: resources)
     print(
       "PASS: actual engine demo, add, edit, budget allocation, offline reopen, exact balances, delete"
     )
@@ -42,6 +67,8 @@ import Foundation
     _ = try await engine.call("bootstrap")
     _ = try await engine.call("demo")
     let before = try await snapshot(engine)
+    precondition(before.budgetType == .envelope && before.toBudget != nil && before.saved == nil)
+    precondition(before.totalBudgeted == expenseBudgeted(before))
     guard let account = before.openAccounts.first(where: { !$0.offbudget }),
       let category = before.categories.first(where: { !$0.isIncome })
     else { throw EngineFailure("Demo fixture has no usable account/category") }
@@ -83,6 +110,36 @@ import Foundation
       }
     }
     return (transaction.id, account.id, account.balance - 2345, category.id)
+  }
+  static func trackingBudget(data: URL, resources: URL) async throws {
+    let engine = try EngineClient(
+      dataDirectory: data, resourceDirectory: resources, useKeychain: false)
+    let budget = try await activeBudget(engine)
+    _ = try await engine.call("close")
+    // Actual reads budgetType when a budget loads; the separate cache is rebuilt.
+    _ = try query(
+      data: data, resources: resources, budget: budget,
+      "INSERT OR REPLACE INTO preferences (id, value) VALUES ('budgetType', 'tracking')")
+    try? FileManager.default.removeItem(
+      at: data.appendingPathComponent(budget).appendingPathComponent("cache.sqlite"))
+    _ = try await engine.call("open", arguments: ["id": .string(budget)])
+    let projected = try await snapshot(engine, month: BudgetDate.month(Date()))
+    precondition(projected.budgetType == .tracking && projected.toBudget == nil)
+    precondition(projected.savedIsProjected && projected.saved != nil)
+    let incomeBudgeted = projected.categories.filter(\.isIncome).reduce(0) { $0 + $1.budgeted }
+    precondition(projected.totalBudgeted == expenseBudgeted(projected))
+    precondition(projected.saved == incomeBudgeted - projected.totalBudgeted)
+    let lastMonth = Calendar(identifier: .gregorian).date(byAdding: .month, value: -1, to: Date())!
+    let past = try await snapshot(engine, month: BudgetDate.month(lastMonth))
+    precondition(past.budgetType == .tracking && !past.savedIsProjected && past.saved != nil)
+    _ = try await engine.call("close")
+    _ = try query(
+      data: data, resources: resources, budget: budget,
+      "DELETE FROM preferences WHERE id = 'budgetType'")
+    try? FileManager.default.removeItem(
+      at: data.appendingPathComponent(budget).appendingPathComponent("cache.sqlite"))
+    _ = try await engine.call("open", arguments: ["id": .string(budget)])
+    print("PASS: tracking budget summary, positive budgeted total, projected and actual savings")
   }
   static func hostTests(data: URL, resources: URL) throws {
     let host = try NativeHost(dataDirectory: data, resourceDirectory: resources, useKeychain: false)

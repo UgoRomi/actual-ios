@@ -9,6 +9,7 @@ private struct AutoSyncFixture: Decodable {
 }
 private struct SyncServerState: Decodable {
     let syncRequests: Int
+    let uploadAttempts: Int
     let pendingRequests: Int
     let maxInFlight: Int
 }
@@ -17,6 +18,10 @@ private struct RemoteBudgetState: Decodable {
     let balance: Int
     let allocation: Int
     let deletedPresent: Bool
+}
+private struct RemoteTransaction: Decodable {
+    let amount: Int
+    let notes: String
 }
 
 @main struct AutomaticBudgetSync {
@@ -29,6 +34,7 @@ private struct RemoteBudgetState: Decodable {
         try await prepare(fixture)
         try await verifyOpeningAndEdits(fixture)
         try await verifyRestartAndSwitch(fixture)
+        try await verifyFailedSnapshotUpload()
     }
 
     static func engine() throws -> EngineClient {
@@ -119,6 +125,18 @@ private struct RemoteBudgetState: Decodable {
         try require(model.syncErrorMessage == nil && !model.isBusy, "Foreground retry did not clear sync failure")
         print("PASS: offline data survives restart and foreground sync exchanges both local and remote edits")
 
+        // Another device edits the note before this device syncs an amount-only edit.
+        _ = try await control("offline")
+        _ = try await control("remote-notes?id=\(saved.id)")
+        try require(await model.perform("saveTransaction", arguments: transaction(fixture, id: saved.id, amount: -5678)), "Amount edit failed")
+        try await until("offline sync after amount edit") { !model.isSyncingBudget }
+        _ = try await control("online")
+        try require(await model.perform("sync"), "Sync after concurrent edits failed: \(model.syncErrorMessage ?? "none")")
+        let merged = try await remoteTransaction(saved.id)
+        try require(merged.amount == -5678 && merged.notes == "Remote note", "A local edit overwrote another device's change: \(merged)")
+        try require(model.snapshot?.transactions.first { $0.id == saved.id }?.notes == "Remote note", "Local view missed the remote note")
+        print("PASS: edits sync only changed fields and keep another device's concurrent change")
+
         _ = try await control("hold")
         try require(await model.perform("saveTransaction", arguments: transaction(fixture, id: saved.id, amount: -4567)), "Save before switch failed")
         try await until("sync before budget switch") { try await control("state").pendingRequests == 1 }
@@ -139,6 +157,34 @@ private struct RemoteBudgetState: Decodable {
         print("PASS: budget switching waits for active sync and local/demo budgets remain local")
     }
 
+    @MainActor private static func verifyFailedSnapshotUpload() async throws {
+        let engine = try engine()
+        let budgets = try JSONDecoder().decode(Bootstrap.self, from: await engine.call("bootstrap")).budgets
+        guard let budget = budgets.first(where: { $0.cloudFileId != nil }) else { throw EngineFailure("Server budget missing") }
+        // Make the weekly snapshot upload due while the budget is closed.
+        let metadataURL = directory.appendingPathComponent(budget.id).appendingPathComponent("metadata.json")
+        func lastUploaded() throws -> String? {
+            (try JSONSerialization.jsonObject(with: Data(contentsOf: metadataURL)) as? [String: Any])?["lastUploaded"] as? String
+        }
+        guard var metadata = try JSONSerialization.jsonObject(with: Data(contentsOf: metadataURL)) as? [String: Any] else { throw EngineFailure("Budget metadata missing") }
+        metadata["lastUploaded"] = "2000-01-01"
+        try JSONSerialization.data(withJSONObject: metadata).write(to: metadataURL)
+        _ = try await control("reject-uploads")
+        let model = AppModel(engine: engine)
+        await model.activate()
+        let attempts = try await control("state").uploadAttempts
+        await model.openBudget(budget.id)
+        try require(model.snapshot != nil && model.errorMessage == nil, "Budget did not open: \(model.errorMessage ?? "no snapshot")")
+        try require(model.syncErrorMessage == nil && model.syncStatus == "Synced with server", "A rejected snapshot upload failed sync: \(model.syncErrorMessage ?? model.syncStatus)")
+        try require(try await control("state").uploadAttempts == attempts + 1, "The due snapshot upload was not attempted")
+        try require(try lastUploaded() == "2000-01-01", "A rejected upload advanced the upload date")
+        _ = try await control("accept-uploads")
+        try require(await model.perform("sync"), "Sync failed after uploads recovered: \(model.syncErrorMessage ?? "none")")
+        try require(try await control("state").uploadAttempts == attempts + 2, "The snapshot upload was not retried")
+        try require(try lastUploaded() != "2000-01-01", "A successful upload did not advance the upload date")
+        print("PASS: a rejected snapshot upload does not fail budget sync and retries on the next sync")
+    }
+
     private static func transaction(_ fixture: AutoSyncFixture, id: String? = nil, amount: Int) -> [String: JSONValue] {
         var arguments: [String: JSONValue] = ["accountId": .string(fixture.accountId), "date": .string("2026-09-24"), "categoryId": .string(fixture.categoryId), "amount": .number(amount), "notes": .string("Automatic sync edit"), "cleared": .bool(true)]
         if let id { arguments["id"] = .string(id) }
@@ -147,6 +193,10 @@ private struct RemoteBudgetState: Decodable {
     private static func control(_ action: String) async throws -> SyncServerState {
         let (data, _) = try await URLSession.shared.data(from: URL(string: server + "/test/" + action)!)
         return try JSONDecoder().decode(SyncServerState.self, from: data)
+    }
+    private static func remoteTransaction(_ id: String) async throws -> RemoteTransaction {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: server + "/test/transaction?id=" + id)!)
+        return try JSONDecoder().decode(RemoteTransaction.self, from: data)
     }
     private static func remoteState() async throws -> RemoteBudgetState {
         let (data, _) = try await URLSession.shared.data(from: URL(string: server + "/test/verify")!)

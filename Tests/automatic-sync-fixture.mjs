@@ -30,7 +30,9 @@ let fixture;
 let proxy;
 let hold = false;
 let offline = false;
+let rejectUploads = false;
 let syncRequests = 0;
+let uploadAttempts = 0;
 let inFlight = 0;
 let maxInFlight = 0;
 const pending = [];
@@ -56,11 +58,26 @@ try {
     try {
       response.setHeader("Content-Type", "application/json");
       if (request.url.startsWith("/test/")) {
-        switch (request.url) {
+        const control = new URL(request.url, "http://fixture");
+        const id = control.searchParams.get("id");
+        switch (control.pathname) {
           case "/test/hold": hold = true; break;
           case "/test/release": hold = false; pending.splice(0).forEach(release => release()); break;
           case "/test/offline": offline = true; break;
           case "/test/online": offline = false; break;
+          case "/test/reject-uploads": rejectUploads = true; break;
+          case "/test/accept-uploads": rejectUploads = false; break;
+          case "/test/remote-notes":
+            await api.sync();
+            await api.updateTransaction(id, { notes: "Remote note" });
+            await api.sync();
+            break;
+          case "/test/transaction": {
+            await api.sync();
+            const row = (await api.getTransactions(fixture.accountId, "2026-01-01", "2026-12-31")).find(row => row.id === id);
+            response.end(JSON.stringify({ amount: row?.amount ?? 0, notes: row?.notes ?? "" }));
+            return;
+          }
           case "/test/remote-edit":
             await api.sync();
             await api.addTransactions(fixture.accountId, [{ date: "2026-09-24", amount: -200, notes: "Remote auto-sync fixture", category: fixture.categoryId }]);
@@ -81,7 +98,7 @@ try {
           case "/test/state": break;
           default: throw new Error(`Unknown fixture control ${request.url}`);
         }
-        response.end(JSON.stringify({ syncRequests, pendingRequests: pending.length, inFlight, maxInFlight }));
+        response.end(JSON.stringify({ syncRequests, uploadAttempts, pendingRequests: pending.length, inFlight, maxInFlight }));
         return;
       }
       const isSync = request.url === "/sync/sync";
@@ -93,6 +110,14 @@ try {
       }
       const chunks = [];
       for await (const chunk of request) chunks.push(chunk);
+      if (request.url === "/sync/upload-user-file") {
+        uploadAttempts++;
+        if (rejectUploads) {
+          response.writeHead(500);
+          response.end(JSON.stringify({ status: "error", reason: "internal" }));
+          return;
+        }
+      }
       if (isSync && hold) await new Promise(resolve => pending.push(resolve));
       if (isSync && offline) {
         response.writeHead(503);
@@ -118,7 +143,7 @@ try {
   const code = await new Promise((resolve, reject) => { native.once("error", reject); native.once("exit", resolve); });
   assert.equal(code, 0, "Native automatic-sync harness failed");
   assert.equal(maxInFlight, 1, "Budget sync requests must never overlap");
-  console.log("PASS: real encrypted server sync with delayed responses, offline failures, and no overlapping requests");
+  console.log("PASS: real encrypted server sync with delayed responses, offline failures, rejected snapshot uploads, and no overlapping requests");
 } finally {
   clearTimeout(watchdog);
   native?.kill();

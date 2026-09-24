@@ -1,8 +1,10 @@
 import { init, lib } from "@actual/core";
 import { getPrefs } from "@actual/prefs";
 import { setServer } from "@actual/server-config";
+import { getBudgetType } from "@actual/source/server/budget/base.ts";
 import { loadKey } from "@actual/source/server/encryption/index.ts";
 import { runMutator } from "@actual/source/server/mutators.ts";
+import { currentMonth, sheetForMonth } from "@actual/source/shared/months.ts";
 import * as storage from "@actual/storage";
 import { setSyncingMode, fullSync, clearFullSyncTimeout } from "@actual/sync";
 
@@ -24,6 +26,16 @@ function integer(value: unknown): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value))
     throw new Error("Invalid monetary amount");
   return value;
+}
+// Some upstream failures, such as FileUploadError, are thrown as plain objects.
+function describe(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object") {
+    if ("message" in error && typeof error.message === "string" && error.message) return error.message;
+    if ("reason" in error && typeof error.reason === "string") return "Actual reported an error: " + error.reason;
+  }
+  return "The operation could not finish. Try again.";
 }
 function fail(result: unknown) {
   if (result && typeof result === "object" && "error" in result && result.error)
@@ -83,6 +95,19 @@ async function snapshot(month: string) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error("Invalid budget month");
   const budget = await lib.send("api/budget-month", { month });
   const preferences = await lib.send("preferences/get");
+  const budgetType = getBudgetType() === "tracking" ? "tracking" : "envelope";
+  // Tracking budgets have no to-budget cell. Mirror the mobile web summary:
+  // projected savings for current/future months, actual savings for past ones.
+  const savedIsProjected = budgetType === "tracking" && month >= currentMonth();
+  const saved =
+    budgetType === "tracking"
+      ? (
+          await lib.send("get-cell", {
+            sheetName: sheetForMonth(month),
+            name: savedIsProjected ? "total-saved" : "real-saved",
+          })
+        ).value
+      : null;
   const rawAccounts = await lib.send("accounts-get");
   const payees = await lib.send("api/payees-get");
   const rawCategories = [
@@ -156,8 +181,12 @@ async function snapshot(month: string) {
       ? preferences.defaultCurrencyCode
       : "",
     syncWarning: syncWarning(),
-    toBudget: budget.toBudget,
-    totalBudgeted: -budget.totalBudgeted,
+    budgetType,
+    toBudget: budgetType === "envelope" ? (budget.toBudget ?? 0) : null,
+    saved: budgetType === "tracking" ? (typeof saved === "number" ? saved : 0) : null,
+    savedIsProjected,
+    // Envelope budgets negate their budgeted total; tracking budgets do not.
+    totalBudgeted: budgetType === "envelope" ? -budget.totalBudgeted : budget.totalBudgeted,
     totalSpent: budget.totalSpent,
     accounts,
     groups,
@@ -305,22 +334,29 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       let payee = text(args.payeeId) || null;
       const name = text(args.payeeName).trim();
       if (!payee && name) payee = await lib.send("api/payee-create", { payee: { name } });
+      const account = (await lib.send("accounts-get")).find((a) => a.id === accountId);
       const fields = {
         account: accountId,
         date,
         payee,
-        category: text(args.categoryId) || null,
+        // Actual never categorizes off-budget transactions.
+        category: account?.offbudget ? null : text(args.categoryId) || null,
         amount: integer(args.amount),
         notes: text(args.notes),
         cleared: Boolean(args.cleared),
       };
-      // The pinned api/transaction-update/delete wrappers acknowledge before
-      // awaiting their batch result. Await the underlying mutation instead.
-      if (id)
-        await runMutator(() => lib.send("transaction-update", { ...existing, id, ...fields }), {
-          undoDisabled: true,
-        });
-      else
+      if (existing) {
+        // Like Actual's editors, send only changed fields. Rewriting unchanged
+        // columns would override other devices' edits that have not synced yet.
+        // The handler is a mutator; lib.send awaits it under Actual's lock.
+        const changes = Object.fromEntries(
+          Object.entries(fields).filter(([key, value]) =>
+            key === "notes" ? (existing.notes || "") !== value : (existing[key] ?? null) !== value,
+          ),
+        );
+        if (Object.keys(changes).length)
+          await lib.send("transactions-batch-update", { updated: [{ id, ...changes }] });
+      } else
         await lib.send("api/transactions-add", {
           accountId,
           transactions: [
@@ -334,9 +370,7 @@ async function perform(method: string, args: Obj): Promise<unknown> {
     case "deleteTransaction": {
       const id = text(args.id);
       await editable(id);
-      await runMutator(() => lib.send("transaction-delete", { id }), {
-        undoDisabled: true,
-      });
+      await lib.send("transactions-batch-update", { deleted: [{ id }] });
       return {};
     }
     case "close":
@@ -359,10 +393,9 @@ async function execute(method: string, args: Obj): Promise<unknown> {
         await lib.send("api/load-budget", { id: previousId });
         await remember();
       } catch (recoveryError) {
-        const original = error instanceof Error ? error.message : String(error);
-        const recovery =
-          recoveryError instanceof Error ? recoveryError.message : String(recoveryError);
-        throw new Error(original + " Previous budget could not be reopened: " + recovery);
+        throw new Error(
+          describe(error) + " Previous budget could not be reopened: " + describe(recoveryError),
+        );
       }
     }
     throw error;
@@ -372,9 +405,7 @@ let queue: Promise<unknown> = Promise.resolve();
 let activeSync: Promise<unknown> | null = null;
 export function request(id: string, method: string, argsJSON: string) {
   const reply = (value: unknown) => _reply(id, JSON.stringify({ value: value ?? null }));
-  const reject = (error: unknown) => _reply(id, JSON.stringify({
-    error: error instanceof Error ? error.message : String(error),
-  }));
+  const reject = (error: unknown) => _reply(id, JSON.stringify({ error: describe(error) }));
   queue = queue.then(async () => {
     const args = object(JSON.parse(argsJSON));
     if (method === "sync") {

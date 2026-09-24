@@ -59,13 +59,14 @@ struct BudgetView: View {
 
     private func summary(_ snapshot: BudgetSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 22) {
+            let headline = SummaryHeadline(snapshot)
             VStack(alignment: .leading, spacing: 8) {
-                Label(snapshot.toBudget < 0 ? "Over budget" : "Available to budget", systemImage: snapshot.toBudget < 0 ? "exclamationmark.circle" : "circle.dotted")
+                Label(headline.title, systemImage: headline.systemImage)
                     .font(.subheadline.weight(.medium)).foregroundStyle(.white.opacity(0.8))
-                Text(Money.formatted(snapshot.toBudget, currency: model.currency))
+                Text(Money.formatted(headline.amount, currency: model.currency))
                     .font(.system(.largeTitle, design: .rounded, weight: .bold)).monospacedDigit()
                     .foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
-                Text(snapshot.toBudget == 0 ? "Every bit has a purpose." : snapshot.toBudget < 0 ? "Adjust your plan to bring it back into balance." : "Give your money a purpose, one category at a time.")
+                Text(headline.message)
                     .font(.subheadline).foregroundStyle(.white.opacity(0.8))
             }
             Divider().overlay(.white.opacity(0.2))
@@ -107,6 +108,34 @@ struct BudgetView: View {
         }.padding(18).contentShape(Rectangle())
             .accessibilityElement(children: .combine)
             .accessibilityHint("Edit budgeted amount")
+    }
+}
+
+/// Envelope budgets lead with money left to budget; tracking budgets with savings, as in Actual's mobile web app.
+private struct SummaryHeadline {
+    let title: String
+    let systemImage: String
+    let amount: Int
+    let message: String
+
+    init(_ snapshot: BudgetSnapshot) {
+        switch snapshot.budgetType {
+        case .envelope:
+            amount = snapshot.toBudget ?? 0
+            title = amount < 0 ? "Over budget" : "Available to budget"
+            systemImage = amount < 0 ? "exclamationmark.circle" : "circle.dotted"
+            message = amount == 0 ? "Every bit has a purpose." : amount < 0 ? "Adjust your plan to bring it back into balance." : "Give your money a purpose, one category at a time."
+        case .tracking:
+            amount = snapshot.saved ?? 0
+            systemImage = amount < 0 ? "exclamationmark.circle" : "banknote"
+            if snapshot.savedIsProjected {
+                title = "Projected savings"
+                message = amount < 0 ? "Budgeted expenses exceed budgeted income." : "Budgeted income left after budgeted expenses."
+            } else {
+                title = amount < 0 ? "Overspent" : "Saved"
+                message = amount < 0 ? "Spending exceeded income this month." : "Income left after spending this month."
+            }
+        }
     }
 }
 

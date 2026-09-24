@@ -7,11 +7,11 @@ This is a development build, with no App Store submission or distribution signin
 ## What works
 
 - Open a real demo or download a budget from your Actual server.
-- Browse monthly budgets, adjust category allocations, and see account balances.
+- Browse monthly envelope or tracking budgets, adjust category allocations, and see account balances. Tracking budgets show saved or projected savings instead of an amount to budget.
 - Pull to refresh Accounts to fetch bank transactions for all linked, open accounts, or refresh one account from its transaction register. Shows bank refresh status and account-specific errors; existing rules and import preferences apply.
 - Search transactions; add, edit, categorize, clear, and delete ordinary transactions.
 - Sync a server-backed budget before opening it on launch or returning from the background. If sync fails, open the saved budget with a retry message.
-- Save edits locally, then sync asynchronously with the server. Rapid edits are coalesced; **Settings → Sync now** remains available for an immediate retry.
+- Save edits locally, then sync asynchronously with the server. Transaction edits send only the fields you changed, so they do not overwrite other devices' changes to other fields. Rapid edits are coalesced; **Settings → Sync now** remains available for an immediate retry.
 - Open end-to-end encrypted budgets using their encryption password.
 - Native light/dark appearances, system glass controls, and locale-aware integer-cent entry.
 
@@ -81,7 +81,7 @@ Run `./scripts/test-transactions.sh` for register grouping/search regressions an
 
 Run `./scripts/test-bank-sync.sh` for native bank-import regressions using a disposable local HTTP fixture. It checks account selection, SimpleFIN batching, exact amounts, duplicate prevention, rules/preferences, partial failures, authentication errors, retries, and persistence. No live bank credentials are used.
 
-Run `./scripts/test-auto-sync.sh` after building the upstream core/API/server artifacts listed above. It uses an encrypted disposable budget and a local proxy to hold or reject sync responses, verifying opening sync, local saves during network waits, automatic uploads, offline restart/retry, and safe budget switching.
+Run `./scripts/test-auto-sync.sh` after building the upstream core/API/server artifacts listed above. It uses an encrypted disposable budget and a local proxy to hold or reject sync responses, verifying opening sync, local saves during network waits, automatic uploads, offline restart/retry, concurrent edits from another device, rejected snapshot uploads, and safe budget switching.
 
 ## Implementation and storage
 
