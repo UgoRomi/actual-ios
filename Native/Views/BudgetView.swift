@@ -7,17 +7,17 @@ struct BudgetView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
-                    Text(model.snapshot?.budgetName ?? "Actual")
+                    Text(model.overview?.budgetName ?? "Actual")
                         .font(.subheadline).foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                     monthControl
                     if let error = model.errorMessage { ErrorNotice(message: error) { Task { await model.refresh() } } }
-                    if let snapshot = model.snapshot {
-                        summary(snapshot)
-                        if snapshot.groups.isEmpty {
+                    if let budget = model.budget {
+                        summary(budget)
+                        if budget.groups.isEmpty {
                             ContentUnavailableView("No categories yet", systemImage: "tray", description: Text("Set up categories in Actual to start planning your money."))
                         }
-                        ForEach(snapshot.groups.filter { $0.categories.contains { !$0.isIncome } }) { group in
+                        ForEach(budget.groups.filter { $0.categories.contains { !$0.isIncome } }) { group in
                             VStack(alignment: .leading, spacing: 12) {
                                 Text(group.name).font(.title3.bold()).padding(.horizontal, 4)
                                 VStack(spacing: 0) {
@@ -57,9 +57,9 @@ struct BudgetView: View {
         }.disabled(model.isBusy)
     }
 
-    private func summary(_ snapshot: BudgetSnapshot) -> some View {
+    private func summary(_ budget: BudgetMonth) -> some View {
         VStack(alignment: .leading, spacing: 22) {
-            let headline = SummaryHeadline(snapshot)
+            let headline = SummaryHeadline(budget)
             VStack(alignment: .leading, spacing: 8) {
                 Label(headline.title, systemImage: headline.systemImage)
                     .font(.subheadline.weight(.medium)).foregroundStyle(.white.opacity(0.8))
@@ -72,13 +72,13 @@ struct BudgetView: View {
             Divider().overlay(.white.opacity(0.2))
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top) {
-                    summaryValue("Budgeted", snapshot.totalBudgeted)
+                    summaryValue("Budgeted", budget.totalBudgeted)
                     Spacer(minLength: 24)
-                    summaryValue("Spent", snapshot.totalSpent)
+                    summaryValue("Spent", budget.totalSpent)
                 }
                 VStack(alignment: .leading, spacing: 16) {
-                    summaryValue("Budgeted", snapshot.totalBudgeted)
-                    summaryValue("Spent", snapshot.totalSpent)
+                    summaryValue("Budgeted", budget.totalBudgeted)
+                    summaryValue("Spent", budget.totalSpent)
                 }
             }
         }
@@ -118,17 +118,17 @@ private struct SummaryHeadline {
     let amount: Int
     let message: String
 
-    init(_ snapshot: BudgetSnapshot) {
-        switch snapshot.budgetType {
+    init(_ budget: BudgetMonth) {
+        switch budget.budgetType {
         case .envelope:
-            amount = snapshot.toBudget ?? 0
+            amount = budget.toBudget ?? 0
             title = amount < 0 ? "Over budget" : "Available to budget"
             systemImage = amount < 0 ? "exclamationmark.circle" : "circle.dotted"
             message = amount == 0 ? "Every bit has a purpose." : amount < 0 ? "Adjust your plan to bring it back into balance." : "Give your money a purpose, one category at a time."
         case .tracking:
-            amount = snapshot.saved ?? 0
+            amount = budget.saved ?? 0
             systemImage = amount < 0 ? "exclamationmark.circle" : "banknote"
-            if snapshot.savedIsProjected {
+            if budget.savedIsProjected {
                 title = "Projected savings"
                 message = amount < 0 ? "Budgeted expenses exceed budgeted income." : "Budgeted income left after budgeted expenses."
             } else {

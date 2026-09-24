@@ -7,13 +7,13 @@ struct AccountsView: View {
             List {
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) { Task { await model.refresh() } } } }
                 BankSyncNotice()
-                if let snapshot = model.snapshot {
-                    if snapshot.accounts.isEmpty {
+                if let overview = model.overview {
+                    if overview.accounts.isEmpty {
                         ContentUnavailableView("No accounts yet", systemImage: "creditcard", description: Text("Add an account in Actual to see its balance and transactions here."))
                     }
-                    accountSection("On budget", accounts: snapshot.accounts.filter { !$0.offbudget && !$0.closed })
-                    accountSection("Off budget", accounts: snapshot.accounts.filter { $0.offbudget && !$0.closed })
-                    accountSection("Closed", accounts: snapshot.accounts.filter(\.closed))
+                    accountSection("On budget", accounts: overview.accounts.filter { !$0.offbudget && !$0.closed })
+                    accountSection("Off budget", accounts: overview.accounts.filter { $0.offbudget && !$0.closed })
+                    accountSection("Closed", accounts: overview.accounts.filter(\.closed))
                 }
                 Section { SyncFooter() }.listRowBackground(Color.clear)
             }
@@ -87,7 +87,7 @@ struct BankSyncNotice: View {
                     }
                     ForEach(results.filter { $0.error != nil }) { result in
                         VStack(alignment: .leading, spacing: 6) {
-                            Text(model.snapshot?.accounts.first { $0.id == result.accountId }?.name ?? "Account").font(.headline)
+                            Text(model.overview?.accounts.first { $0.id == result.accountId }?.name ?? "Account").font(.headline)
                             Text(result.error ?? "Bank refresh failed.").font(.subheadline).foregroundStyle(.secondary)
                             Button("Try again") { Task { await model.refreshAccounts(accountID: result.accountId) } }
                                 .disabled(model.isBusy)

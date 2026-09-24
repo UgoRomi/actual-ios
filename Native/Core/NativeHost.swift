@@ -31,6 +31,11 @@ final class NativeHost {
   let resourceDirectory: URL
   let useKeychain: Bool
   private let service: String
+  /// Engine settings that are credentials. Only these live in the Keychain;
+  /// everything else is ordinary preferences in a protected file.
+  static let secretKeys: Set<String> = ["user-token", "user-id", "user-key", "encrypt-keys"]
+  private var savedSecrets: NSDictionary?
+  private var settingsURL: URL { dataDirectory.appendingPathComponent("settings.json") }
   lazy var sqlite = SQLiteHost { [unowned self] in try self.resolve($0, writing: $1) }
   init(dataDirectory: URL, resourceDirectory: URL, useKeychain: Bool) throws {
     try FileManager.default.createDirectory(at: dataDirectory, withIntermediateDirectories: true)
@@ -190,54 +195,84 @@ final class NativeHost {
     else { throw EngineFailure("Use an HTTPS Actual server address.") }
     return url
   }
+  /// Settings from the file, plus credentials from the Keychain. Older builds
+  /// kept every setting in the Keychain; move ordinary settings to the file.
   private func readSettings() throws -> [String: Any] {
-    let data: Data
-    if useKeychain {
-      let query: [String: Any] = [
-        kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-        kSecAttrAccount as String: "engine", kSecReturnData as String: true,
-        kSecMatchLimit as String: kSecMatchLimitOne,
-      ]
-      var result: CFTypeRef?
-      let status = SecItemCopyMatching(query as CFDictionary, &result)
-      if status == errSecItemNotFound { return [:] }
-      guard status == errSecSuccess, let stored = result as? Data else {
-        throw EngineFailure("Unable to read saved credentials (\(status))")
-      }
-      data = stored
-    } else {
-      let url = dataDirectory.appendingPathComponent("test-settings.json")
-      guard FileManager.default.fileExists(atPath: url.path) else { return [:] }
-      data = try Data(contentsOf: url)
+    var secrets = try readSecrets()
+    var settings = try readJSON(settingsURL) ?? [:]
+    let legacy = secrets.filter { !Self.secretKeys.contains($0.key) }
+    if !legacy.isEmpty {
+      // Write the file first: after an interruption, the next read retries.
+      settings = legacy.merging(settings) { _, file in file }
+      try writeJSON(settings, to: settingsURL)
+      secrets = secrets.filter { Self.secretKeys.contains($0.key) }
+      try writeSecrets(secrets)
     }
-    guard let settings = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+    savedSecrets = secrets as NSDictionary
+    return settings.merging(secrets) { _, secret in secret }
+  }
+  /// Writes the file every time, but the Keychain only when credentials change.
+  private func writeSettings(_ settings: [String: Any]) throws {
+    try writeJSON(settings.filter { !Self.secretKeys.contains($0.key) }, to: settingsURL)
+    let secrets = settings.filter { Self.secretKeys.contains($0.key) }
+    if savedSecrets?.isEqual(to: secrets) != true {
+      try writeSecrets(secrets)
+      savedSecrets = secrets as NSDictionary
+    }
+  }
+  private func readJSON(_ url: URL) throws -> [String: Any]? {
+    guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+    guard let value = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any]
+    else { throw EngineFailure("Saved engine settings are invalid") }
+    return value
+  }
+  private func writeJSON(_ value: [String: Any], to url: URL) throws {
+    let data = try JSONSerialization.data(withJSONObject: value)
+    #if os(iOS)
+      try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+    #else
+      try data.write(to: url, options: .atomic)
+    #endif
+  }
+  /// Tests without Keychain access keep credentials in a separate file.
+  private var testSecretsURL: URL { dataDirectory.appendingPathComponent("test-secrets.json") }
+  private func readSecrets() throws -> [String: Any] {
+    guard useKeychain else { return try readJSON(testSecretsURL) ?? [:] }
+    let query: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+      kSecAttrAccount as String: "engine", kSecReturnData as String: true,
+      kSecMatchLimit as String: kSecMatchLimitOne,
+    ]
+    var result: CFTypeRef?
+    let status = SecItemCopyMatching(query as CFDictionary, &result)
+    if status == errSecItemNotFound { return [:] }
+    guard status == errSecSuccess, let stored = result as? Data else {
+      throw EngineFailure("Unable to read saved credentials (\(status))")
+    }
+    guard let secrets = try JSONSerialization.jsonObject(with: stored) as? [String: Any] else {
       throw EngineFailure("Saved engine settings are invalid")
     }
-    return settings
+    return secrets
   }
-  private func writeSettings(_ settings: [String: Any]) throws {
-    let data = try JSONSerialization.data(withJSONObject: settings)
-    if useKeychain {
-      let query: [String: Any] = [
-        kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
-        kSecAttrAccount as String: "engine",
-      ]
-      let status = SecItemUpdate(
-        query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
-      if status == errSecItemNotFound {
-        var item = query
-        item[kSecValueData as String] = data
-        item[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        let added = SecItemAdd(item as CFDictionary, nil)
-        guard added == errSecSuccess else {
-          throw EngineFailure("Unable to save credentials (\(added))")
-        }
-      } else if status != errSecSuccess {
-        throw EngineFailure("Unable to save credentials (\(status))")
+  private func writeSecrets(_ secrets: [String: Any]) throws {
+    guard useKeychain else { return try writeJSON(secrets, to: testSecretsURL) }
+    let data = try JSONSerialization.data(withJSONObject: secrets)
+    let query: [String: Any] = [
+      kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
+      kSecAttrAccount as String: "engine",
+    ]
+    let status = SecItemUpdate(
+      query as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+    if status == errSecItemNotFound {
+      var item = query
+      item[kSecValueData as String] = data
+      item[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+      let added = SecItemAdd(item as CFDictionary, nil)
+      guard added == errSecSuccess else {
+        throw EngineFailure("Unable to save credentials (\(added))")
       }
-    } else {
-      try data.write(
-        to: dataDirectory.appendingPathComponent("test-settings.json"), options: .atomic)
+    } else if status != errSecSuccess {
+      throw EngineFailure("Unable to save credentials (\(status))")
     }
   }
 }

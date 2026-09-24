@@ -68,6 +68,11 @@ const result = await build({
       setup(b) {
         b.onResolve({ filter: /.*/ }, (args) => {
           if (overrides[args.path]) return { path: path.join(adapters, overrides[args.path]) };
+          if (
+            args.path === "./backups" &&
+            args.importer === path.join(core, "src/server/budgetfiles/app.ts")
+          )
+            return { path: path.join(adapters, "backups.ts") };
           if (args.path === "node:crypto" || args.path === "crypto")
             return { path: path.join(adapters, "node-crypto.ts") };
           if (args.path === "@actual/core") return { path: path.join(core, "src/server/main.ts") };
@@ -95,6 +100,10 @@ const result = await build({
     },
   ],
   logLevel: "info",
+  // Smaller source parses faster at launch. Keep names: errors and upstream
+  // code may rely on function and class names.
+  minify: true,
+  keepNames: true,
   sourcemap: false,
   metafile: true,
 });

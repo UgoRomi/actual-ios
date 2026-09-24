@@ -9,7 +9,7 @@ private struct BankRequest: Decodable {
     static let resources = URL(fileURLWithPath: CommandLine.arguments[1])
     static let directory = URL(fileURLWithPath: CommandLine.arguments[2])
     static let server = CommandLine.arguments[3]
-    static let linkedIDs = ["bank-checking", "bank-rate", "bank-sf-a", "bank-sf-b", "bank-broken", "bank-no-external"]
+    static let linkedIDs = ["bank-checking", "bank-rate", "bank-sf-a", "bank-sf-b", "bank-sf-no-external", "bank-broken", "bank-no-external"]
 
     @MainActor static func main() async throws {
         let budgetID = try await createFixture()
@@ -50,7 +50,8 @@ private struct BankRequest: Decodable {
         }
         _ = try host.perform("sql.query", ["id": handle, "sql": "INSERT INTO banks (id, bank_id, name, tombstone) VALUES ('fixture-bank', 'external-bank', 'Fixture Bank', 0), ('incomplete-bank', NULL, 'Incomplete Bank', 0)"])
         for id in linkedIDs + ["bank-manual", "bank-closed", "bank-deleted"] {
-            let bank: Any = id == "bank-manual" ? NSNull() : id == "bank-no-external" ? "incomplete-bank" : "fixture-bank"
+            // SimpleFIN may store no external bank ID; its batch sync does not need one.
+            let bank: Any = id == "bank-manual" ? NSNull() : ["bank-no-external", "bank-sf-no-external"].contains(id) ? "incomplete-bank" : "fixture-bank"
             let external: Any = id == "bank-broken" || id == "bank-manual" ? NSNull() : id
             let source: Any = id == "bank-manual" ? NSNull() : id.hasPrefix("bank-sf-") ? "simpleFin" : "goCardless"
             _ = try host.perform("sql.query", ["id": handle,
@@ -141,12 +142,13 @@ private struct BankRequest: Decodable {
         await model.refreshAccounts()
         guard let result = model.bankSyncResult else { throw EngineFailure(model.bankSyncErrorMessage ?? "No bank result") }
         precondition(result.accounts.count == linkedIDs.count)
-        precondition(result.accounts.filter { $0.error == nil }.count == 3)
+        precondition(result.accounts.filter { $0.error == nil }.count == 4)
         precondition(result.accounts.first { $0.id == "bank-rate" }?.error?.contains("refresh limit") == true)
         precondition(result.accounts.first { $0.id == "bank-no-external" }?.error?.contains("incomplete") == true)
         precondition(model.snapshot?.accounts.first { $0.id == "bank-rate" }?.bankSyncStatus == "rate-limit-exceeded")
         precondition(model.snapshot?.accounts.first { $0.id == "bank-sf-a" }?.balance == 98766)
         precondition(model.snapshot?.accounts.first { $0.id == "bank-sf-b" }?.balance == 98766)
+        precondition(model.snapshot?.accounts.first { $0.id == "bank-sf-no-external" }?.balance == 98766)
         precondition(model.snapshot?.transactions.contains { $0.accountId == "bank-sf-b" && $0.amount == -100 } == false)
         precondition(model.snapshot?.transactions.first { $0.accountId == "bank-sf-b" && $0.amount == -1234 }?.notes == "")
         precondition(model.syncStatus == "Saved on this device" && model.lastSyncedAt == nil)
@@ -154,8 +156,8 @@ private struct BankRequest: Decodable {
         let allRequests = Array(try await requests().dropFirst(beforeAll))
         precondition(allRequests.count == 3)
         precondition(allRequests.filter { $0.path == "/simplefin/transactions" }.count == 1)
-        precondition(Set(allRequests.first { $0.path == "/simplefin/transactions" }?.accountIds ?? []) == Set(["bank-sf-a", "bank-sf-b"]))
-        print("PASS: SimpleFIN batches once, off-budget accounts import, rules/preferences apply, partial failures retain successful imports")
+        precondition(Set(allRequests.first { $0.path == "/simplefin/transactions" }?.accountIds ?? []) == Set(["bank-sf-a", "bank-sf-b", "bank-sf-no-external"]))
+        print("PASS: SimpleFIN batches once, including accounts without an external bank ID; off-budget accounts import, rules/preferences apply, partial failures retain successful imports")
 
         await model.refreshAccounts(accountID: "bank-sf-a")
         let simpleFinRequest = try await requests().last
@@ -188,7 +190,7 @@ private struct BankRequest: Decodable {
 
         let reopened = try self.engine()
         _ = try await reopened.call("open", arguments: ["id": .string(budgetID)])
-        let restored = try JSONDecoder().decode(BudgetSnapshot.self, from: await reopened.call("snapshot", arguments: ["month": .string(BudgetDate.month(Date()))]))
+        let restored = try await BudgetSnapshot.load(reopened, month: BudgetDate.month(Date()))
         precondition(restored.accounts.first { $0.id == "bank-rate" }?.balance == 98766)
         precondition(restored.accounts.first { $0.id == "bank-rate" }?.lastBankSyncDate != nil)
         precondition(restored.accounts.first { $0.id == "bank-sf-a" }?.bankSyncNeedsAttention == true)

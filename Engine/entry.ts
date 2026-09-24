@@ -1,10 +1,12 @@
 import { init, lib } from "@actual/core";
 import { getPrefs } from "@actual/prefs";
 import { setServer } from "@actual/server-config";
+import { createPayee } from "@actual/source/server/accounts/payees.ts";
 import { getBudgetType } from "@actual/source/server/budget/base.ts";
 import { loadKey } from "@actual/source/server/encryption/index.ts";
 import { runMutator } from "@actual/source/server/mutators.ts";
 import { currentMonth, sheetForMonth } from "@actual/source/shared/months.ts";
+import { makeChild, recalculateSplit } from "@actual/source/shared/transactions.ts";
 import * as storage from "@actual/storage";
 import { setSyncingMode, fullSync, clearFullSyncTimeout } from "@actual/sync";
 
@@ -12,7 +14,7 @@ import { native } from "./native";
 import { uploadSnapshotIfDue } from "./adapters/cloud-storage";
 import { canSyncBank, syncBankAccounts } from "./bank-sync";
 
-declare function _reply(id: string, response: string): void;
+declare function _reply(id: string, ok: boolean, payload: string): void;
 type Obj = Record<string, unknown>;
 function object(value: unknown): Obj {
   if (value && typeof value === "object" && !Array.isArray(value))
@@ -42,18 +44,46 @@ function fail(result: unknown) {
     throw new Error(typeof result.error === "string" ? result.error : JSON.stringify(result.error));
   return result;
 }
+// desktop-client's shouldApplyRuleChange: rules fill empty fields and may
+// extend notes, but never replace what the user entered.
+function ruleMayChange(field: string, current: unknown, next: unknown): boolean {
+  if (current == null || current === "" || current === 0 || current === false) return true;
+  if (field !== "notes" || typeof current !== "string" || typeof next !== "string" || next === current)
+    return false;
+  const index = next.indexOf(current);
+  if (index === -1) return false;
+  const prepended = next.slice(0, index);
+  const appended = next.slice(index + current.length);
+  return !(
+    (prepended === "" || current.startsWith(prepended)) &&
+    (appended === "" || current.endsWith(appended))
+  );
+}
 let ready = false;
-function syncWarning(): string | null {
-  if (storage.getItemSync("native-dropped-sync:" + getPrefs()?.id) === true)
-    return "Some server changes could not be applied. Review this budget in the current Actual web app before continuing.";
+type SyncWarning = { kind: "dropped" | "newer-version"; message: string };
+function syncWarning(): SyncWarning | null {
+  // Newer-version changes can only apply after an app update, so check them first.
   const tables = lib.db.runQuery(
     "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'messages_pending'",
     [],
     true,
   );
   if (tables.length && lib.db.runQuery("SELECT 1 FROM messages_pending LIMIT 1", [], true).length)
-    return "This budget contains changes from a newer Actual version. Update this app before editing or syncing again.";
+    return {
+      kind: "newer-version",
+      message:
+        "This budget contains changes from a newer Actual version. Update this app before editing or syncing again.",
+    };
+  if (storage.getItemSync(droppedSyncKey()) === true)
+    return {
+      kind: "dropped",
+      message:
+        "Some changes made on another device could not be applied on this device, so your devices may show different values. Edits and sync are paused until you review this.",
+    };
   return null;
+}
+function droppedSyncKey() {
+  return "native-dropped-sync:" + getPrefs()?.id;
 }
 async function start() {
   if (ready) return;
@@ -75,7 +105,7 @@ async function start() {
   });
   lib.on("sync", (event: unknown) => {
     if (event && typeof event === "object" && "type" in event && event.type === "dropped-messages")
-      storage.setItemSync("native-dropped-sync:" + getPrefs()?.id, true);
+      storage.setItemSync(droppedSyncKey(), true);
   });
   setSyncingMode("offline");
   ready = true;
@@ -91,10 +121,43 @@ async function budgets() {
     cloudFileId: file.cloudFileId ?? null,
   }));
 }
-async function snapshot(month: string) {
+function checkMonth(month: string) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error("Invalid budget month");
-  const budget = await lib.send("api/budget-month", { month });
+}
+// Budget metadata, accounts with balances, and payees.
+async function overview() {
   const preferences = await lib.send("preferences/get");
+  const rawAccounts = await lib.send("accounts-get");
+  const payees = await lib.send("api/payees-get");
+  const accounts = [];
+  for (const account of rawAccounts) {
+    accounts.push({
+      id: account.id,
+      name: account.name,
+      // Like Actual's account balance, include future-dated transactions.
+      balance: (await lib.send("account-properties", { id: account.id })).balance,
+      closed: Boolean(account.closed),
+      offbudget: Boolean(account.offbudget),
+      bankSyncEnabled: canSyncBank(account),
+      bankSyncStatus: account.bank_sync_status,
+      lastBankSync: account.last_sync,
+    });
+  }
+  return {
+    cloudFileId: getPrefs()?.cloudFileId ?? null,
+    budgetName: getPrefs()?.budgetName || "Budget",
+    currencyCode: /^[A-Z]{3}$/.test(preferences.defaultCurrencyCode || "")
+      ? preferences.defaultCurrencyCode
+      : "",
+    syncWarning: syncWarning(),
+    accounts,
+    payees: payees.filter((p) => !p.transfer_acct).map((p) => ({ id: p.id, name: p.name })),
+  };
+}
+// One month of the budget: its summary and visible category groups.
+async function budgetMonth(month: string) {
+  checkMonth(month);
+  const budget = await lib.send("api/budget-month", { month });
   const budgetType = getBudgetType() === "tracking" ? "tracking" : "envelope";
   // Tracking budgets have no to-budget cell. Mirror the mobile web summary:
   // projected savings for current/future months, actual savings for past ones.
@@ -108,55 +171,6 @@ async function snapshot(month: string) {
           })
         ).value
       : null;
-  const rawAccounts = await lib.send("accounts-get");
-  const payees = await lib.send("api/payees-get");
-  const rawCategories = [
-    ...(await lib.send("api/categories-get", {})),
-    ...(await lib.send("api/categories-get", { hidden: true })),
-  ];
-  const payeeMap = new Map(payees.map((p) => [p.id, p]));
-  const categoryMap = new Map(rawCategories.map((c) => [c.id, c]));
-  const accounts = [];
-  const transactions = [];
-  for (const account of rawAccounts) {
-    accounts.push({
-      id: account.id,
-      name: account.name,
-      // The public API wrapper acquires a mutator; snapshot already holds it.
-      balance: await lib.send("account-balance", { id: account.id, cutoff: new Date() }),
-      closed: Boolean(account.closed),
-      offbudget: Boolean(account.offbudget),
-      bankSyncEnabled: canSyncBank(account),
-      bankSyncStatus: account.bank_sync_status,
-      lastBankSync: account.last_sync,
-    });
-    const rows = await lib.send("api/transactions-get", {
-      accountId: account.id,
-      startDate: "1900-01-01",
-      endDate: "2999-12-31",
-    });
-    for (const row of rows) {
-      const payee = row.payee ? payeeMap.get(row.payee) : undefined;
-      transactions.push({
-        id: row.id,
-        accountId: row.account,
-        date: row.date,
-        payeeId: row.payee ?? null,
-        payeeName: payee?.name ?? null,
-        categoryId: row.category ?? null,
-        categoryName:
-          (row.category ? categoryMap.get(row.category)?.name : undefined) || "Uncategorized",
-        amount: row.amount,
-        notes: row.notes || "",
-        cleared: Boolean(row.cleared),
-        isParent: Boolean(row.is_parent),
-        isChild: Boolean(row.is_child),
-        isTransfer: Boolean(row.transfer_id || payee?.transfer_acct),
-        reconciled: Boolean(row.reconciled),
-      });
-    }
-  }
-  transactions.sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
   const groups = budget.categoryGroups
     .filter((g) => !g.hidden)
     .map((group) => ({
@@ -174,13 +188,7 @@ async function snapshot(month: string) {
         })),
     }));
   return {
-    cloudFileId: getPrefs()?.cloudFileId ?? null,
-    budgetName: getPrefs()?.budgetName || "Budget",
     month,
-    currencyCode: /^[A-Z]{3}$/.test(preferences.defaultCurrencyCode || "")
-      ? preferences.defaultCurrencyCode
-      : "",
-    syncWarning: syncWarning(),
     budgetType,
     toBudget: budgetType === "envelope" ? (budget.toBudget ?? 0) : null,
     saved: budgetType === "tracking" ? (typeof saved === "number" ? saved : 0) : null,
@@ -188,11 +196,40 @@ async function snapshot(month: string) {
     // Envelope budgets negate their budgeted total; tracking budgets do not.
     totalBudgeted: budgetType === "envelope" ? -budget.totalBudgeted : budget.totalBudgeted,
     totalSpent: budget.totalSpent,
-    accounts,
     groups,
-    transactions,
-    payees: payees.filter((p) => !p.transfer_acct).map((p) => ({ id: p.id, name: p.name })),
   };
+}
+// Every transaction, newest first, with split children grouped under parents.
+async function register() {
+  const payees = await lib.send("api/payees-get");
+  const categories = [
+    ...(await lib.send("api/categories-get", {})),
+    ...(await lib.send("api/categories-get", { hidden: true })),
+  ];
+  const payeeMap = new Map(payees.map((p) => [p.id, p]));
+  const categoryMap = new Map(categories.map((c) => [c.id, c]));
+  const rows = await lib.send("api/transactions-get", {});
+  const transactions = rows.map((row) => {
+    const payee = row.payee ? payeeMap.get(row.payee) : undefined;
+    return {
+      id: row.id,
+      accountId: row.account,
+      date: row.date,
+      payeeId: row.payee ?? null,
+      payeeName: payee?.name ?? null,
+      categoryId: row.category ?? null,
+      categoryName:
+        (row.category ? categoryMap.get(row.category)?.name : undefined) || "Uncategorized",
+      amount: row.amount,
+      notes: row.notes || "",
+      cleared: Boolean(row.cleared),
+      isParent: Boolean(row.is_parent),
+      isChild: Boolean(row.is_child),
+      isTransfer: Boolean(row.transfer_id || payee?.transfer_acct),
+      reconciled: Boolean(row.reconciled),
+    };
+  });
+  return transactions.sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
 }
 async function editable(id: string) {
   const { data: rows } = await lib.send(
@@ -210,7 +247,7 @@ async function perform(method: string, args: Obj): Promise<unknown> {
   await start();
   if (["saveTransaction", "deleteTransaction", "budget", "sync", "syncAccounts"].includes(method)) {
     const warning = syncWarning();
-    if (warning) throw new Error(warning);
+    if (warning) throw new Error(warning.message);
   }
   switch (method) {
     case "bootstrap": {
@@ -234,10 +271,23 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       await remember();
       return {};
     }
-    case "snapshot":
-      // Incoming sync messages can apply between awaits. Read one coherent
-      // snapshot using the same serialization as upstream mutations.
-      return runMutator(() => snapshot(text(args.month)));
+    // Incoming sync messages can apply between awaits. Read each part
+    // coherently using the same serialization as upstream mutations.
+    case "overview":
+      return runMutator(overview);
+    case "budgetMonth":
+      return runMutator(() => budgetMonth(text(args.month)));
+    case "register":
+      return runMutator(register);
+    case "acknowledgeSyncWarning": {
+      // Actual only warns when another device's changes are discarded; this
+      // device may then show different values for them. Once the user accepts
+      // that, continue as Actual does. Newer-version changes stay blocked.
+      if (!getPrefs()?.id) throw new Error("Open a budget first.");
+      if (syncWarning()?.kind !== "dropped") throw new Error("There is no warning to dismiss.");
+      await storage.removeItem(droppedSyncKey());
+      return {};
+    }
     case "syncAccounts": {
       if (!getPrefs()?.id) throw new Error("Open a budget before refreshing bank accounts.");
       if (args.accountId !== undefined && (typeof args.accountId !== "string" || !args.accountId))
@@ -307,7 +357,7 @@ async function perform(method: string, args: Obj): Promise<unknown> {
           throw new Error(message || reason || "Budget sync could not finish. Try again.");
         }
         const warning = syncWarning();
-        if (warning) throw new Error(warning);
+        if (warning) throw new Error(warning.message);
         await uploadSnapshotIfDue();
       } finally {
         // Local edits during the request may schedule upstream's fire-and-forget
@@ -333,8 +383,10 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Choose a valid date.");
       let payee = text(args.payeeId) || null;
       const name = text(args.payeeName).trim();
-      if (!payee && name) payee = await lib.send("api/payee-create", { payee: { name } });
+      // Like Actual, reuse an existing payee whose name differs only in case.
+      if (!payee && name) payee = await runMutator(() => createPayee(name));
       const account = (await lib.send("accounts-get")).find((a) => a.id === accountId);
+      if (!account) throw new Error("This account no longer exists. Choose another account.");
       const fields = {
         account: accountId,
         date,
@@ -356,15 +408,41 @@ async function perform(method: string, args: Obj): Promise<unknown> {
         );
         if (Object.keys(changes).length)
           await lib.send("transactions-batch-update", { updated: [{ id, ...changes }] });
-      } else
-        await lib.send("api/transactions-add", {
-          accountId,
-          transactions: [
-            { ...fields, category: fields.category ?? undefined, payee: fields.payee ?? undefined },
-          ],
-          learnCategories: false,
-          runTransfers: true,
-        });
+      } else {
+        // Like Actual's mobile editor, run rules on the new transaction but keep
+        // what the user entered: rules fill empty fields and may extend notes.
+        // A rule's payee always applies, as when a payee is chosen in Actual.
+        // The batch handler saves without running rules again.
+        const draft = {
+          id: crypto.randomUUID(),
+          sort_order: Date.now(),
+          ...fields,
+          payee: fields.payee ?? undefined,
+          category: fields.category ?? undefined,
+        };
+        const ruled = await lib.send("rules-run", { transaction: draft });
+        const transaction = { ...draft };
+        for (const field of Object.keys(fields) as Array<keyof typeof fields>) {
+          if (
+            ruled[field] !== draft[field] &&
+            (field === "payee" || ruleMayChange(field, draft[field], ruled[field]))
+          )
+            Object.assign(transaction, { [field]: ruled[field] });
+        }
+        const children = ruled.subtransactions ?? [];
+        if (children.length) {
+          // A split rule: store the parent and children as upstream imports do.
+          const { subtransactions = [], ...parent } = recalculateSplit({
+            ...ruled,
+            ...transaction,
+            is_parent: true,
+            subtransactions: children.map((child, index) =>
+              makeChild(transaction, { ...child, sort_order: 0 - index }),
+            ),
+          });
+          await lib.send("transactions-batch-update", { added: [parent, ...subtransactions] });
+        } else await lib.send("transactions-batch-update", { added: [transaction] });
+      }
       return {};
     }
     case "deleteTransaction": {
@@ -404,8 +482,9 @@ async function execute(method: string, args: Obj): Promise<unknown> {
 let queue: Promise<unknown> = Promise.resolve();
 let activeSync: Promise<unknown> | null = null;
 export function request(id: string, method: string, argsJSON: string) {
-  const reply = (value: unknown) => _reply(id, JSON.stringify({ value: value ?? null }));
-  const reject = (error: unknown) => _reply(id, JSON.stringify({ error: describe(error) }));
+  // Pass the result's JSON through untouched; native decodes it off the main thread.
+  const reply = (value: unknown) => _reply(id, true, JSON.stringify(value ?? null));
+  const reject = (error: unknown) => _reply(id, false, describe(error));
   queue = queue.then(async () => {
     const args = object(JSON.parse(argsJSON));
     if (method === "sync") {

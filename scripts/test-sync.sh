@@ -13,7 +13,7 @@ done
 cd "${project_root}"
 node Engine/build.mjs
 mkdir -p .build
-xcrun swiftc -parse-as-library Native/Models.swift Native/Core/*.swift Tests/EngineSync.swift \
+xcrun swiftc -parse-as-library Native/Models.swift Native/Core/*.swift Tests/Support/BudgetSnapshot.swift Tests/EngineSync.swift \
   -module-cache-path "${project_root}/.build/ModuleCache" -lsqlite3 -o .build/engine-sync
 
 test_dir="$(mktemp -d "${TMPDIR:-/tmp}/actual-native-sync.XXXXXX")"

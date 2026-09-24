@@ -113,8 +113,6 @@ private struct Fixture: Decodable {
     }
   }
   private static func snapshot(_ engine: EngineClient) async throws -> BudgetSnapshot {
-    try JSONDecoder().decode(
-      BudgetSnapshot.self,
-      from: await engine.call("snapshot", arguments: ["month": .string("2026-09")]))
+    try await BudgetSnapshot.load(engine, month: "2026-09")
   }
 }

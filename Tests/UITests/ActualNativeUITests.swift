@@ -98,16 +98,51 @@ final class ActualNativeUITests: XCTestCase {
         addTransaction.tap()
         XCTAssertTrue(app.navigationBars["New transaction"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.textFields["Amount"].exists)
-        XCTAssertTrue(app.textFields["Payee"].exists)
+        let payeeRow = app.buttons["payee-row"]
+        let categoryRow = app.buttons["category-row"]
+        XCTAssertTrue(payeeRow.exists && categoryRow.exists)
         XCTAssertTrue(app.buttons["Save"].exists)
         capture("05-transaction-editor")
-        let payee = app.textFields["Payee"]
-        payee.tap()
-        payee.typeText("Resume draft")
+
+        // Search for a new payee and add it.
+        payeeRow.tap()
+        XCTAssertTrue(app.navigationBars["Payee"].waitForExistence(timeout: 10))
+        let payeeSearch = app.searchFields.firstMatch
+        XCTAssertTrue(payeeSearch.waitForExistence(timeout: 5))
+        payeeSearch.tap()
+        payeeSearch.typeText("Resume draft")
+        let addPayee = app.buttons["Add “Resume draft”"]
+        XCTAssertTrue(addPayee.waitForExistence(timeout: 5), "Searching for a new name should offer to add it")
+        capture("06-payee-search")
+        addPayee.tap()
+        XCTAssertTrue(app.navigationBars["New transaction"].waitForExistence(timeout: 10))
+        XCTAssertTrue(describes(payeeRow, "Resume draft"))
+
+        // Search categories and choose one.
+        categoryRow.tap()
+        XCTAssertTrue(app.navigationBars["Category"].waitForExistence(timeout: 10))
+        let categorySearch = app.searchFields.firstMatch
+        categorySearch.tap()
+        categorySearch.typeText("Food")
+        let food = app.buttons["Food"].firstMatch
+        XCTAssertTrue(food.waitForExistence(timeout: 5), "Category search should find Food")
+        XCTAssertFalse(app.buttons["Restaurants"].exists, "Category search should hide other categories")
+        capture("07-category-search")
+        food.tap()
+        XCTAssertTrue(app.navigationBars["New transaction"].waitForExistence(timeout: 10))
+        XCTAssertTrue(describes(categoryRow, "Food"))
+
         XCUIDevice.shared.press(.home)
         app.activate()
         XCTAssertTrue(app.navigationBars["New transaction"].waitForExistence(timeout: 10))
-        XCTAssertEqual(payee.value as? String, "Resume draft", "Foreground handling must preserve an open editor's draft")
+        XCTAssertTrue(describes(payeeRow, "Resume draft") && describes(categoryRow, "Food"),
+                      "Foreground handling must preserve an open editor's draft")
+    }
+
+    /// A row's label and value, as VoiceOver reads them.
+    @MainActor
+    private func describes(_ element: XCUIElement, _ text: String) -> Bool {
+        element.label.contains(text) || (element.value as? String)?.contains(text) == true
     }
 
     @MainActor

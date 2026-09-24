@@ -15,7 +15,7 @@ struct TransactionsView: View {
     }
 
     private var content: some View {
-        let sections = TransactionSection.grouped(model.snapshot?.transactions ?? [], accountID: accountID,
+        let sections = TransactionSection.grouped(model.transactions, accountID: accountID,
                                                   search: search, currency: model.currency)
         return List {
             if let error = model.errorMessage { Section { ErrorNotice(message: error) { Task { await model.refresh() } } } }
@@ -42,7 +42,7 @@ struct TransactionsView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Add transaction", systemImage: "plus") { isAdding = true }
-                    .disabled(model.isBusy || model.snapshot?.openAccounts.isEmpty != false)
+                    .disabled(model.isBusy || model.overview?.openAccounts.isEmpty != false)
             }
         }
         .refreshable {

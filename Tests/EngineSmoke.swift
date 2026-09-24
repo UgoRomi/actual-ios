@@ -4,9 +4,7 @@ import Foundation
   static func snapshot(_ engine: EngineClient, month: String = "2026-09") async throws
     -> BudgetSnapshot
   {
-    try JSONDecoder().decode(
-      BudgetSnapshot.self,
-      from: await engine.call("snapshot", arguments: ["month": .string(month)]))
+    try await BudgetSnapshot.load(engine, month: month)
   }
   static func expenseBudgeted(_ snapshot: BudgetSnapshot) -> Int {
     snapshot.categories.filter { !$0.isIncome }.reduce(0) { $0 + $1.budgeted }
@@ -24,9 +22,7 @@ import Foundation
       ?? []
   }
   static func activeBudget(_ engine: EngineClient) async throws -> String {
-    guard
-      let id = try JSONDecoder().decode(Bootstrap.self, from: await engine.call("bootstrap"))
-        .activeBudgetId
+    guard let id = try await engine.call("bootstrap", as: Bootstrap.self).activeBudgetId
     else { throw EngineFailure("No active budget") }
     return id
   }
@@ -55,6 +51,7 @@ import Foundation
     let deleted = try await snapshot(restarted)
     precondition(!deleted.transactions.contains(where: { $0.id == saved.id }))
     try await trackingBudget(data: data.appendingPathComponent("budget"), resources: resources)
+    try await newTransactions(data: data.appendingPathComponent("budget"), resources: resources)
     print(
       "PASS: actual engine demo, add, edit, budget allocation, offline reopen, exact balances, delete"
     )
@@ -111,6 +108,56 @@ import Foundation
     }
     return (transaction.id, account.id, account.balance - 2345, category.id)
   }
+  static func newTransactions(data: URL, resources: URL) async throws {
+    let engine = try EngineClient(
+      dataDirectory: data, resourceDirectory: resources, useKeychain: false)
+    let budget = try await activeBudget(engine)
+    let before = try await snapshot(engine)
+    let expenses = before.categories.filter { !$0.isIncome }
+    guard let account = before.openAccounts.first(where: { !$0.offbudget }),
+      let payee = before.payees.first(where: { $0.name.uppercased() != $0.name }),
+      expenses.count > 1
+    else { throw EngineFailure("Demo fixture has no usable account, payee, or categories") }
+    func save(_ notes: String, amount: Int, date: String = "2026-09-20", payeeName: String = "", category: String = "")
+      async throws -> Transaction
+    {
+      _ = try await engine.call(
+        "saveTransaction",
+        arguments: [
+          "accountId": .string(account.id), "date": .string(date), "payeeName": .string(payeeName),
+          "categoryId": .string(category), "amount": .number(amount), "notes": .string(notes),
+          "cleared": .bool(false),
+        ])
+      guard let saved = try await snapshot(engine).transactions.first(where: { $0.amount == amount && $0.notes == notes })
+      else { throw EngineFailure("Saved transaction \(notes) not found") }
+      return saved
+    }
+
+    let differentCase = try await save("Payee case", amount: -501, payeeName: payee.name.uppercased())
+    precondition(differentCase.payeeId == payee.id, "A payee differing only in case was duplicated")
+    let payees = try await snapshot(engine).payees
+    precondition(payees.count == before.payees.count)
+
+    let future = Calendar(identifier: .gregorian).date(byAdding: .year, value: 1, to: Date())!
+    _ = try await save("Future dated", amount: -502, date: BudgetDate.day(future))
+    let balance = try await snapshot(engine).accounts.first(where: { $0.id == account.id })?.balance
+    precondition(balance == account.balance - 501 - 502, "Account balance must include future-dated transactions")
+
+    // Rules load with the budget. This one sets a category and a payee.
+    _ = try await engine.call("close")
+    let actions = #"[{"field":"category","op":"set","value":"\#(expenses[1].id)"},{"field":"payee","op":"set","value":"\#(payee.id)"}]"#
+    _ = try query(
+      data: data, resources: resources, budget: budget,
+      "INSERT INTO rules (id, stage, conditions, actions, conditions_op, tombstone) VALUES ('native-rule', 'post', ?, ?, 'and', 0)",
+      [#"[{"field":"notes","op":"is","value":"Rule check"}]"#, actions])
+    _ = try await engine.call("open", arguments: ["id": .string(budget)])
+    let chosen = try await save("Rule check", amount: -503, payeeName: "Typed rule payee", category: expenses[0].id)
+    precondition(chosen.categoryId == expenses[0].id, "A rule replaced the category the user chose")
+    precondition(chosen.payeeId == payee.id, "A rule's payee must apply, as when choosing a payee in Actual")
+    let empty = try await save("Rule check", amount: -504)
+    precondition(empty.categoryId == expenses[1].id && empty.payeeId == payee.id, "A rule did not fill empty fields")
+    print("PASS: case-insensitive payee reuse, future-dated balances, rules fill but never replace user entries")
+  }
   static func trackingBudget(data: URL, resources: URL) async throws {
     let engine = try EngineClient(
       dataDirectory: data, resourceDirectory: resources, useKeychain: false)
@@ -140,6 +187,41 @@ import Foundation
       at: data.appendingPathComponent(budget).appendingPathComponent("cache.sqlite"))
     _ = try await engine.call("open", arguments: ["id": .string(budget)])
     print("PASS: tracking budget summary, positive budgeted total, projected and actual savings")
+  }
+  /// Only credentials belong in the secret store (the Keychain on iOS). Settings
+  /// from builds that kept everything there move to the settings file.
+  static func settingsTests(data: URL, resources: URL) throws {
+    try FileManager.default.createDirectory(at: data, withIntermediateDirectories: true)
+    let secretsURL = data.appendingPathComponent("test-secrets.json")
+    let settingsURL = data.appendingPathComponent("settings.json")
+    func json(_ url: URL) throws -> [String: Any] {
+      try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as! [String: Any]
+    }
+    try JSONSerialization.data(withJSONObject: [
+      "user-token": "token", "encrypt-keys": "{}", "server-url": "https://example.com",
+      "native-last-budget": "budget",
+    ]).write(to: secretsURL)
+    let host = try NativeHost(dataDirectory: data, resourceDirectory: resources, useKeychain: false)
+    let merged = try host.perform("settings.read", [:]) as! [String: Any]
+    precondition(Set(merged.keys) == ["user-token", "encrypt-keys", "server-url", "native-last-budget"])
+    let (secrets, settings) = (try json(secretsURL), try json(settingsURL))
+    precondition(Set(secrets.keys) == ["user-token", "encrypt-keys"])
+    precondition(Set(settings.keys) == ["server-url", "native-last-budget"])
+
+    // Ordinary changes leave the secret store alone.
+    try FileManager.default.removeItem(at: secretsURL)
+    var changed = merged
+    changed["native-last-budget"] = "other"
+    _ = try host.perform("settings.write", changed)
+    precondition(!FileManager.default.fileExists(atPath: secretsURL.path))
+    let updated = try json(settingsURL)
+    precondition(updated["native-last-budget"] as? String == "other")
+    changed["user-token"] = "new token"
+    _ = try host.perform("settings.write", changed)
+    let (newSecrets, newSettings) = (try json(secretsURL), try json(settingsURL))
+    precondition(newSecrets["user-token"] as? String == "new token")
+    precondition(newSettings["user-token"] == nil)
+    print("PASS: credentials stay in the secret store; other settings move to and stay in a file")
   }
   static func hostTests(data: URL, resources: URL) throws {
     let host = try NativeHost(dataDirectory: data, resourceDirectory: resources, useKeychain: false)
@@ -193,6 +275,7 @@ import Foundation
       _ = try host.resolve("/documents/../../outside", writing: true)
       throw EngineFailure("Path escape accepted")
     } catch { precondition(error.localizedDescription.contains("Invalid file path")) }
+    try settingsTests(data: data.appendingPathComponent("settings"), resources: resources)
     print(
       "PASS: native SQLite parameters/rollback/exact integers, PBKDF2 compatibility, AES-GCM, sandbox path rejection"
     )

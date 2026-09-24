@@ -62,14 +62,16 @@ export async function syncBankAccounts(accountId?: string) {
     throw new Error("Connect to your Actual server in Settings before refreshing bank accounts.");
 
   const results = new Map<string, AccountResult>();
-  // accounts-get's bankId is the local bank row ID. The sync handler also
+  // accounts-get's bankId is the local bank row ID. accounts-bank-sync also
   // requires its external bank_id, otherwise it silently skips the account.
+  // SimpleFIN's batch handler does not use it, and SimpleFIN may leave it empty.
   const banks = lib.db.runQuery<{ id: string }>(
     "SELECT id FROM banks WHERE bank_id IS NOT NULL AND bank_id != ''", [], true,
   );
   const bankIDs = new Set(banks.map(bank => bank.id));
   const linked = accounts.filter(account => {
-    if (account.account_id && account.bank && bankIDs.has(account.bank) && account.account_sync_source) return true;
+    const bankLinked = account.account_sync_source === "simpleFin" || (account.bank && bankIDs.has(account.bank));
+    if (account.account_id && account.bank && bankLinked && account.account_sync_source) return true;
     results.set(account.id, failed(account.id, "This bank connection is incomplete. Reconnect the account in Actual web or desktop."));
     return false;
   });

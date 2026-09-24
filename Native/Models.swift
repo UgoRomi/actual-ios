@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 enum JSONValue: Codable, Sendable {
     case null, bool(Bool), number(Int), string(String), array([JSONValue]), object([String: JSONValue])
@@ -39,12 +40,32 @@ struct Bootstrap: Decodable, Sendable {
 
 struct BudgetListing: Decodable, Sendable { let budgets: [BudgetFile] }
 
-struct BudgetSnapshot: Decodable, Sendable {
+/// The open budget's metadata, accounts with balances, and payees.
+struct BudgetOverview: Decodable, Sendable {
     let budgetName: String
     let cloudFileId: String?
-    let month: String
     let currencyCode: String
-    let syncWarning: String?
+    let syncWarning: SyncWarning?
+    let accounts: [Account]
+    let payees: [Payee]
+
+    var openAccounts: [Account] { accounts.filter { !$0.closed } }
+}
+
+struct SyncWarning: Decodable, Sendable {
+    enum Kind: String, Decodable, Sendable {
+        /// Another device's changes were discarded. The user may continue, as in Actual.
+        case dropped
+        /// Changes from a newer Actual version wait for an app update.
+        case newerVersion = "newer-version"
+    }
+    let kind: Kind
+    let message: String
+}
+
+/// One month of the budget.
+struct BudgetMonth: Decodable, Sendable {
+    let month: String
     let budgetType: BudgetType
     /// Envelope budgets only.
     let toBudget: Int?
@@ -53,13 +74,9 @@ struct BudgetSnapshot: Decodable, Sendable {
     let savedIsProjected: Bool
     let totalBudgeted: Int
     let totalSpent: Int
-    let accounts: [Account]
     let groups: [CategoryGroup]
-    let transactions: [Transaction]
-    let payees: [Payee]
 
     var categories: [BudgetCategory] { groups.flatMap(\.categories) }
-    var openAccounts: [Account] { accounts.filter { !$0.closed } }
 }
 
 enum BudgetType: String, Decodable, Sendable { case envelope, tracking }
@@ -165,13 +182,15 @@ enum Money {
     }
 
     fileprivate static func formatter(currency: String, locale: Locale) -> NumberFormatter {
-        let formatter = NumberFormatter()
-        formatter.locale = locale
-        formatter.numberStyle = currency.isEmpty ? .decimal : .currency
-        if !currency.isEmpty { formatter.currencyCode = currency }
-        formatter.minimumFractionDigits = 2
-        formatter.maximumFractionDigits = 2
-        return formatter
+        FormatterCache.shared.formatter("display", currency, locale) {
+            let formatter = NumberFormatter()
+            formatter.locale = locale
+            formatter.numberStyle = currency.isEmpty ? .decimal : .currency
+            if !currency.isEmpty { formatter.currencyCode = currency }
+            formatter.minimumFractionDigits = 2
+            formatter.maximumFractionDigits = 2
+            return formatter
+        }
     }
 
     fileprivate static func formatted(_ minorUnits: Int, formatter: NumberFormatter) -> String {
@@ -179,21 +198,27 @@ enum Money {
     }
 
     static func editable(_ minorUnits: Int, locale: Locale = .current) -> String {
-        let formatter = NumberFormatter()
-        formatter.locale = locale
-        formatter.numberStyle = .decimal
-        formatter.usesGroupingSeparator = false
-        formatter.minimumFractionDigits = 2
-        formatter.maximumFractionDigits = 2
+        let formatter = FormatterCache.shared.formatter("editable", "", locale) {
+            let formatter = NumberFormatter()
+            formatter.locale = locale
+            formatter.numberStyle = .decimal
+            formatter.usesGroupingSeparator = false
+            formatter.minimumFractionDigits = 2
+            formatter.maximumFractionDigits = 2
+            return formatter
+        }
         return formatter.string(from: NSDecimalNumber(decimal: Decimal(minorUnits) / 100)) ?? ""
     }
 
     /// Parse the whole localized input, without accepting fractional cents or floating-point rounding.
     static func parse(_ text: String, locale: Locale = .current) -> Int? {
-        let formatter = NumberFormatter()
-        formatter.locale = locale
-        formatter.numberStyle = .decimal
-        formatter.generatesDecimalNumbers = true
+        let formatter = FormatterCache.shared.formatter("parse", "", locale) {
+            let formatter = NumberFormatter()
+            formatter.locale = locale
+            formatter.numberStyle = .decimal
+            formatter.generatesDecimalNumbers = true
+            return formatter
+        }
         let input = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty else { return nil }
         let decimalSeparator = formatter.decimalSeparator ?? "."
@@ -214,26 +239,39 @@ enum Money {
     }
 }
 
+/// Number formatters are costly to create, and every amount on screen needs one.
+/// Cached formatters are configured once and never changed afterward.
+private final class FormatterCache: Sendable {
+    static let shared = FormatterCache()
+    private let formatters = Mutex<[String: NumberFormatter]>([:])
+
+    func formatter(_ purpose: String, _ currency: String, _ locale: Locale, make: () -> NumberFormatter) -> NumberFormatter {
+        // Separators too: a changed number format need not change the identifier.
+        let key = [purpose, currency, locale.identifier, locale.decimalSeparator ?? "", locale.groupingSeparator ?? ""]
+            .joined(separator: "|")
+        return formatters.withLock { formatters in
+            if let formatter = formatters[key] { return formatter }
+            let formatter = make()
+            formatters[key] = formatter
+            return formatter
+        }
+    }
+}
+
 enum BudgetDate {
-    static func month(_ date: Date) -> String {
+    // Fixed formats in the Gregorian calendar; configured once, then only read.
+    private static let monthFormatter = formatter("yyyy-MM")
+    private static let dayFormatter = formatter("yyyy-MM-dd")
+
+    private static func formatter(_ format: String) -> DateFormatter {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM"
-        return formatter.string(from: date)
+        formatter.timeZone = .autoupdatingCurrent
+        formatter.dateFormat = format
+        return formatter
     }
-    static func day(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
-    }
-    static func date(_ string: String) -> Date? {
-        let formatter = DateFormatter()
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.date(from: string)
-    }
+    static func month(_ date: Date) -> String { monthFormatter.string(from: date) }
+    static func day(_ date: Date) -> String { dayFormatter.string(from: date) }
+    static func date(_ string: String) -> Date? { dayFormatter.date(from: string) }
 }

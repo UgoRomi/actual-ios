@@ -33,6 +33,7 @@ let offline = false;
 let rejectUploads = false;
 let syncRequests = 0;
 let uploadAttempts = 0;
+let events = [];
 let inFlight = 0;
 let maxInFlight = 0;
 const pending = [];
@@ -67,6 +68,9 @@ try {
           case "/test/online": offline = false; break;
           case "/test/reject-uploads": rejectUploads = true; break;
           case "/test/accept-uploads": rejectUploads = false; break;
+          case "/test/events":
+            response.end(JSON.stringify(events.splice(0)));
+            return;
           case "/test/remote-notes":
             await api.sync();
             await api.updateTransaction(id, { notes: "Remote note" });
@@ -103,6 +107,7 @@ try {
       }
       const isSync = request.url === "/sync/sync";
       if (isSync) {
+        events.push("sync");
         syncRequests++;
         inFlight++;
         maxInFlight = Math.max(maxInFlight, inFlight);
@@ -110,6 +115,19 @@ try {
       }
       const chunks = [];
       for await (const chunk of request) chunks.push(chunk);
+      if (request.url === "/gocardless/transactions") {
+        // A disposable bank provider for a device-only linked account.
+        events.push("bank");
+        const transaction = {
+          transactionId: "auto-bank-import", date: "2026-09-24", booked: true,
+          payeeName: "Auto Bank Merchant", notes: "Auto bank import",
+          transactionAmount: { amount: "-3.21", currency: "EUR" },
+        };
+        response.end(JSON.stringify({ status: "ok", data: {
+          transactions: { all: [transaction], booked: [transaction], pending: [] }, balances: [], startingBalance: 0,
+        } }));
+        return;
+      }
       if (request.url === "/sync/upload-user-file") {
         uploadAttempts++;
         if (rejectUploads) {
@@ -143,7 +161,7 @@ try {
   const code = await new Promise((resolve, reject) => { native.once("error", reject); native.once("exit", resolve); });
   assert.equal(code, 0, "Native automatic-sync harness failed");
   assert.equal(maxInFlight, 1, "Budget sync requests must never overlap");
-  console.log("PASS: real encrypted server sync with delayed responses, offline failures, rejected snapshot uploads, and no overlapping requests");
+  console.log("PASS: real encrypted server sync with delayed responses, offline failures, rejected snapshot uploads, bank refresh ordering, and no overlapping requests");
 } finally {
   clearTimeout(watchdog);
   native?.kill();

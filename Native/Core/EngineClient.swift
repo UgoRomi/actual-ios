@@ -10,6 +10,8 @@ final class EngineClient: @unchecked Sendable {
   private var httpTasks: [Int: URLSessionDataTask] = [:]
   private let session: URLSession
   private let delegate = EngineNetworkDelegate()
+  private static let bankTransactionPaths = ["gocardless", "simplefin", "pluggyai", "akahu", "enablebanking"]
+    .map { "/\($0)/transactions" }
 
   init(dataDirectory: URL? = nil, resourceDirectory: URL? = nil, useKeychain: Bool = true) throws {
     let applicationSupport = FileManager.default.urls(
@@ -24,7 +26,7 @@ final class EngineClient: @unchecked Sendable {
       dataDirectory: data, resourceDirectory: resources, useKeychain: useKeychain)
     let config = URLSessionConfiguration.ephemeral
     config.timeoutIntervalForRequest = 30
-    // Actual permits up to five minutes for a SimpleFIN batch refresh.
+    // Actual permits up to five minutes for a bank refresh.
     config.timeoutIntervalForResource = 300
     session = URLSession(configuration: config, delegate: delegate, delegateQueue: nil)
     try queue.sync { try setup() }
@@ -32,6 +34,28 @@ final class EngineClient: @unchecked Sendable {
   deinit {
     session.invalidateAndCancel()
     timers.values.forEach { $0.cancel() }
+  }
+
+  /// Loading the engine script takes a noticeable moment; do it off the main thread.
+  static func create() async throws -> EngineClient {
+    try await withCheckedThrowingContinuation { continuation in
+      DispatchQueue.global(qos: .userInitiated).async {
+        continuation.resume(with: Result { try EngineClient() })
+      }
+    }
+  }
+
+  /// Runs a command and decodes its result off the caller's actor.
+  func call<Value: Decodable & Sendable>(
+    _ method: String, arguments: [String: JSONValue] = [:], as type: Value.Type
+  ) async throws -> Value {
+    try await Self.decode(type, from: await call(method, arguments: arguments))
+  }
+
+  @concurrent private static func decode<Value: Decodable & Sendable>(
+    _ type: Value.Type, from data: Data
+  ) async throws -> Value {
+    try JSONDecoder().decode(type, from: data)
   }
 
   func call(_ method: String, arguments: [String: JSONValue] = [:]) async throws -> Data {
@@ -67,17 +91,11 @@ final class EngineClient: @unchecked Sendable {
       }
     }
     js.setObject(native, forKeyedSubscript: "_native" as NSString)
-    let reply: @convention(block) (String, String) -> Void = { [weak self] id, payload in
+    // The payload is the result's JSON when ok, otherwise an error message.
+    let reply: @convention(block) (String, Bool, String) -> Void = { [weak self] id, ok, payload in
       guard let self, let continuation = self.pending.removeValue(forKey: id) else { return }
-      do {
-        guard let data = payload.data(using: .utf8),
-          let result = try JSONSerialization.jsonObject(with: data) as? [String: Any]
-        else { throw EngineFailure("Invalid engine response") }
-        if let error = result["error"] as? String { throw EngineFailure(error) }
-        let resultData = try JSONSerialization.data(
-          withJSONObject: result["value"] ?? NSNull(), options: [.fragmentsAllowed])
-        continuation.resume(returning: resultData)
-      } catch { continuation.resume(throwing: error) }
+      if ok { continuation.resume(returning: Data(payload.utf8)) }
+      else { continuation.resume(throwing: EngineFailure(payload)) }
     }
     js.setObject(reply, forKeyedSubscript: "_reply" as NSString)
     let register: @convention(block) (Int, String, Int, JSValue) -> Void = {
@@ -150,7 +168,9 @@ final class EngineClient: @unchecked Sendable {
         let args = try JSONSerialization.jsonObject(with: bytes) as? [String: Any]
       else { throw EngineFailure("Invalid network request") }
       var request = URLRequest(url: try host.validatedURL(args.requiredString("url")))
-      if request.url?.path.hasSuffix("/simplefin/transactions") == true {
+      // Bank providers can take minutes to respond. Actual applies each
+      // provider's own limit, up to five minutes, by aborting the request.
+      if let path = request.url?.path, Self.bankTransactionPaths.contains(where: path.hasSuffix) {
         request.timeoutInterval = 300
       }
       request.httpMethod = args["method"] as? String ?? "GET"

@@ -5,8 +5,8 @@ struct RootView: View {
     var body: some View {
         Group {
             if !model.hasStarted {
-                openingBudget
-            } else if model.snapshot != nil {
+                ActualTheme.background.ignoresSafeArea()
+            } else if model.isBudgetOpen {
                 TabView {
                     Tab("Budget", systemImage: "chart.pie") { BudgetView() }
                     Tab("Accounts", systemImage: "creditcard") { AccountsView() }
@@ -16,7 +16,7 @@ struct RootView: View {
         }
         .disabled(model.isOpeningBudget)
         .overlay {
-            if model.hasStarted && model.isOpeningBudget { openingBudget }
+            if !model.hasStarted || model.isOpeningBudget { openingBudget }
         }
     }
 
@@ -24,7 +24,14 @@ struct RootView: View {
         VStack(spacing: 18) {
             Image(systemName: "chart.pie.fill").font(.system(size: 44)).foregroundStyle(ActualTheme.purple)
             ProgressView(model.isSyncingBudget ? "Syncing your budget…" : "Opening your budget…")
-        }.frame(maxWidth: .infinity, maxHeight: .infinity).background(ActualTheme.background)
+            if model.isAwaitingOpeningSync {
+                VStack(spacing: 8) {
+                    Button("Continue offline") { model.continueOffline() }.buttonStyle(.glass)
+                    Text("Use the budget saved on this device. Syncing continues in the background.")
+                        .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                }.padding(.top, 12)
+            }
+        }.padding(24).frame(maxWidth: .infinity, maxHeight: .infinity).background(ActualTheme.background)
     }
 }
 
@@ -94,9 +101,22 @@ struct SettingsButton: View {
 
 struct SyncFooter: View {
     @Environment(AppModel.self) private var model
+    @State private var confirmsWarning = false
     var body: some View {
         VStack(spacing: 12) {
-            if let warning = model.snapshot?.syncWarning { ErrorNotice(message: warning) }
+            if let warning = model.overview?.syncWarning {
+                ErrorNotice(message: warning.message)
+                if warning.kind == .dropped {
+                    Button("Keep using this budget") { confirmsWarning = true }
+                        .buttonStyle(.bordered).disabled(model.isBusy)
+                        .confirmationDialog("Keep using this budget?", isPresented: $confirmsWarning, titleVisibility: .visible) {
+                            Button("Keep using this budget") { Task { await model.acknowledgeSyncWarning() } }
+                            Button("Cancel", role: .cancel) { }
+                        } message: {
+                            Text("Actual continues after this warning too. Values changed on the other device may stay different here until someone edits them again. Your edits here sync to all devices.")
+                        }
+                }
+            }
             if let error = model.syncErrorMessage {
                 ErrorNotice(message: error) { Task { await model.perform("sync") } }
             }

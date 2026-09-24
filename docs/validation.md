@@ -92,7 +92,7 @@ fixture_dir="$(mktemp -d "${TMPDIR:-/tmp}/actual-bank-ui.XXXXXX")"
 .build/engine-bank-sync Native/Resources "${fixture_dir}" unused seed-ui
 ```
 
-Install the app on a **fresh disposable simulator**. Use `xcrun simctl get_app_container SIMULATOR_ID com.ugoromi.actualnative data` to find its data directory, and copy `${fixture_dir}/bank-sync-regression` into `Library/Application Support/ActualNative/`. Do not copy `test-settings.json`; simulator credentials stay empty. Run only this test with `-parallel-testing-enabled NO`:
+Install the app on a **fresh disposable simulator**. Use `xcrun simctl get_app_container SIMULATOR_ID com.ugoromi.actualnative data` to find its data directory, and copy `${fixture_dir}/bank-sync-regression` into `Library/Application Support/ActualNative/`. Do not copy `settings.json` or `test-secrets.json`; simulator credentials stay empty. Run only this test with `-parallel-testing-enabled NO`:
 
 ```sh
 xcodebuild test -project ActualNative.xcodeproj -scheme ActualNative \
@@ -133,3 +133,27 @@ A review against the pinned upstream source found four bridge defects. Each has 
 - **Snapshot upload failures.** A rejected weekly snapshot upload failed every sync, and the error showed as "[object Object]" because upstream throws plain objects. The upload is still awaited within tracked sync, but its failure is logged and retried on the next due sync. Plain-object errors now show their reason. The automatic-sync harness rejects a due upload and verifies that sync still succeeds, that the upload date does not advance, and that the next sync uploads successfully.
 
 Strict bridge type checking, native engine/recovery tests, encrypted budget sync, bank-sync regressions, the 10,000-transaction regression, the signed simulator build, and the demo UI smoke test on a new iPhone 17 Pro simulator also passed.
+
+## Upstream parity fixes (2026-09-24)
+
+A second set of bridge fixes aligns behavior with the pinned upstream source. Each automated check below failed on the previous code:
+
+- **Payees.** A typed payee name now goes through upstream's `createPayee`, which reuses an existing payee whose name differs only in case. `./scripts/test-engine.sh` saves an uppercased existing payee name and checks that no payee is added.
+- **Rules on new transactions.** New transactions follow Actual's mobile editor. `rules-run` fills empty fields and may extend notes; a rule's payee always applies; otherwise the user's entries win. The transaction is then saved through `transactions-batch-update` without running rules again, and rule-created splits are kept. The engine test adds a rule that sets a category and payee. It checks that a chosen category survives, that an empty category is filled, and that the rule's payee applies. The encrypted sync test's rule-created transfer still produces reciprocal entries and exact balances.
+- **Bank refresh ordering.** A server-backed budget now syncs before any bank request and syncs again after imports. `./scripts/test-auto-sync.sh` links the fixture account to a local fake GoCardless provider. It verifies that a failed budget sync stops the refresh before any bank request, and that a successful refresh orders requests as sync, bank, then sync.
+- **Account balances.** Balances use `account-properties`, the same unfiltered sum Actual shows, so future-dated transactions count. The engine test adds a transaction dated a year ahead and checks the balance.
+- **Backups.** Actual's desktop backup service, which made a full copy every 15 minutes, is replaced with a no-op by a build override, as in Actual's web and mobile apps. The bundled budget loader was checked to call the no-op. Existing backup files from earlier builds are left in place.
+- **Bank connections.** SimpleFIN accounts no longer need an external bank ID, as with upstream's batch handler; `./scripts/test-bank-sync.sh` includes one. Requests to every bank provider's `/transactions` endpoint may now take up to five minutes instead of stopping after 30 seconds without data, and upstream applies each provider's shorter limit. A one-off run with a 35-second provider response imported successfully, and failed with the previous timeout; it is not part of the suite to keep runs fast.
+
+Strict bridge type checking, native engine/recovery tests, encrypted budget sync, automatic sync, bank-sync regressions, the 10,000-transaction regression, the signed simulator build, and the demo UI smoke test on a new iPhone 17 Pro simulator passed.
+
+## Opening sync, repair, search, and loading (2026-09-24)
+
+- **Foreground sync.** Returning within five minutes of a successful sync, with no failure since, skips the opening sync. **Continue offline** releases the saved budget while the sync continues and later refreshes the view. `./scripts/test-auto-sync.sh` checks that a quick return makes no sync request. After the interval, it checks that the gate offers to continue while a response is held, and that continuing leaves the app usable. An allocation saved meanwhile reaches the upstream API once the response is released.
+- **Discarded-change warning.** The warning now matches Actual's. **Keep using this budget**, after a confirmation, clears the pause and syncs, as Actual continues after this warning. Changes waiting for a newer Actual version stay blocked, because only an update can apply them. `./scripts/test-engine.sh` dismisses a reviewed warning and saves afterward. It then adds a change for a table this version lacks, and checks that it cannot be dismissed and still blocks edits.
+- **Search.** Payee and category choices are searchable lists; a new payee name can be added from the search. The demo UI test adds a payee through search and finds a category by name. It then checks that both survive backgrounding. Screenshots of the editor and both pickers were inspected. The **Continue offline** button was checked in the harness, not visually.
+- **Loading.** The engine bundle is minified with names kept, from 5.2 MB to 2.5 MB, and loads off the main thread. On a Mac the engine started in 63 ms instead of 80 ms; device timing was not measured. The bridge passes each result's JSON through unchanged. Separate overview, budget-month, and register requests replace the full snapshot, and results decode off the main thread. A month change or allocation reloads only the month: on the demo budget, under 1 ms instead of 8 ms for everything. Transaction edits, syncs, and bank imports still reload all three.
+- **Settings storage.** Only `user-token`, `user-id`, `user-key`, and `encrypt-keys` stay in the Keychain, which is written only when they change. Other settings are in `settings.json` with file protection. The engine test migrates a store holding every setting, as earlier builds did. It then checks that ordinary changes leave the secret store untouched.
+- **Formatters.** Number formatters are cached per purpose, currency, and locale, including separators; date formatters are created once.
+
+Strict bridge type checking, native engine/recovery tests, encrypted budget sync, automatic sync, bank-sync regressions, the 10,000-transaction regression, the signed simulator build, and the demo UI test on new iPhone 17 Pro simulators passed.

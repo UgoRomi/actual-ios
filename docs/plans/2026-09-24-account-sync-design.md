@@ -4,13 +4,13 @@ Approved on 2026-09-24. Pull to refresh Accounts to fetch transactions for all l
 
 Use Actual 26.9.0 at the revision in `Engine/upstream.json`. Its `accounts-get` handler exposes bank linkage and status; the public accounts API omits some of this metadata. Call `simplefin-batch-sync` once for selected SimpleFIN accounts and `accounts-bank-sync` for each other selected account, matching the upstream UI. Never pass an empty ID list: upstream treats it as all accounts. Keep imports, matching, rules, account preferences, and balance calculations inside Actual's engine.
 
-Bank refresh is explicit and separate from budget sync. Imported transactions are saved locally and trigger asynchronous budget sync under the subsequent `2026-09-24-automatic-budget-sync-design.md` extension. Settings → Sync now remains an immediate retry. Require a connected server and token before requesting bank data. Existing compatibility/recovery warnings also block bank imports.
+Bank refresh is explicit. Like upstream's sync-and-download flow, a server-backed budget syncs first so imports can match transactions other devices already imported; if that sync fails, no bank is contacted. Imported transactions are saved locally and trigger asynchronous budget sync under the subsequent `2026-09-24-automatic-budget-sync-design.md` extension. Settings → Sync now remains an immediate retry. Require a connected server and token before requesting bank data. Existing compatibility/recovery warnings also block bank imports.
 
 Show linked-account status, progress, last successful bank refresh, and actionable account-specific failures. A failed account must not hide successful imports from other accounts. Refresh the snapshot after both successful and failed attempts; preserve bank errors until another attempt or a budget switch. Disable overlapping commands using the existing busy state. Return structured results instead of treating a partial import as an all-or-nothing failure.
 
 ## Implementation plan
 
-1. Add bank metadata to snapshots and a guarded bank-sync command using upstream handlers.
+1. Add bank metadata to the budget data and a guarded bank-sync command using upstream handlers.
 2. Add typed native results/state and wire pull-to-refresh on Accounts and account registers.
 3. Exercise the native engine against a disposable local bank-response fixture: selection, SimpleFIN batching, exact imports, repeat matching, failures, persisted status, and recovery guards. Build the iOS app and run appropriate existing regressions.
 4. Update the README, existing design, and validation notes with delivered behavior and test limits.
@@ -19,4 +19,4 @@ The brainstorming skill's follow-on `writing-plans` skill is unavailable in this
 
 ## Delivered behavior
 
-The engine returns typed per-account results and snapshots expose bank eligibility, persisted status, and last refresh. Native pull-to-refresh uses these results, retains successful imports during partial failures, and keeps budget sync status separate. Account setup/reconnection stays in Actual web/desktop. SimpleFIN requests have the upstream five-minute allowance. The native bank fixture, engine/recovery tests, type check, encrypted budget-sync integration, and simulator build pass; detailed coverage and remaining live-provider limits are recorded in `../validation.md`.
+The engine returns typed per-account results and the accounts overview exposes bank eligibility, persisted status, and last refresh. Native pull-to-refresh uses these results, retains successful imports during partial failures, and keeps budget sync status separate. Account setup/reconnection stays in Actual web/desktop. Bank provider requests may take up to five minutes; upstream applies each provider's shorter limit. SimpleFIN accounts do not need an external bank ID, matching its batch handler. The native bank fixture, engine/recovery tests, type check, encrypted budget-sync integration, and simulator build pass; detailed coverage and remaining live-provider limits are recorded in `../validation.md`.

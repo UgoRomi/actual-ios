@@ -42,7 +42,7 @@ const server = http.createServer(async (request, response) => {
     if (request.url === "/simplefin/transactions") {
       assert.ok(Array.isArray(args.accountId), "SimpleFIN must use batch requests, including one account");
       assert.ok(args.accountId.length > 0, "An empty list must never reach the server");
-      assert.ok(args.accountId.every(id => ["bank-sf-a", "bank-sf-b"].includes(id)));
+      assert.ok(args.accountId.every(id => ["bank-sf-a", "bank-sf-b", "bank-sf-no-external"].includes(id)));
       if (failureMode === "simplefin-missing") {
         response.end(JSON.stringify({ status: "ok", data: {} }));
       } else {

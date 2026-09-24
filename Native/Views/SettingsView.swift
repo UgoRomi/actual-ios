@@ -9,7 +9,7 @@ struct SettingsView: View {
         NavigationStack {
             Form {
                 Section("Your budget") {
-                    LabeledContent("Name", value: model.snapshot?.budgetName ?? "Actual")
+                    LabeledContent("Name", value: model.overview?.budgetName ?? "Actual")
                     LabeledContent("Currency", value: model.currency.isEmpty ? "Budget default (no symbol)" : model.currency)
                 }
                 Section {

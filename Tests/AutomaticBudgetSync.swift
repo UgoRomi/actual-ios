@@ -35,6 +35,7 @@ private struct RemoteTransaction: Decodable {
         try await verifyOpeningAndEdits(fixture)
         try await verifyRestartAndSwitch(fixture)
         try await verifyFailedSnapshotUpload()
+        try await verifyBankRefreshSyncsFirst(fixture)
     }
 
     static func engine() throws -> EngineClient {
@@ -125,6 +126,29 @@ private struct RemoteTransaction: Decodable {
         try require(model.syncErrorMessage == nil && !model.isBusy, "Foreground retry did not clear sync failure")
         print("PASS: offline data survives restart and foreground sync exchanges both local and remote edits")
 
+        // Returning soon after a successful sync skips the opening sync.
+        let beforeReturn = try await control("state").syncRequests
+        model.enteredBackground()
+        await model.activate()
+        try require(try await control("state").syncRequests == beforeReturn && !model.isBusy, "A recent sync should not repeat on return")
+
+        // After a while it syncs again, but the user may continue with the saved budget.
+        model.lastSyncedAt = Date(timeIntervalSinceNow: -AppModel.recentSyncInterval - 1)
+        _ = try await control("hold")
+        model.enteredBackground()
+        let returning = Task { await model.activate() }
+        try await until("foreground request after a while") { try await control("state").pendingRequests == 1 }
+        try require(model.isOpeningBudget && model.isAwaitingOpeningSync, "Returning after a while must offer to continue offline")
+        model.continueOffline()
+        await returning.value
+        try require(!model.isBusy && !model.isOpeningBudget && model.isSyncingBudget, "Continue offline must release the budget while sync continues")
+        try require(await model.perform("budget", arguments: ["month": .string("2026-09"), "categoryId": .string(fixture.categoryId), "amount": .number(23456)]), "Editing failed after continuing offline")
+        _ = try await control("release")
+        try await until("background sync after continuing offline") { !model.isSyncingBudget }
+        try require(model.syncErrorMessage == nil && model.syncStatus == "Synced with server", model.syncErrorMessage ?? model.syncStatus)
+        try require(try await remoteState().allocation == 23456, "An edit made after continuing offline did not sync")
+        print("PASS: recent syncs are not repeated on return; Continue offline releases the saved budget while sync finishes")
+
         // Another device edits the note before this device syncs an amount-only edit.
         _ = try await control("offline")
         _ = try await control("remote-notes?id=\(saved.id)")
@@ -185,6 +209,45 @@ private struct RemoteTransaction: Decodable {
         print("PASS: a rejected snapshot upload does not fail budget sync and retries on the next sync")
     }
 
+    @MainActor private static func verifyBankRefreshSyncsFirst(_ fixture: AutoSyncFixture) async throws {
+        let engine = try engine()
+        let budgets = try JSONDecoder().decode(Bootstrap.self, from: await engine.call("bootstrap")).budgets
+        guard let budget = budgets.first(where: { $0.cloudFileId != nil }) else { throw EngineFailure("Server budget missing") }
+        _ = try await engine.call("close")
+        // Link the fixture account to a bank on this device only.
+        let host = try NativeHost(dataDirectory: directory, resourceDirectory: resources, useKeychain: false)
+        guard let db = try host.perform("sql.open", ["path": "/documents/\(budget.id)/db.sqlite"]) as? Int else { throw EngineFailure("Budget database did not open") }
+        _ = try host.perform("sql.query", ["id": db, "sql": "INSERT INTO banks (id, bank_id, name, tombstone) VALUES ('auto-bank', 'external-bank', 'Fixture Bank', 0)"])
+        _ = try host.perform("sql.query", ["id": db, "sql": "UPDATE accounts SET bank = 'auto-bank', account_id = 'auto-bank-account', account_sync_source = 'goCardless' WHERE id = ?", "params": [fixture.accountId]])
+        _ = try host.perform("sql.close", ["id": db])
+        let model = AppModel(engine: engine)
+        await model.activate()
+        await model.openBudget(budget.id)
+        try require(model.snapshot?.accounts.first { $0.id == fixture.accountId }?.canSyncBank == true, "Fixture account is not linked")
+
+        _ = try await control("offline")
+        _ = try await events()
+        await model.refreshAccounts(accountID: fixture.accountId)
+        let failed = try await events()
+        try require(model.bankSyncErrorMessage != nil && model.bankSyncResult == nil, "Bank refresh continued after a failed budget sync")
+        try require(failed.first == "sync" && !failed.contains("bank"), "A bank was contacted before the budget synced: \(failed)")
+
+        _ = try await control("online")
+        await model.refreshAccounts(accountID: fixture.accountId)
+        try require(model.bankSyncErrorMessage == nil && model.bankSyncResult?.accounts.first?.added == 1, model.bankSyncErrorMessage ?? "Bank import missing")
+        try await until("sync after bank import") { !model.isSyncingBudget }
+        let order = try await events()
+        guard let bank = order.firstIndex(of: "bank") else { throw EngineFailure("No bank request: \(order)") }
+        try require(order.filter { $0 == "bank" }.count == 1 && bank > 0 && !order[..<bank].contains { $0 != "sync" } && order.last == "sync",
+                    "Bank refresh must sync the budget before and after importing: \(order)")
+        try require(model.syncErrorMessage == nil && model.syncStatus == "Synced with server", model.syncErrorMessage ?? model.syncStatus)
+        print("PASS: bank refresh syncs the budget first, stops if that fails, and syncs imports afterward")
+    }
+
+    private static func events() async throws -> [String] {
+        let (data, _) = try await URLSession.shared.data(from: URL(string: server + "/test/events")!)
+        return try JSONDecoder().decode([String].self, from: data)
+    }
     private static func transaction(_ fixture: AutoSyncFixture, id: String? = nil, amount: Int) -> [String: JSONValue] {
         var arguments: [String: JSONValue] = ["accountId": .string(fixture.accountId), "date": .string("2026-09-24"), "categoryId": .string(fixture.categoryId), "amount": .number(amount), "notes": .string("Automatic sync edit"), "cleared": .bool(true)]
         if let id { arguments["id"] = .string(id) }
