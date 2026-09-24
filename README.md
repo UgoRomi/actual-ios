@@ -25,6 +25,8 @@ Requires macOS, Xcode with the iOS 26 SDK or later, Node 22+, and Yarn 4. Tested
 
 The build consumes a separate Actual checkout, by default `../actual`. Its exact tested revision is recorded in [Engine/upstream.json](Engine/upstream.json); the build rejects a different commit. Use a dedicated checkout for that revision if your main Actual checkout has advanced.
 
+[AGENTS.md](AGENTS.md) instructs coding agents to consult that checkout's web UI and core logic before changing related native behavior.
+
 In the Actual checkout, install dependencies:
 
 ```sh
