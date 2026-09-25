@@ -130,6 +130,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = 7DE97F2CECB2601227982F09 /* Build configuration list for PBXNativeTarget "ActualNative" */;
 			buildPhases = (
+				16644122B3014A09BD431644 /* Bundle Actual Engine */,
 				BCE16DD0260827ECF338C787 /* Sources */,
 				7561BFB015D8F536760CB671 /* Frameworks */,
 				0189424A5A60FED329FA868E /* Resources */,
@@ -208,6 +209,29 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		16644122B3014A09BD431644 /* Bundle Actual Engine */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Bundle Actual Engine";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/xcode-build-engine.sh\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		55C2A1145FF0806565865D92 /* Sources */ = {

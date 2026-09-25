@@ -45,11 +45,17 @@ yarn install --immutable
 In this project:
 
 ```sh
-./scripts/build.sh
 open ActualNative.xcodeproj
 ```
 
-Select the `ActualNative` scheme and an iOS simulator, then Run. The script bundles Actual and copies its database template, migrations, and license notices before building. If the checkouts are not siblings, prefix commands with `ACTUAL_SOURCE=/absolute/path/to/actual`.
+Select the `ActualNative` scheme and an iOS simulator, then Run. Every Xcode build first runs `scripts/xcode-build-engine.sh`. It bundles Actual and copies its database template, migrations, and license notices, so the app always ships the engine that matches its code. `./scripts/build.sh` builds for the simulator from the command line. If the checkouts are not siblings, prefix commands with `ACTUAL_SOURCE=/absolute/path/to/actual`.
+
+Xcode opened from the Dock does not see your shell's variables or `PATH`. The build looks for Node 22+ in `NODE_BINARY`, Xcode's `PATH`, nvm's default version, Homebrew, and Volta, in that order. It uses the Actual checkout at `ACTUAL_SOURCE`, or `../actual`. If the build cannot find either, create `.xcode.env.local` in this project; git ignores it:
+
+```sh
+export NODE_BINARY=/absolute/path/to/node
+export ACTUAL_SOURCE=/absolute/path/to/actual
+```
 
 Simulator builds use local ad hoc signing so Keychain works. For an iPhone, choose your development team and a unique bundle identifier in Xcode, and enable automatic signing. Device installation has not yet been verified.
 

@@ -25,7 +25,6 @@ Run `./scripts/test-engine.sh`, `node Engine/typecheck.mjs`, and `./scripts/test
 Use a fresh simulator because the test starts on the welcome screen and creates a demo. List available simulators with `xcrun simctl list devices available`, then use an iOS 26-or-later device identifier:
 
 ```sh
-node Engine/build.mjs
 xcodebuild test \
   -project ActualNative.xcodeproj \
   -scheme ActualNative \
@@ -219,3 +218,9 @@ Touch and hold a budget in the list to delete it from this device, as with Actua
 The opt-in UI test `testDeleteLocalBudget` needs a disposable local budget named `Delete Budget Regression`. Install the fixture as for `testLargeBudgetTransactionsStayResponsive`, in `Library/Application Support/ActualNative/delete-regression/`, with a copy of a disposable budget's `db.sqlite`, such as the demo's, and `{"id":"delete-regression","budgetName":"Delete Budget Regression"}` as `metadata.json`. The test cancels once and then deletes. It checks that the budget leaves the list and does not return after relaunch. It passed on a new iPhone 17 Pro / iOS 27.0 simulator, and the app's data directory then held only `settings.json`. The first run failed in the test itself: on iOS 27 the confirmation is a popover anchored to the row, without a Cancel button, so the test now taps outside it. Screenshots of the menu, the confirmation, and the emptied list were inspected.
 
 Strict bridge type checking, native engine/recovery tests, and the signed simulator build also passed. Deleting a downloaded server budget was checked in code, not end to end; its confirmation text was not seen on screen. Deleting a budget from the server remains in Actual web/desktop.
+
+## Engine bundling in Xcode (2026-09-25)
+
+A device build ran new Swift code against an older `engine.js` and failed with "Unknown operation: deleteBudget". Xcode had only copied whatever bundle `./scripts/build.sh` last made. The app target's first build phase now runs `scripts/xcode-build-engine.sh`, which rebuilds the engine on every build in about half a second.
+
+With `engine.js` replaced by a stale file, both a full and an incremental simulator build regenerated it, and the app's copy matched the regenerated bundle. The log shows the script before the engine copy. With a bare `PATH`, as for Xcode opened from the Dock, the script found Node through nvm's default. With nvm and `ACTUAL_SOURCE` unavailable, the settings in `.xcode.env.local` were enough. A missing Node or Actual checkout stops the build with an `error:` line that names the setting to fix.
