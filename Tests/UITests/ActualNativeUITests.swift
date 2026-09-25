@@ -167,6 +167,22 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Available to budget"].exists, "The native budget summary should load")
         capture("02-budget")
 
+        // Budget a calculation with the keypad, which opens with the editor.
+        let foodBudget = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Food'")).firstMatch
+        foodBudget.tap()
+        XCTAssertTrue(app.navigationBars["Food"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Clear"].waitForExistence(timeout: 5), "The calculator keypad should open with the editor")
+        app.buttons["Clear"].tap()
+        tapKeys(app, "120+30")
+        let budgeted = app.textFields["Budgeted amount"]
+        XCTAssertEqual(budgeted.value as? String, "120+30")
+        capture("budget-calculator")
+        tapKeys(app, "=")
+        XCTAssertEqual(budgeted.value as? String, "150\(decimalSeparator)00", "= shows the calculation's result")
+        app.navigationBars["Food"].buttons["Save"].tap()
+        XCTAssertTrue(wait(forAbsence: app.navigationBars["Food"]), "The calculated amount should save")
+        XCTAssertTrue(describes(foodBudget, "150\(decimalSeparator)00"))
+
         let accountsTab = app.tabBars.buttons["Accounts"]
         XCTAssertTrue(accountsTab.exists)
         accountsTab.tap()
@@ -250,7 +266,9 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(balance.waitForExistence(timeout: 5))
         let prefilled = balance.value as? String ?? ""
         XCTAssertFalse(prefilled.isEmpty, "The cleared balance should be prefilled")
-        balance.typeText(String(repeating: XCUIKeyboardKey.delete.rawValue, count: prefilled.count + 2) + "0")
+        XCTAssertTrue(app.buttons["Clear"].waitForExistence(timeout: 5), "The calculator keypad should open with the sheet")
+        app.buttons["Clear"].tap()
+        tapKeys(app, "0")
         capture("08-reconcile-sheet")
         sheet.buttons["Reconcile"].tap()
 
@@ -305,7 +323,11 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["New transaction"].waitForExistence(timeout: 10))
         let amount = app.textFields["Amount"]
         amount.tap()
-        amount.typeText("43" + (Locale.current.decimalSeparator ?? ".") + "21")
+        tapKeys(app, "40+3\(decimalSeparator)21")
+        XCTAssertEqual(amount.value as? String, "40+3\(decimalSeparator)21")
+        capture("transfer-calculator")
+        tapKeys(app, "=")
+        XCTAssertEqual(amount.value as? String, "43\(decimalSeparator)21", "= shows the calculation's result")
 
         let payeeRow = app.buttons["payee-row"]
         let categoryRow = app.buttons["category-row"]
@@ -339,6 +361,7 @@ final class ActualNativeUITests: XCTestCase {
         received.tap()
         XCTAssertTrue(app.navigationBars["Transaction"].waitForExistence(timeout: 10))
         XCTAssertTrue(describes(payeeRow, "Transfer from Capital One Checking"))
+        XCTAssertEqual(app.textFields["Amount"].value as? String, "43\(decimalSeparator)21", "The calculated amount should save")
         app.buttons["Delete transaction"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["This removes the transfer from both accounts and updates your balances."]
             .waitForExistence(timeout: 5))
@@ -351,6 +374,15 @@ final class ActualNativeUITests: XCTestCase {
         app.staticTexts["Capital One Checking"].tap()
         XCTAssertTrue(checking.waitForExistence(timeout: 10))
         XCTAssertTrue(wait(forAbsence: app.staticTexts["Transfer to Ally Savings"]), "Deleting removes the linked side too")
+    }
+
+    private var decimalSeparator: String { Locale.current.decimalSeparator ?? "." }
+
+    /// Taps calculator keypad keys, by symbol.
+    @MainActor
+    private func tapKeys(_ app: XCUIApplication, _ keys: String) {
+        let names: [Character: String] = ["+": "Plus", "−": "Minus", "×": "Multiply", "÷": "Divide", "=": "Equals"]
+        for key in keys { app.buttons[names[key] ?? String(key)].tap() }
     }
 
     @MainActor

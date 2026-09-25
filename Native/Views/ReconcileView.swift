@@ -7,7 +7,6 @@ struct ReconcileSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var amount = ""
     @State private var validation: String?
-    @FocusState private var amountFocused: Bool
 
     private var account: Account? { model.overview?.accounts.first { $0.id == accountID } }
 
@@ -15,10 +14,7 @@ struct ReconcileSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("0.00", text: $amount)
-                        .keyboardType(.numbersAndPunctuation)
-                        .font(.system(.largeTitle, design: .rounded, weight: .semibold)).monospacedDigit()
-                        .focused($amountFocused).accessibilityLabel("Bank balance")
+                    AmountField(label: "Bank balance", text: $amount, large: true, focusesOnAppear: true)
                 } header: { Text("Bank balance") } footer: {
                     Text("Enter the current balance of your bank account that you want to reconcile with.")
                 }
@@ -46,14 +42,13 @@ struct ReconcileSheet: View {
                 // Adjusting a reconciliation in progress starts from its balance.
                 let current = model.reconciliation?.accountID == accountID ? model.reconciliation?.targetBalance : nil
                 amount = Money.editable(current ?? account?.clearedBalance ?? 0)
-                amountFocused = true
             }
         }.presentationDetents([.medium, .large])
     }
 
     private func reconcile() {
         guard let balance = Money.parse(amount) else {
-            validation = "Enter an amount with no more than two decimal places."
+            validation = "Enter an amount or calculation, with no more than two decimal places."
             return
         }
         model.startReconciliation(accountID: accountID, targetBalance: balance)

@@ -17,6 +17,7 @@ This is a development build, with no App Store submission or distribution signin
 - Save edits locally, then sync asynchronously with the server. Transaction edits send only the fields you changed, so they do not overwrite other devices' changes to other fields. Rapid edits are coalesced; **Settings → Sync now** remains available for an immediate retry.
 - Open end-to-end encrypted budgets using their encryption password.
 - Native light/dark appearances, system glass controls, and locale-aware integer-cent entry.
+- Amounts use a calculator keypad laid out like Actual's mobile calculator. Enter a number, or a calculation with + − × ÷ and parentheses, such as `120+30` for a category's budget. **=** or leaving the field shows the result. As in Actual, a calculation is rounded to the nearest cent; a single number still may not have more than two decimal places.
 
 Split transactions, and transfers linked to part of a split, are view only, except that they can be cleared, locked, and unlocked while reconciling. Account/category creation, bank setup, reports, schedules/rule editors, widgets, and Shortcuts remain in Actual web/desktop. Existing Actual transaction rules still run through its engine.
 
@@ -87,6 +88,8 @@ The sync test starts a temporary server on a free localhost port, downloads an e
 `./scripts/test-openid.sh` checks OpenID sign-in the same way, against a temporary server with OpenID enabled and a minimal local provider that approves at once. Pass `--simulator SIMULATOR_ID` to run the sign-in UI test on a fresh simulator instead.
 
 Simulator UI checks are in `Tests/UITests`. See [docs/validation.md](docs/validation.md) for the command and observed coverage.
+
+Run `./scripts/test-amounts.sh` for amount entry: localized numbers, calculations, rounding, and invalid input.
 
 Run `./scripts/test-transactions.sh` for register grouping/search regressions and a 10,000-transaction fixture. Optionally pass a local `db.sqlite` path to test it read-only, with `--baseline` to compare the previous section-preparation cost. See the validation notes for the opt-in large-budget simulator test.
 

@@ -80,10 +80,7 @@ struct TransactionEditor: View {
                     }.pickerStyle(.segmented)
                     HStack(alignment: .firstTextBaseline) {
                         Text(isOutflow ? "−" : "+").foregroundStyle(.secondary)
-                        TextField("0.00", text: $amount)
-                            .keyboardType(.decimalPad)
-                            .font(.system(.largeTitle, design: .rounded, weight: .semibold))
-                            .monospacedDigit().accessibilityLabel("Amount")
+                        AmountField(label: "Amount", text: $amount, large: true)
                         if !model.currency.isEmpty { Text(model.currency).font(.caption).foregroundStyle(.secondary) }
                     }.padding(.vertical, 8)
                 }.disabled(!editable || model.isBusy)
@@ -212,7 +209,7 @@ struct TransactionEditor: View {
     private func save(confirmed: Bool = false) {
         guard !account.isEmpty else { validation = "Choose an account before saving."; return }
         guard transferAccount != account else { validation = "Choose two different accounts for a transfer."; return }
-        guard let parsed = Money.parse(amount), parsed >= 0 else { validation = "Enter a positive amount with no more than two decimal places."; return }
+        guard let parsed = Money.parse(amount), parsed >= 0 else { validation = "Enter a positive amount or calculation, with no more than two decimal places."; return }
         validation = nil
         var arguments: [String: JSONValue] = [
             "accountId": .string(account), "date": .string(BudgetDate.day(date)),

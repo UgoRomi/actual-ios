@@ -146,15 +146,12 @@ struct BudgetEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var amount = ""
     @State private var validation: String?
-    @FocusState private var amountFocused: Bool
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Budgeted amount", text: $amount)
-                        .keyboardType(.numbersAndPunctuation).monospacedDigit().focused($amountFocused)
-                        .accessibilityLabel("Budgeted amount")
+                    AmountField(label: "Budgeted amount", text: $amount, placeholder: "Budgeted amount", focusesOnAppear: true)
                 } header: { Text("Budgeted for \(month)") } footer: { Text("Set the total amount you want to budget for this category.") }
                 Section {
                     LabeledContent("Spent") { MoneyText(value: category.spent, currency: model.currency) }
@@ -168,7 +165,7 @@ struct BudgetEditor: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(model.isBusy) }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        guard let cents = Money.parse(amount) else { validation = "Enter an amount with no more than two decimal places."; return }
+                        guard let cents = Money.parse(amount) else { validation = "Enter an amount or calculation, with no more than two decimal places."; return }
                         validation = nil
                         Task {
                             if await model.perform("budget", arguments: ["month": .string(month), "categoryId": .string(category.id), "amount": .number(cents)]) { dismiss() }
@@ -176,7 +173,7 @@ struct BudgetEditor: View {
                     }.disabled(model.isBusy).bold()
                 }
             }
-            .onAppear { amount = Money.editable(category.budgeted); amountFocused = true }
+            .onAppear { amount = Money.editable(category.budgeted) }
             .interactiveDismissDisabled(model.isBusy)
         }.presentationDetents([.medium, .large])
     }

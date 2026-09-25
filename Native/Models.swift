@@ -265,7 +265,9 @@ enum Money {
         return formatter.string(from: NSDecimalNumber(decimal: Decimal(minorUnits) / 100)) ?? ""
     }
 
-    /// Parse the whole localized input, without accepting fractional cents or floating-point rounding.
+    /// Parse the whole localized input: a number, or a calculation with + − × ÷ and parentheses,
+    /// as Actual's amount fields accept. Arithmetic is exact, without floating-point rounding.
+    /// As in Actual, a calculation's result is rounded to the cent; a lone number may not have fractional cents.
     static func parse(_ text: String, locale: Locale = .current) -> Int? {
         let formatter = FormatterCache.shared.formatter("parse", "", locale) {
             let formatter = NumberFormatter()
@@ -274,23 +276,90 @@ enum Money {
             formatter.generatesDecimalNumbers = true
             return formatter
         }
-        let input = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !input.isEmpty else { return nil }
-        let decimalSeparator = formatter.decimalSeparator ?? "."
-        let groupingSeparator = formatter.groupingSeparator ?? ","
-        var normalized = input.replacingOccurrences(of: groupingSeparator, with: "")
-        normalized = normalized.replacingOccurrences(of: decimalSeparator, with: ".")
-        normalized = normalized.replacingOccurrences(of: formatter.minusSign ?? "-", with: "-")
-        normalized = normalized.map { character in
-            character.wholeNumberValue.map(String.init) ?? String(character)
-        }.joined()
-        guard normalized.range(of: "^[+-]?[0-9]+(?:\\.[0-9]{1,2})?$", options: .regularExpression) != nil,
-              formatter.number(from: input) != nil,
-              let decimal = Decimal(string: normalized, locale: Locale(identifier: "en_US_POSIX")) else { return nil }
-        let cents = decimal * 100
+        // As Actual does, ignore spaces, including a space used as the grouping separator.
+        var input = text.replacingOccurrences(of: formatter.minusSign ?? "-", with: "-")
+        input.unicodeScalars.removeAll { CharacterSet.whitespacesAndNewlines.contains($0) }
+        let symbols: [Character: Character] = ["−": "-", "×": "*", "÷": "/"]
+        var calculation = Calculation(characters: input.map { symbols[$0] ?? $0 }) { number($0, formatter: formatter) }
+        guard let value = calculation.expression(), calculation.isAtEnd, !value.isNaN else { return nil }
+        var cents = value * 100
+        // Actual's Math.round: to the nearest cent, halves upward.
+        var shifted = cents + Decimal(sign: .plus, exponent: -1, significand: 5)
+        NSDecimalRound(&cents, &shifted, 0, .down)
+        guard calculation.calculated || cents == value * 100 else { return nil }
         // Actual stores exact JS integers; stay within that range at the bridge boundary.
         guard cents >= -9_007_199_254_740_991, cents <= 9_007_199_254_740_991 else { return nil }
         return NSDecimalNumber(decimal: cents).intValue
+    }
+
+    /// One number of an amount entry, in the locale's format.
+    private static func number(_ text: String, formatter: NumberFormatter) -> Decimal? {
+        let decimalSeparator = formatter.decimalSeparator ?? "."
+        let groupingSeparator = formatter.groupingSeparator ?? ","
+        var normalized = text.replacingOccurrences(of: groupingSeparator, with: "")
+        normalized = normalized.replacingOccurrences(of: decimalSeparator, with: ".")
+        normalized = normalized.map { character in
+            character.wholeNumberValue.map(String.init) ?? String(character)
+        }.joined()
+        guard normalized.range(of: "^(?:[0-9]+\\.?[0-9]*|\\.[0-9]+)$", options: .regularExpression) != nil,
+              formatter.number(from: text) != nil else { return nil }
+        return Decimal(string: normalized, locale: Locale(identifier: "en_US_POSIX"))
+    }
+}
+
+/// Actual's amount arithmetic (loot-core's `evalArithmetic`) with exact decimals. Like Actual's
+/// calculator keypad, it offers + - * / and parentheses, but not `^`.
+private struct Calculation {
+    let characters: [Character]
+    let number: (String) -> Decimal?
+    var index = 0
+    /// Whether the input used an operator or parentheses, rather than being a lone number.
+    var calculated = false
+
+    var isAtEnd: Bool { index == characters.count }
+    private var next: Character? { index < characters.count ? characters[index] : nil }
+
+    mutating func expression() -> Decimal? {
+        guard var value = term() else { return nil }
+        while let operation = next, operation == "+" || operation == "-" {
+            index += 1
+            calculated = true
+            guard let right = term() else { return nil }
+            value = operation == "+" ? value + right : value - right
+        }
+        return value
+    }
+
+    private mutating func term() -> Decimal? {
+        guard var value = factor() else { return nil }
+        while let operation = next, operation == "*" || operation == "/" {
+            index += 1
+            calculated = true
+            guard let right = factor() else { return nil }
+            value = operation == "*" ? value * right : value / right
+        }
+        return value
+    }
+
+    private mutating func factor() -> Decimal? {
+        switch next {
+        case "-":
+            index += 1
+            return factor().map { -$0 }
+        case "+":
+            index += 1
+            return factor()
+        case "(":
+            index += 1
+            calculated = true
+            guard let value = expression(), next == ")" else { return nil }
+            index += 1
+            return value
+        default:
+            let start = index
+            while let character = next, !"+-*/()".contains(character) { index += 1 }
+            return start == index ? nil : number(String(characters[start..<index]))
+        }
     }
 }
 

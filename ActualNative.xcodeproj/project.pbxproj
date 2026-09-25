@@ -19,6 +19,7 @@
 		6773E3F2849B62EF2317BF27 /* Native/ActualNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3D9589739A3279854188C92 /* Native/ActualNativeApp.swift */; };
 		A43402011D74D5734C7D96ED /* Tests/UITests/ActualNativeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D988CE8A4343CC9ED0D4F0 /* Tests/UITests/ActualNativeUITests.swift */; };
 		AB1BDB58B28CF1FDFFC17C52 /* Native/Views/BudgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83416C8B7281940A2D331143 /* Native/Views/BudgetView.swift */; };
+		5C1A7E0B9D2F4A6E8B3C1D20 /* Native/Views/AmountField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E4B2C7A1F6D3E8B5A0C4F21 /* Native/Views/AmountField.swift */; };
 		AF716BBB3F56F5E55D747809 /* Native/Views/AccountsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443F99244216BE707150CE77 /* Native/Views/AccountsView.swift */; };
 		C08A978F6160C98BB61BF18C /* Native/Views/RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22F448B416504426D44ADE65 /* Native/Views/RootView.swift */; };
 		C7C805D8E081A4AD7DCDAEC9 /* Native/AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33E8BE36FC801D3CF8C5A001 /* Native/AppModel.swift */; };
@@ -61,6 +62,7 @@
 		35ADAC2A7B4B204230C2E4AE /* Native/Views/TransactionEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/TransactionEditor.swift; sourceTree = "<group>"; };
 		38A007151ABE87CC01A5B6E9 /* ActualNative.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = ActualNative.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3D1C8D9F0C3BC17165ACEE19 /* Native/Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Theme.swift; sourceTree = "<group>"; };
+		9E4B2C7A1F6D3E8B5A0C4F21 /* Native/Views/AmountField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/AmountField.swift; sourceTree = "<group>"; };
 		443F99244216BE707150CE77 /* Native/Views/AccountsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/AccountsView.swift; sourceTree = "<group>"; };
 		66177DE593ACD3F7FBE818F7 /* Native/Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Models.swift; sourceTree = "<group>"; };
 		6F51DF911B0314245CE3C35C /* Native/Core/SQLiteHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Core/SQLiteHost.swift; sourceTree = "<group>"; };
@@ -110,6 +112,7 @@
 				66177DE593ACD3F7FBE818F7 /* Native/Models.swift */,
 				3D1C8D9F0C3BC17165ACEE19 /* Native/Theme.swift */,
 				443F99244216BE707150CE77 /* Native/Views/AccountsView.swift */,
+				9E4B2C7A1F6D3E8B5A0C4F21 /* Native/Views/AmountField.swift */,
 				83416C8B7281940A2D331143 /* Native/Views/BudgetView.swift */,
 				B8F4D2EA6C305F9172D5E3B2 /* Native/Views/ReconcileView.swift */,
 				22F448B416504426D44ADE65 /* Native/Views/RootView.swift */,
@@ -254,6 +257,7 @@
 				0AED486DC5028236E648FC8C /* Native/Models.swift in Sources */,
 				CA222D1BB6E2CDD8B11B84EC /* Native/Theme.swift in Sources */,
 				AF716BBB3F56F5E55D747809 /* Native/Views/AccountsView.swift in Sources */,
+				5C1A7E0B9D2F4A6E8B3C1D20 /* Native/Views/AmountField.swift in Sources */,
 				AB1BDB58B28CF1FDFFC17C52 /* Native/Views/BudgetView.swift in Sources */,
 				C08A978F6160C98BB61BF18C /* Native/Views/RootView.swift in Sources */,
 				A7E3C1D95B2F4E8061C4D2A1 /* Native/Views/ReconcileView.swift in Sources */,
