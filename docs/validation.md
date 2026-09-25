@@ -188,7 +188,7 @@ Strict bridge type checking, the encrypted sync, automatic sync, and 10,000-tran
 
 Disabling the linked-reconciled check, or the split-linked check, made this test fail. `./scripts/test-transactions.sh` checks transfer titles, categories, search, and the view-only state.
 
-`./scripts/test-sync.sh` now edits the rule-created transfer offline from its receiving side; the upstream API then checks both amounts, the notes, and both balances. It was not run for this change, because `rg` was not on the shell's `PATH`.
+`./scripts/test-sync.sh` now edits the rule-created transfer offline from its receiving side; the upstream API then checks both amounts, the notes, and both balances. It passed. The script prints its free port as plain text, since `FORCE_COLOR` would otherwise add color codes that stop the server from starting.
 
 The UI test `testDemoTransfer` transfers from Capital One Checking to Ally Savings through the payee list. It checks that the account cannot transfer to itself, the payee and category rows, and both register rows. It then deletes the transfer from Ally Savings and checks that both sides are gone. It passed with the demo navigation and reconciliation tests on a new iPhone 17 Pro / iOS 26.0 simulator, run with `-parallel-testing-enabled NO`. The first runs failed in the test itself: it typed a `.` decimal on a simulator using `,`, and then tapped the form's delete button instead of the dialog's. Screenshots of the payee list, editor, both registers, and the delete confirmation were inspected.
 

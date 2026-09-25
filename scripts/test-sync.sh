@@ -17,7 +17,7 @@ xcrun swiftc -parse-as-library Native/Models.swift Native/Core/*.swift Tests/Sup
   -module-cache-path "${project_root}/.build/ModuleCache" -lsqlite3 -o .build/engine-sync
 
 test_dir="$(mktemp -d "${TMPDIR:-/tmp}/actual-native-sync.XXXXXX")"
-test_port="$(node -e 'const s=require("node:net").createServer();s.listen(0,"127.0.0.1",()=>{console.log(s.address().port);s.close()})')"
+test_port="$(node -e 'const s=require("node:net").createServer();s.listen(0,"127.0.0.1",()=>{console.log(String(s.address().port));s.close()})')"
 export NATIVE_TEST_SERVER="http://127.0.0.1:${test_port}"
 server_pid=""
 mkdir -p "${test_dir}/server"

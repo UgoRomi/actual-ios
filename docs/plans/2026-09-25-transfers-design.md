@@ -17,4 +17,4 @@ Editing or deleting a transfer whose linked transaction is reconciled asks for c
 
 ## Delivered behavior
 
-As designed. Register rows report the other account, the linked transaction, and whether it is reconciled or part of a split. The engine resolves the other account's payee, checks both sides before any write, and leaves linking, moving, and deleting to Actual's `transactions-batch-update`. The engine, register, bank-sync, automatic-sync, and demo UI tests pass; the encrypted sync test was extended but not run. See `../validation.md`.
+As designed. Register rows report the other account, the linked transaction, and whether it is reconciled or part of a split. The engine resolves the other account's payee, checks both sides before any write, and leaves linking, moving, and deleting to Actual's `transactions-batch-update`. The engine, register, encrypted sync, bank-sync, automatic-sync, and demo UI tests pass. See `../validation.md`.
