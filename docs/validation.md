@@ -173,3 +173,23 @@ The recovery test checks that the new commands are blocked by a sync warning. `.
 The UI test `testDemoReconciliation` reconciles a demo account to zero: prefilled cleared balance, clearing and unclearing a row, adjustment, lock, and the warning before saving a locked transaction. It passed with the demo navigation test on a new iPhone 17 Pro / iOS 26.0 simulator, run with `-parallel-testing-enabled NO`; it opens the demo itself when needed. Screenshots of the reconcile sheet, both banner states, the locked register, and the save warning were inspected.
 
 Strict bridge type checking, the encrypted sync, automatic sync, and 10,000-transaction regressions also passed. `./scripts/test-sync.sh` needs `rg` on `PATH`. Reconciliation against a live bank connection and on a physical device was not verified.
+
+## Transfers (2026-09-25)
+
+`./scripts/test-engine.sh` makes transfers between demo accounts through the native bridge and checks both sides:
+
+- A new transfer between on-budget accounts adds its linked transaction with the opposite amount and the same notes. The chosen category is dropped, and both balances change. Register rows name the other account and the direction. Transfer payees are not listed as ordinary payees.
+- Edits from the receiving side carry the amount and notes to the sending side. Each side keeps its own date and cleared state, as in Actual.
+- Choosing an off-budget account moves the linked transaction there and keeps the category. Choosing an ordinary payee removes the linked transaction; choosing an account again adds a new one and drops the category.
+- A transfer to the transaction's own account is rejected, including by moving one side into the other account.
+- A reconciled linked transaction blocks edits and deletions until its own confirmation is given; confirming this side alone is not enough. A confirmed edit updates the linked transaction, which stays locked.
+- Deleting a transfer deletes both sides and restores all three balances.
+- A transfer linked to a split child is view only and cannot be edited or deleted, but can still be cleared.
+
+Disabling the linked-reconciled check, or the split-linked check, made this test fail. `./scripts/test-transactions.sh` checks transfer titles, categories, search, and the view-only state.
+
+`./scripts/test-sync.sh` now edits the rule-created transfer offline from its receiving side; the upstream API then checks both amounts, the notes, and both balances. It was not run for this change, because `rg` was not on the shell's `PATH`.
+
+The UI test `testDemoTransfer` transfers from Capital One Checking to Ally Savings through the payee list. It checks that the account cannot transfer to itself, the payee and category rows, and both register rows. It then deletes the transfer from Ally Savings and checks that both sides are gone. It passed with the demo navigation and reconciliation tests on a new iPhone 17 Pro / iOS 26.0 simulator, run with `-parallel-testing-enabled NO`. The first runs failed in the test itself: it typed a `.` decimal on a simulator using `,`, and then tapped the form's delete button instead of the dialog's. Screenshots of the payee list, editor, both registers, and the delete confirmation were inspected.
+
+Strict bridge type checking, native engine/recovery tests, bank-sync regressions, automatic sync, and the 10,000-transaction regression also passed. Transfers on a physical device and against a live server were not verified.

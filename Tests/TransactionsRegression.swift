@@ -5,10 +5,11 @@ import SQLite3
     static func transaction(_ id: String, date: String = "2026-09-24", account: String = "a",
                             payee: String? = "Market", category: String? = "Food", notes: String? = nil,
                             amount: Int = -1234, parent: Bool = false, child: Bool = false,
-                            transfer: Bool = false) -> Transaction {
+                            transfer: Bool = false, categoryID: String? = nil, transferAccount: String? = nil) -> Transaction {
         Transaction(id: id, accountId: account, date: date, payeeId: nil, payeeName: payee,
-                    categoryId: nil, categoryName: category, amount: amount, notes: notes,
-                    cleared: true, isParent: parent, isChild: child, isTransfer: transfer, reconciled: false)
+                    categoryId: categoryID, categoryName: category, amount: amount, notes: notes,
+                    cleared: true, isParent: parent, isChild: child, isTransfer: transfer, reconciled: false,
+                    transferAccountId: transferAccount)
     }
 
     static func ids(_ sections: [TransactionSection]) -> [String] {
@@ -40,6 +41,20 @@ import SQLite3
             }
         }
         print("PASS: dates, stable same-day order, accounts, splits/transfers, text and localized amount searches")
+
+        // As in Actual's mobile register, a transfer names the other account and its direction.
+        var sent = transaction("sent", payee: "Ally Savings", category: "Uncategorized", amount: -5000,
+                               transfer: true, transferAccount: "savings")
+        let received = transaction("received", account: "savings", payee: "Checking", category: "Food", amount: 5000,
+                                   transfer: true, categoryID: "food", transferAccount: "a")
+        precondition(sent.title == "Transfer to Ally Savings" && sent.detail == "Transfer" && sent.canEdit)
+        precondition(received.title == "Transfer from Checking" && received.detail == "Food")
+        precondition(ids(TransactionSection.grouped([sent, received], search: "ally")) == ["sent"])
+        precondition(ids(TransactionSection.grouped([sent, received], search: "transfer from")) == ["received"])
+        precondition(ids(TransactionSection.grouped([sent, received], search: "Transfer")) == ["sent", "received"])
+        sent.transferInSplit = true
+        precondition(!sent.canEdit, "A transfer linked to part of a split stays view only")
+        print("PASS: transfer titles, categories, search, and split-linked view-only state")
 
         // Thousands of days matter: a single-day fixture misses the original repeated-scan bug.
         let synthetic: [Transaction] = (0..<10_000).map { index in

@@ -53,6 +53,7 @@ import Foundation
     try await trackingBudget(data: data.appendingPathComponent("budget"), resources: resources)
     try await newTransactions(data: data.appendingPathComponent("budget"), resources: resources)
     try await reconciliation(data: data.appendingPathComponent("budget"), resources: resources)
+    try await transfers(data: data.appendingPathComponent("budget"), resources: resources)
     print(
       "PASS: actual engine demo, add, edit, budget allocation, offline reopen, exact balances, delete"
     )
@@ -99,14 +100,6 @@ import Foundation
       ])
     let edited = try await snapshot(engine)
     precondition(edited.transactions.first(where: { $0.id == transaction.id })?.amount == -2345)
-    if let transfer = edited.transactions.first(where: { $0.isTransfer }) {
-      do {
-        _ = try await engine.call("deleteTransaction", arguments: ["id": .string(transfer.id)])
-        throw EngineFailure("Transfer deletion should be rejected")
-      } catch {
-        precondition(error.localizedDescription.contains("split transactions and transfers"))
-      }
-    }
     return (transaction.id, account.id, account.balance - 2345, category.id)
   }
   static func newTransactions(data: URL, resources: URL) async throws {

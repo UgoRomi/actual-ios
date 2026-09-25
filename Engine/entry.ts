@@ -220,8 +220,13 @@ async function register() {
   const payeeMap = new Map(payees.map((p) => [p.id, p]));
   const categoryMap = new Map(categories.map((c) => [c.id, c]));
   const rows = await lib.send("api/transactions-get", {});
+  // A transfer's linked transaction may be a split child, which rows group under its parent.
+  const byId = new Map(
+    rows.flatMap((row) => [row, ...(row.subtransactions ?? [])]).map((row) => [row.id, row]),
+  );
   const transactions = rows.map((row) => {
     const payee = row.payee ? payeeMap.get(row.payee) : undefined;
+    const linked = row.transfer_id ? byId.get(row.transfer_id) : undefined;
     return {
       id: row.id,
       accountId: row.account,
@@ -238,23 +243,40 @@ async function register() {
       isChild: Boolean(row.is_child),
       isTransfer: Boolean(row.transfer_id || payee?.transfer_acct),
       reconciled: Boolean(row.reconciled),
+      // As in Actual, a transfer's payee stands for the other account.
+      transferAccountId: payee?.transfer_acct ?? null,
+      transferId: row.transfer_id ?? null,
+      transferReconciled: Boolean(linked?.reconciled),
+      transferInSplit: Boolean(linked?.is_child),
     };
   });
   return transactions.sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
 }
-// Reconciled transactions need the user's confirmation, as in Actual. It must
-// be given for the transaction as it is now, not as it was when an editor opened.
-async function editable(id: string, allowReconciled: boolean) {
-  const { data: rows } = await lib.send(
-    "query",
-    lib.q("transactions").filter({ id }).select("*").serialize(),
-  );
-  const row = rows[0];
+// Reconciled transactions need the user's confirmation, as in Actual, and so
+// does a transfer whose linked transaction is reconciled. It must be given for
+// both as they are now, not as they were when an editor opened.
+async function editable(id: string, allowReconciled: boolean, allowReconciledTransfer: boolean) {
+  const find = async (transactionId: string) =>
+    (
+      await lib.send(
+        "query",
+        lib.q("transactions").filter({ id: transactionId }).select("*").options({ splits: "all" }).serialize(),
+      )
+    ).data[0];
+  const row = await find(id);
   if (!row) throw new Error("Transaction no longer exists");
-  if (row.is_parent || row.is_child || row.transfer_id)
-    throw new Error("Edit split transactions and transfers in Actual for now.");
+  if (row.is_parent || row.is_child) throw new Error("Edit split transactions in Actual for now.");
   if (row.reconciled && !allowReconciled)
     throw new Error("This transaction was reconciled after you opened it. Close it and open it again to review your change.");
+  const linked = row.transfer_id ? await find(row.transfer_id) : undefined;
+  // Actual would carry an edit to the split's child, unbalancing the split or
+  // moving the child away from its parent's account.
+  if (linked?.is_child)
+    throw new Error("This transfer is linked to part of a split transaction. Edit it in Actual for now.");
+  if (linked?.reconciled && !allowReconciledTransfer)
+    throw new Error(
+      "The linked transaction in the other account was reconciled after you opened this transfer. Close it and open it again to review your change.",
+    );
   return row;
 }
 async function perform(method: string, args: Obj): Promise<unknown> {
@@ -396,22 +418,37 @@ async function perform(method: string, args: Obj): Promise<unknown> {
     }
     case "saveTransaction": {
       const id = text(args.id);
-      const existing = id ? await editable(id, args.allowReconciled === true) : null;
+      const existing = id
+        ? await editable(id, args.allowReconciled === true, args.allowReconciledTransfer === true)
+        : null;
       const accountId = text(args.accountId),
         date = text(args.date);
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Choose a valid date.");
+      const accounts = await lib.send("accounts-get");
+      const account = accounts.find((a) => a.id === accountId);
+      if (!account) throw new Error("This account no longer exists. Choose another account.");
+      const payees = await lib.send("api/payees-get");
       let payee = text(args.payeeId) || null;
       const name = text(args.payeeName).trim();
-      // Like Actual, reuse an existing payee whose name differs only in case.
-      if (!payee && name) payee = await runMutator(() => createPayee(name));
-      const account = (await lib.send("accounts-get")).find((a) => a.id === accountId);
-      if (!account) throw new Error("This account no longer exists. Choose another account.");
+      const transferAccountId = text(args.transferAccountId);
+      if (transferAccountId) {
+        // As in Actual, the other account's payee makes this a transfer.
+        payee = payees.find((p) => p.transfer_acct === transferAccountId)?.id ?? null;
+        if (!payee) throw new Error("The account to transfer with no longer exists. Choose another account.");
+      } else if (!payee && name) {
+        // Like Actual, reuse an existing payee whose name differs only in case.
+        payee = await runMutator(() => createPayee(name));
+      }
+      const transferTarget = payees.find((p) => p.id === payee)?.transfer_acct;
+      if (transferTarget === accountId) throw new Error("Choose two different accounts for a transfer.");
+      const other = accounts.find((a) => a.id === transferTarget);
       const fields = {
         account: accountId,
         date,
         payee,
-        // Actual never categorizes off-budget transactions.
-        category: account?.offbudget ? null : text(args.categoryId) || null,
+        // Actual never categorizes off-budget transactions, or transfers
+        // between two on-budget accounts.
+        category: account.offbudget || (other && !other.offbudget) ? null : text(args.categoryId) || null,
         amount: integer(args.amount),
         notes: text(args.notes),
         // A reconciled transaction stays cleared until it is unlocked.
@@ -469,7 +506,8 @@ async function perform(method: string, args: Obj): Promise<unknown> {
     }
     case "deleteTransaction": {
       const id = text(args.id);
-      await editable(id, args.allowReconciled === true);
+      await editable(id, args.allowReconciled === true, args.allowReconciledTransfer === true);
+      // Actual deletes a transfer's linked transaction too.
       await lib.send("transactions-batch-update", { deleted: [{ id }] });
       return {};
     }

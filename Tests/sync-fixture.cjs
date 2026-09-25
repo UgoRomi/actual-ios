@@ -84,15 +84,17 @@ const encryptionPassword = "disposable-encryption-test";
       "2026-01-01",
       "2026-12-31",
     );
-    const source = ruleRows.find((t) => t.notes === "native transfer rule");
+    // The offline edit came from the receiving side; both sides carry it.
+    const source = ruleRows.find((t) => t.notes === "native transfer edit");
     assert.ok(source?.transfer_id, "Rule-created transfer has a matching entry");
     const target = transferRows.find((t) => t.id === source.transfer_id);
     assert.equal(target?.transfer_id, source.id);
-    assert.equal(source.amount, -4321);
-    assert.equal(target.amount, 4321);
-    assert.equal(await api.getAccountBalance(fixture.ruleAccountId), -4321);
-    assert.equal(await api.getAccountBalance(fixture.transferAccountId), 4321);
-    console.log("PASS: rule-created native transfer has reciprocal entries and exact balances");
+    assert.equal(target.notes, "native transfer edit");
+    assert.equal(source.amount, -5000);
+    assert.equal(target.amount, 5000);
+    assert.equal(await api.getAccountBalance(fixture.ruleAccountId), -5000);
+    assert.equal(await api.getAccountBalance(fixture.transferAccountId), 5000);
+    console.log("PASS: rule-created native transfer, edited offline from its other side, syncs both entries and exact balances");
     console.log("PASS: upstream Actual API sees native encrypted offline edit and exact balance");
   }
   await api.shutdown();

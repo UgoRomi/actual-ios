@@ -199,6 +199,77 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Capital One Checking"].waitForExistence(timeout: 10))
     }
 
+    /// Transfers from one demo account to another, then deletes the transfer from the other side.
+    @MainActor
+    func testDemoTransfer() {
+        let app = XCUIApplication()
+        app.launch()
+        let demoButton = app.buttons["Explore a demo budget"]
+        let accountsTab = app.tabBars.buttons["Accounts"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        XCTAssertTrue(accountsTab.waitForExistence(timeout: 60), "The demo budget should open")
+        accountsTab.tap()
+        app.staticTexts["Capital One Checking"].tap()
+        let checking = app.navigationBars["Capital One Checking"]
+        XCTAssertTrue(checking.waitForExistence(timeout: 10))
+        checking.buttons["Add transaction"].tap()
+        XCTAssertTrue(app.navigationBars["New transaction"].waitForExistence(timeout: 10))
+        let amount = app.textFields["Amount"]
+        amount.tap()
+        amount.typeText("43" + (Locale.current.decimalSeparator ?? ".") + "21")
+
+        let payeeRow = app.buttons["payee-row"]
+        let categoryRow = app.buttons["category-row"]
+        payeeRow.tap()
+        XCTAssertTrue(app.navigationBars["Payee"].waitForExistence(timeout: 10))
+        let savings = app.buttons["Transfer to or from Ally Savings"]
+        XCTAssertTrue(savings.waitForExistence(timeout: 5), "Other accounts are offered for transfers")
+        XCTAssertFalse(app.buttons["Transfer to or from Capital One Checking"].exists, "An account cannot transfer to itself")
+        capture("13-transfer-payee")
+        savings.tap()
+        XCTAssertTrue(app.navigationBars["New transaction"].waitForExistence(timeout: 10))
+        XCTAssertTrue(describes(payeeRow, "Transfer to Ally Savings"))
+        XCTAssertTrue(describes(categoryRow, "Transfer") && !categoryRow.isEnabled,
+                      "Transfers between on-budget accounts have no category")
+        capture("14-transfer-editor")
+        app.navigationBars["New transaction"].buttons["Save"].tap()
+        // The editor shows the same title, so look for the row once it has closed.
+        XCTAssertTrue(wait(forAbsence: app.navigationBars["New transaction"]), "The transfer should save")
+
+        // The demo has no transfers, so each title names this test's transaction.
+        let sent = app.staticTexts["Transfer to Ally Savings"]
+        XCTAssertTrue(sent.waitForExistence(timeout: 10), "The transfer should appear in the sending account")
+        capture("15-transfer-register")
+        app.navigationBars.buttons["Accounts"].tap()
+        app.staticTexts["Ally Savings"].tap()
+        XCTAssertTrue(app.navigationBars["Ally Savings"].waitForExistence(timeout: 10))
+        let received = app.staticTexts["Transfer from Capital One Checking"]
+        XCTAssertTrue(received.waitForExistence(timeout: 10), "The linked transaction should appear in the other account")
+        capture("16-transfer-linked")
+
+        received.tap()
+        XCTAssertTrue(app.navigationBars["Transaction"].waitForExistence(timeout: 10))
+        XCTAssertTrue(describes(payeeRow, "Transfer from Capital One Checking"))
+        app.buttons["Delete transaction"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["This removes the transfer from both accounts and updates your balances."]
+            .waitForExistence(timeout: 5))
+        capture("17-transfer-delete")
+        // The dialog repeats the form's button label.
+        app.sheets["Delete this transaction?"].buttons["Delete transaction"].tap()
+        XCTAssertTrue(wait(forAbsence: app.navigationBars["Transaction"]), "Deleting closes the editor")
+        XCTAssertTrue(wait(forAbsence: received), "Deleting removes this side")
+        app.navigationBars.buttons["Accounts"].tap()
+        app.staticTexts["Capital One Checking"].tap()
+        XCTAssertTrue(checking.waitForExistence(timeout: 10))
+        XCTAssertTrue(wait(forAbsence: app.staticTexts["Transfer to Ally Savings"]), "Deleting removes the linked side too")
+    }
+
+    @MainActor
+    private func wait(forAbsence element: XCUIElement) -> Bool {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: 10) == .completed
+    }
+
     /// A row's label and value, as VoiceOver reads them.
     @MainActor
     private func describes(_ element: XCUIElement, _ text: String) -> Bool {

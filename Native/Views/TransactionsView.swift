@@ -86,7 +86,8 @@ struct TransactionRow: View {
                 .background(ActualTheme.background, in: Circle())
             VStack(alignment: .leading, spacing: 5) {
                 Text(transaction.title).font(.body.weight(.medium)).foregroundStyle(.primary)
-                Text(transaction.isTransfer ? "Transfer · view only" : transaction.isParent ? "Split transaction · view only" : transaction.detail)
+                Text(transaction.isParent ? "Split transaction · view only"
+                     : transaction.canEdit ? transaction.detail : "\(transaction.detail) · view only")
                     .font(.caption).foregroundStyle(.secondary)
                 if let notes = transaction.notes, !notes.isEmpty { Text(notes).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
             }

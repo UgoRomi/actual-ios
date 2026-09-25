@@ -14,6 +14,7 @@ node Engine/build.mjs
 mkdir -p .build
 xcrun swiftc -parse-as-library \
   Native/Models.swift Native/Core/*.swift Tests/Support/BudgetSnapshot.swift Tests/EngineSmoke.swift Tests/EngineReconciliation.swift \
+  Tests/EngineTransfers.swift \
   -module-cache-path "${project_root}/.build/ModuleCache" \
   -lsqlite3 -o .build/engine-smoke
 .build/engine-smoke "${project_root}/Native/Resources"

@@ -10,6 +10,8 @@ struct TransactionEditor: View {
     @State private var date = Date()
     @State private var account = ""
     @State private var payee = ""
+    /// Another account, for a transfer. As in Actual, it takes the payee's place.
+    @State private var transferAccount = ""
     @State private var category = ""
     @State private var notes = ""
     @State private var cleared = false
@@ -19,15 +21,34 @@ struct TransactionEditor: View {
     @State private var initialized = false
 
     private var editable: Bool { transaction?.canEdit ?? true }
-    /// Uses the latest load: the transaction may have been reconciled since the editor opened.
-    private var isReconciled: Bool {
-        guard let transaction else { return false }
-        return (model.transactions.first { $0.id == transaction.id } ?? transaction).isReconciled
+    /// The latest load: this transaction, or a transfer's linked transaction,
+    /// may have been reconciled since the editor opened.
+    private var current: Transaction? {
+        transaction.map { transaction in model.transactions.first { $0.id == transaction.id } ?? transaction }
+    }
+    private var isReconciled: Bool { current?.isReconciled == true }
+    private var isTransferReconciled: Bool { current?.transferReconciled == true }
+    private var accounts: [Account] { model.overview?.accounts ?? [] }
+    private var transferTarget: Account? { transferAccount.isEmpty ? nil : accounts.first { $0.id == transferAccount } }
+    /// Open accounts other than this one, and the current choice. Like Actual's
+    /// payee list, on-budget accounts come first.
+    private var transferAccounts: [Account] {
+        let offered = accounts.filter { $0.id != account && (!$0.closed || $0.id == transferAccount) }
+        return offered.filter { !$0.offbudget } + offered.filter(\.offbudget)
     }
     /// Actual never categorizes off-budget transactions.
-    private var isOffBudget: Bool { model.overview?.accounts.first { $0.id == account }?.offbudget == true }
+    private var isOffBudget: Bool { accounts.first { $0.id == account }?.offbudget == true }
+    /// Nor transfers to an on-budget account: from on-budget, the budget is unchanged.
+    private var isBudgetTransfer: Bool { transferTarget.map { !$0.offbudget } ?? false }
+    private var payeeLabel: String {
+        if !transferAccount.isEmpty {
+            return "Transfer \(isOutflow ? "to" : "from") \(transferTarget?.name ?? "a deleted account")"
+        }
+        return payee.isEmpty ? "None" : payee
+    }
     private var categoryName: String {
         if isOffBudget { return "Off budget" }
+        if isBudgetTransfer { return "Transfer" }
         if category.isEmpty { return "Uncategorized" }
         // Hidden categories are not listed, but a transaction can still use one.
         return model.budget?.categories.first { $0.id == category }?.name
@@ -40,7 +61,9 @@ struct TransactionEditor: View {
                 if !editable {
                     Section {
                         Label("View only", systemImage: "lock")
-                        Text("Edit transfers and split transactions in the Actual web or desktop app.")
+                        Text(transaction?.transferInSplit == true
+                             ? "This transfer is linked to part of a split transaction. Edit it in the Actual web or desktop app."
+                             : "Edit split transactions in the Actual web or desktop app.")
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
                 } else if isReconciled {
@@ -64,7 +87,7 @@ struct TransactionEditor: View {
                         if !model.currency.isEmpty { Text(model.currency).font(.caption).foregroundStyle(.secondary) }
                     }.padding(.vertical, 8)
                 }.disabled(!editable || model.isBusy)
-                Section("Details") {
+                Section {
                     Picker("Account", selection: $account) {
                         Text("Choose an account").tag("")
                         ForEach(model.overview?.accounts.filter { !$0.closed || $0.id == account } ?? []) { item in
@@ -73,19 +96,21 @@ struct TransactionEditor: View {
                     }
                     DatePicker("Date", selection: $date, displayedComponents: .date)
                     NavigationLink {
-                        PayeePicker(selection: $payee, payees: model.overview?.payees ?? [])
+                        PayeePicker(selection: $payee, transferAccount: $transferAccount,
+                                    payees: model.overview?.payees ?? [], accounts: transferAccounts)
                     } label: {
-                        LabeledContent("Payee", value: payee.isEmpty ? "None" : payee)
+                        LabeledContent("Payee", value: payeeLabel)
                     }.accessibilityIdentifier("payee-row")
                     NavigationLink {
                         CategoryPicker(selection: $category, groups: model.budget?.groups ?? [])
                     } label: {
                         LabeledContent("Category", value: categoryName)
-                    }.disabled(isOffBudget).accessibilityIdentifier("category-row")
+                    }.disabled(isOffBudget || isBudgetTransfer).accessibilityIdentifier("category-row")
                     if isReconciled { Toggle("Reconciled", isOn: .constant(true)).disabled(true) }
                     else { Toggle("Cleared", isOn: $cleared) }
                     TextField("Notes", text: $notes, axis: .vertical).lineLimit(2...5)
-                }.disabled(!editable || model.isBusy)
+                } header: { Text("Details") } footer: { if editable { transferFooter } }
+                .disabled(!editable || model.isBusy)
                 if let validation { Section { Text(validation).foregroundStyle(.red) } }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
                 if transaction != nil && editable {
@@ -107,7 +132,7 @@ struct TransactionEditor: View {
                 ToolbarItem(placement: .cancellationAction) { Button(editable ? "Cancel" : "Done") { dismiss() }.disabled(model.isBusy) }
                 if editable {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Save") { if isReconciled { confirmsReconciledSave = true } else { save() } }
+                        Button("Save") { if isReconciled || isTransferReconciled { confirmsReconciledSave = true } else { save() } }
                             .bold().disabled(model.isBusy)
                     }
                 }
@@ -116,21 +141,54 @@ struct TransactionEditor: View {
             .confirmationDialog("Delete this transaction?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
                 Button("Delete transaction", role: .destructive) {
                     if let transaction {
-                        let arguments: [String: JSONValue] = ["id": .string(transaction.id), "allowReconciled": .bool(isReconciled)]
+                        let arguments: [String: JSONValue] = [
+                            "id": .string(transaction.id), "allowReconciled": .bool(isReconciled),
+                            "allowReconciledTransfer": .bool(isTransferReconciled),
+                        ]
                         Task { if await model.perform("deleteTransaction", arguments: arguments) { dismiss() } }
                     }
                 }
                 Button("Cancel", role: .cancel) { }
-            } message: {
-                Text(isReconciled ? "Deleting reconciled transactions may bring your reconciliation out of balance."
-                     : "This removes the transaction from your budget and updates your balances.")
-            }
-            // As in Actual's mobile editor, any save of a reconciled transaction warns first.
-            .confirmationDialog("Save this reconciled transaction?", isPresented: $confirmsReconciledSave, titleVisibility: .visible) {
-                Button("Save changes") { save(allowReconciled: true) }
+            } message: { Text(deleteMessage) }
+            // As in Actual's mobile editor, any save of a reconciled transaction,
+            // or of a transfer whose linked transaction is reconciled, warns first.
+            .confirmationDialog(isReconciled ? "Save this reconciled transaction?" : "Save this transfer?",
+                                isPresented: $confirmsReconciledSave, titleVisibility: .visible) {
+                Button("Save changes") { save(confirmed: true) }
                 Button("Cancel", role: .cancel) { }
-            } message: { Text("Saving your changes to this reconciled transaction may bring your reconciliation out of balance.") }
+            } message: { Text(saveMessage) }
             .onAppear { initialize() }
+        }
+    }
+
+    /// What saving does in the other account, as Actual's transfer handling does.
+    @ViewBuilder private var transferFooter: some View {
+        if let transferTarget {
+            Text(current?.transferId == nil
+                 ? "Saving also adds the matching transaction to \(transferTarget.name)."
+                 : "Its linked transaction in \(transferTarget.name) gets the same amount and notes, but keeps its own date and cleared state.")
+        } else if current?.transferId != nil, let previous = accounts.first(where: { $0.id == current?.transferAccountId }) {
+            Text("Choosing a payee removes the linked transaction from \(previous.name).")
+        }
+    }
+
+    /// Actual's confirmations, naming each reconciliation that may fall out of balance.
+    private var saveMessage: String {
+        switch (isReconciled, isTransferReconciled) {
+        case (true, true): "This transaction and its linked transaction in another account are reconciled. Saving your changes may bring their reconciliations out of balance."
+        case (true, false): "Saving your changes to this reconciled transaction may bring your reconciliation out of balance."
+        default: "This transfer has a linked transaction in another account that is reconciled. Editing it may bring that account’s reconciliation out of balance."
+        }
+    }
+
+    private var deleteMessage: String {
+        switch (isReconciled, isTransferReconciled) {
+        case (true, true): "This transaction and its linked transaction in another account are reconciled. Deleting them may bring their reconciliations out of balance."
+        case (true, false): "Deleting reconciled transactions may bring your reconciliation out of balance."
+        case (false, true): "This transfer has a linked transaction in another account that is reconciled. Deleting it may bring that account’s reconciliation out of balance."
+        case (false, false): current?.transferId == nil
+            ? "This removes the transaction from your budget and updates your balances."
+            : "This removes the transfer from both accounts and updates your balances."
         }
     }
 
@@ -142,27 +200,34 @@ struct TransactionEditor: View {
         amount = Money.editable(abs(transaction.amount))
         isOutflow = transaction.amount < 0
         date = BudgetDate.date(transaction.date) ?? Date()
-        payee = transaction.payeeId == nil ? "" : (transaction.payeeName ?? "")
+        // A transfer's payee stands for the other account, not a name to reuse.
+        transferAccount = transaction.transferAccountId ?? ""
+        payee = transaction.payeeId == nil || !transferAccount.isEmpty ? "" : (transaction.payeeName ?? "")
         category = transaction.categoryId ?? ""
         notes = transaction.notes ?? ""
         cleared = transaction.cleared
     }
 
-    private func save(allowReconciled: Bool = false) {
+    /// A confirmation covers whatever is reconciled now, as its message describes.
+    private func save(confirmed: Bool = false) {
         guard !account.isEmpty else { validation = "Choose an account before saving."; return }
+        guard transferAccount != account else { validation = "Choose two different accounts for a transfer."; return }
         guard let parsed = Money.parse(amount), parsed >= 0 else { validation = "Enter a positive amount with no more than two decimal places."; return }
         validation = nil
         var arguments: [String: JSONValue] = [
             "accountId": .string(account), "date": .string(BudgetDate.day(date)),
             "amount": .number(isOutflow ? -parsed : parsed), "notes": .string(notes), "cleared": .bool(cleared),
-            "categoryId": category.isEmpty ? .null : .string(category)
+            "categoryId": category.isEmpty || isOffBudget || isBudgetTransfer ? .null : .string(category)
         ]
         if let transaction {
             arguments["id"] = .string(transaction.id)
-            arguments["allowReconciled"] = .bool(allowReconciled)
+            arguments["allowReconciled"] = .bool(confirmed && isReconciled)
+            arguments["allowReconciledTransfer"] = .bool(confirmed && isTransferReconciled)
         }
         let cleanedPayee = payee.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let match = model.overview?.payees.first(where: { $0.name == cleanedPayee }) {
+        if !transferAccount.isEmpty {
+            arguments["transferAccountId"] = .string(transferAccount)
+        } else if let match = model.overview?.payees.first(where: { $0.name == cleanedPayee }) {
             arguments["payeeId"] = .string(match.id)
         } else if !cleanedPayee.isEmpty { arguments["payeeName"] = .string(cleanedPayee) }
         else { arguments["payeeId"] = .null }
@@ -171,10 +236,13 @@ struct TransactionEditor: View {
     }
 }
 
-/// Search existing payees, or add a new one by name.
+/// Search existing payees, add a new one by name, or choose another account for a transfer.
 struct PayeePicker: View {
     @Binding var selection: String
+    @Binding var transferAccount: String
     let payees: [Payee]
+    /// Accounts to transfer with.
+    let accounts: [Account]
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
     @FocusState private var searchFocused: Bool
@@ -182,6 +250,9 @@ struct PayeePicker: View {
     private var query: String { search.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var matches: [Payee] {
         query.isEmpty ? payees : payees.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+    private var matchingAccounts: [Account] {
+        query.isEmpty ? accounts : accounts.filter { $0.name.localizedCaseInsensitiveContains(query) }
     }
     /// Actual reuses a payee whose name differs only in case, so do not offer to add one.
     private var canAdd: Bool {
@@ -195,9 +266,26 @@ struct PayeePicker: View {
                     Button { choose(query) } label: { Label("Add “\(query)”", systemImage: "plus.circle") }
                 }
             }
-            Section {
-                if query.isEmpty { choice("No payee", value: "") }
-                ForEach(matches) { payee in choice(payee.name, value: payee.name) }
+            if query.isEmpty { Section { choice("No payee", value: "") } }
+            // Before payees: the account list is short, and payees can number in the hundreds.
+            if !matchingAccounts.isEmpty {
+                Section("Transfer to/from") {
+                    ForEach(matchingAccounts) { account in
+                        Button {
+                            transferAccount = account.id
+                            selection = ""
+                            dismiss()
+                        } label: {
+                            row(account.name, detail: account.offbudget ? "Off budget" : nil,
+                                selected: transferAccount == account.id)
+                        }
+                        .accessibilityLabel("Transfer to or from \(account.name)")
+                        .accessibilityValue(account.offbudget ? "Off budget" : "")
+                    }
+                }
+            }
+            if !matches.isEmpty {
+                Section("Payees") { ForEach(matches) { payee in choice(payee.name, value: payee.name) } }
             }
         }
         .navigationTitle("Payee").navigationBarTitleDisplayMode(.inline)
@@ -207,17 +295,21 @@ struct PayeePicker: View {
     }
 
     private func choice(_ title: String, value: String) -> some View {
-        Button { choose(value) } label: {
-            HStack {
-                Text(title).foregroundStyle(Color.primary)
-                Spacer()
-                if selection == value { Image(systemName: "checkmark").foregroundStyle(ActualTheme.purple) }
-            }
+        Button { choose(value) } label: { row(title, selected: transferAccount.isEmpty && selection == value) }
+    }
+
+    private func row(_ title: String, detail: String? = nil, selected: Bool) -> some View {
+        HStack {
+            Text(title).foregroundStyle(Color.primary)
+            Spacer()
+            if let detail { Text(detail).font(.caption).foregroundStyle(Color.secondary) }
+            if selected { Image(systemName: "checkmark").foregroundStyle(ActualTheme.purple) }
         }
     }
 
     private func choose(_ value: String) {
         selection = value
+        transferAccount = ""
         dismiss()
     }
 }

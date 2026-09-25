@@ -65,15 +65,10 @@ private struct Fixture: Decodable {
           $0.accountId == fixture.ruleAccountId && $0.notes == "native transfer rule"
         })
       else { throw EngineFailure("Rule transfer missing") }
-      precondition(ruleTransfer.isTransfer)
+      precondition(ruleTransfer.isTransfer && ruleTransfer.canEdit)
+      precondition(ruleTransfer.transferAccountId == fixture.transferAccountId)
       precondition(
         afterRule.accounts.first(where: { $0.id == fixture.transferAccountId })?.balance == 4321)
-      do {
-        _ = try await engine.call("deleteTransaction", arguments: ["id": .string(ruleTransfer.id)])
-        throw EngineFailure("Transfer deletion should be rejected")
-      } catch let error as EngineFailure {
-        precondition(error.message.contains("split transactions and transfers"))
-      }
       _ = try await engine.call("sync")
       let beforeFailedDownload = try await self.snapshot(engine)
       do {
@@ -99,7 +94,24 @@ private struct Fixture: Decodable {
           "payeeId": .string(transaction.payeeId ?? ""), "amount": .number(-2345),
           "notes": .string("native offline restart"), "cleared": .bool(true),
         ])
-      print("PASS: encrypted budget reopened in fresh process and edited offline")
+      // Edit the rule-created transfer from its receiving side; Actual updates the sending side.
+      guard
+        let received = snapshot.transactions.first(where: {
+          $0.accountId == fixture.transferAccountId && $0.transferAccountId == fixture.ruleAccountId
+        })
+      else { throw EngineFailure("No synced transfer") }
+      _ = try await engine.call(
+        "saveTransaction",
+        arguments: [
+          "id": .string(received.id), "accountId": .string(fixture.transferAccountId),
+          "date": .string(received.date), "transferAccountId": .string(fixture.ruleAccountId),
+          "categoryId": .null, "amount": .number(5000), "notes": .string("native transfer edit"),
+          "cleared": .bool(false),
+        ])
+      let edited = try await self.snapshot(engine)
+      precondition(
+        edited.transactions.first(where: { $0.id == received.transferId })?.amount == -5000)
+      print("PASS: encrypted budget reopened in fresh process and edited offline, including a transfer")
     } else if phase == "sync" {
       _ = try await engine.call("sync")
       let snapshot = try await snapshot(engine)

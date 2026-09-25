@@ -152,12 +152,26 @@ struct Transaction: Decodable, Identifiable, Sendable {
     let isTransfer: Bool
 
     let reconciled: Bool?
+    /// Transfers only: the other account, which Actual stores as the payee.
+    var transferAccountId: String? = nil
+    /// The linked transaction in the other account.
+    var transferId: String? = nil
+    var transferReconciled: Bool? = nil
+    /// The linked transaction is part of a split, which Actual would unbalance or move.
+    var transferInSplit: Bool? = nil
 
-    /// Reconciled transactions can be edited too, after a warning.
-    var canEdit: Bool { !isParent && !isChild && !isTransfer }
+    /// Reconciled transactions and transfers can be edited too, after any warning.
+    var canEdit: Bool { !isParent && !isChild && transferInSplit != true }
     var isReconciled: Bool { reconciled == true }
-    var title: String { payeeName.flatMap { $0.isEmpty ? nil : $0 } ?? "No payee" }
-    var detail: String { categoryName ?? "Uncategorized" }
+    var title: String {
+        // As in Actual's mobile register, a transfer names the other account and the direction.
+        if transferAccountId != nil, let payeeName, !payeeName.isEmpty {
+            return amount > 0 ? "Transfer from \(payeeName)" : "Transfer to \(payeeName)"
+        }
+        return payeeName.flatMap { $0.isEmpty ? nil : $0 } ?? "No payee"
+    }
+    /// An uncategorized transfer, such as one between two on-budget accounts, shows as a transfer.
+    var detail: String { transferAccountId != nil && categoryId == nil ? "Transfer" : categoryName ?? "Uncategorized" }
 }
 
 struct Payee: Decodable, Identifiable, Sendable { let id: String; let name: String }
