@@ -63,6 +63,48 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["No matching transactions"].exists)
     }
 
+    /// Opt-in: install a disposable local budget named "Delete Budget Regression" first.
+    /// Deletes it from this device.
+    @MainActor
+    func testDeleteLocalBudget() throws {
+        let app = XCUIApplication()
+        app.launch()
+        let fixture = app.buttons["Delete Budget Regression"]
+        guard fixture.waitForExistence(timeout: 10) else {
+            throw XCTSkip("Requires the disposable delete-budget fixture; see docs/validation.md")
+        }
+        XCTAssertTrue(app.staticTexts["Touch and hold a budget to delete it from this device."].exists)
+        let delete = app.buttons["Delete from This Device"]
+        let message = app.staticTexts["This budget is not on a server. Deleting it removes it permanently."]
+
+        fixture.press(forDuration: 1)
+        XCTAssertTrue(delete.waitForExistence(timeout: 5))
+        capture("16-delete-budget-menu")
+        delete.tap()
+        XCTAssertTrue(message.waitForExistence(timeout: 5))
+        // As a popover, the dialog has no Cancel button; tapping outside dismisses it.
+        let cancel = app.buttons["Cancel"]
+        if cancel.exists { cancel.tap() } else { app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.1)).tap() }
+        XCTAssertTrue(message.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(fixture.exists, "Cancelling must keep the budget")
+
+        fixture.press(forDuration: 1)
+        XCTAssertTrue(delete.waitForExistence(timeout: 5))
+        delete.tap()
+        XCTAssertTrue(message.waitForExistence(timeout: 5))
+        capture("17-delete-budget-confirmation")
+        delete.firstMatch.tap()
+        XCTAssertTrue(fixture.waitForNonExistence(timeout: 10), "The deleted budget must leave the list")
+        XCTAssertFalse(app.staticTexts["Something needs attention"].exists)
+        XCTAssertTrue(app.buttons["Explore a demo budget"].exists)
+        capture("18-budget-deleted")
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.buttons["Explore a demo budget"].waitForExistence(timeout: 30))
+        XCTAssertFalse(fixture.exists, "The deleted budget must stay deleted after relaunch")
+    }
+
     /// Opt-in: signs in to a disposable OpenID server; run `scripts/test-openid.sh --simulator`.
     @MainActor
     func testOpenIDSignIn() throws {

@@ -33,7 +33,7 @@ struct SettingsView: View {
                     Button("Choose another budget") {
                         Task { if await model.closeBudget() { dismiss() } }
                     }.disabled(model.isBusy)
-                } footer: { Text("Your saved budget stays on this device.") }
+                } footer: { Text("Your saved budget stays on this device. You can delete it from the budget list.") }
                 Section {
                     Label("Actual", systemImage: "chart.pie.fill").foregroundStyle(ActualTheme.purple).font(.headline)
                     Text("Unofficial client for Actual Budget.").font(.subheadline).foregroundStyle(.secondary)

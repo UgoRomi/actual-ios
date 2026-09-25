@@ -615,6 +615,20 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       await lib.send("close-budget");
       await storage.removeItem("native-last-budget");
       return {};
+    case "deleteBudget": {
+      // Like Actual's "Delete file locally": a server budget stays on the server.
+      const id = text(args.id);
+      if (!(await budgets()).some((budget) => budget.id === id))
+        throw new Error("This budget is no longer on this device.");
+      // Actual deletes from its file list, with no budget open. Its handler
+      // opens the budget's database, which would replace an open one.
+      if (getPrefs()?.id) await lib.send("close-budget");
+      if ((await storage.getItem("native-last-budget")) === id) await storage.removeItem("native-last-budget");
+      if ((await lib.send("delete-budget", { id })) !== "ok")
+        throw new Error("The budget could not be deleted. Try again.");
+      await storage.removeItem("native-dropped-sync:" + id);
+      return { budgets: await budgets() };
+    }
     default:
       throw new Error("Unknown operation: " + method);
   }
@@ -655,7 +669,7 @@ export function request(id: string, method: string, argsJSON: string) {
       void activeSync.then(reply, reject);
       return;
     }
-    if (["bootstrap", "open", "download", "demo", "close", "connect", "loginMethods", "openIdSignIn"].includes(method)) {
+    if (["bootstrap", "open", "download", "demo", "close", "deleteBudget", "connect", "loginMethods", "openIdSignIn"].includes(method)) {
       // A sync must finish against the budget/server with which it started.
       await activeSync?.catch(() => {});
     }

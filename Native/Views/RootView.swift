@@ -38,6 +38,8 @@ struct RootView: View {
 struct WelcomeView: View {
     @Environment(AppModel.self) private var model
     @State private var showConnection = false
+    @State private var budgetToDelete: BudgetFile?
+    @State private var isDeleting = false
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -67,7 +69,28 @@ struct WelcomeView: View {
                                     HStack { Label(budget.name, systemImage: "folder"); Spacer(); Image(systemName: "chevron.right") }
                                         .padding().background(ActualTheme.surface, in: RoundedRectangle(cornerRadius: 16))
                                 }.buttonStyle(.plain)
+                                .contextMenu {
+                                    Button("Delete from This Device", systemImage: "trash", role: .destructive) {
+                                        budgetToDelete = budget
+                                    }
+                                }
+                                .confirmationDialog(
+                                    "Delete “\(budget.name)” from this device?",
+                                    isPresented: Binding(
+                                        get: { budgetToDelete?.id == budget.id },
+                                        set: { if !$0 { budgetToDelete = nil } }),
+                                    titleVisibility: .visible
+                                ) {
+                                    Button("Delete from This Device", role: .destructive) { delete(budget) }
+                                    Button("Cancel", role: .cancel) { }
+                                } message: {
+                                    Text(budget.cloudFileId == nil
+                                         ? "This budget is not on a server. Deleting it removes it permanently."
+                                         : "Your server keeps this budget, so you can download it again. Changes not yet synced to your server are lost.")
+                                }
                             }
+                            Text("Touch and hold a budget to delete it from this device.")
+                                .font(.footnote).foregroundStyle(.secondary)
                         }
                     }
                     VStack(spacing: 14) {
@@ -85,8 +108,20 @@ struct WelcomeView: View {
             }
             .background(ActualTheme.background)
             .disabled(model.isBusy)
-            .overlay(alignment: .bottom) { if model.isBusy { ProgressView("Opening budget…").padding().glassEffect().padding() } }
+            .overlay(alignment: .bottom) {
+                if model.isBusy {
+                    ProgressView(isDeleting ? "Deleting budget…" : "Opening budget…").padding().glassEffect().padding()
+                }
+            }
             .sheet(isPresented: $showConnection) { ConnectionView() }
+        }
+    }
+
+    private func delete(_ budget: BudgetFile) {
+        isDeleting = true
+        Task {
+            await model.deleteBudget(budget.id)
+            isDeleting = false
         }
     }
 }

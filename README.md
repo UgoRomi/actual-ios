@@ -7,6 +7,7 @@ This is a development build, with no App Store submission or distribution signin
 ## What works
 
 - Open a real demo or download a budget from your Actual server.
+- Delete a budget from this device: touch and hold it in the budget list. As with Actual's **Delete file locally**, a server budget stays on your server and can be downloaded again, but changes not yet synced are lost. A budget that is not on a server is deleted permanently. Deleting a budget from the server remains in Actual web/desktop.
 - Browse monthly envelope or tracking budgets, adjust category allocations, and see account balances, including future-dated transactions as in Actual. Tracking budgets show saved or projected savings instead of an amount to budget.
 - Pull to refresh Accounts to fetch bank transactions for all linked, open accounts, or refresh one account from its transaction register. Shows bank refresh status and account-specific errors; existing rules and import preferences apply.
 - Search transactions; add, edit, categorize, clear, and delete ordinary transactions. Payees and categories are chosen from searchable lists, and typing a new name adds a payee. As in Actual's mobile app, rules fill in empty fields of new transactions and may set the payee or extend notes, but never replace a category or other value you entered. A typed payee name reuses an existing payee regardless of capitalization.

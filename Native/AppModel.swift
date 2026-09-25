@@ -459,4 +459,24 @@ final class AppModel {
             return true
         } catch { errorMessage = error.localizedDescription; return false }
     }
+
+    /// Removes a budget's copy on this device, as Actual's "Delete file locally"
+    /// does. A server budget stays on the server and can be downloaded again.
+    @discardableResult
+    func deleteBudget(_ id: String) async -> Bool {
+        guard !isBusy, !isBudgetOpen else { return false }
+        isBusy = true
+        defer { finishOperation() }
+        _ = await syncTask?.value
+        do {
+            let listing = try await client().call("deleteBudget", arguments: ["id": .string(id)], as: BudgetListing.self)
+            // The engine closes a budget that is open without a loaded view.
+            clearBudget()
+            clearAccountState()
+            resetBudgetSyncState()
+            localBudgets = listing.budgets
+            errorMessage = nil
+            return true
+        } catch { errorMessage = error.localizedDescription; return false }
+    }
 }
