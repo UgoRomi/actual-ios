@@ -1,3 +1,4 @@
+import AuthenticationServices
 import SwiftUI
 
 struct SettingsView: View {
@@ -49,12 +50,22 @@ struct SettingsView: View {
 struct ConnectionView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.webAuthenticationSession) private var webAuthenticationSession
     @State private var serverURL = ""
     @State private var password = ""
+    /// How the server at `serverURL` lets people sign in, once checked.
+    @State private var options: LoginOptions?
+    @State private var signingIn: LoginMethod?
     @State private var syncID = ""
     @State private var budgetPassword = ""
     @State private var connected = false
     @State private var validation: String?
+
+    /// Before anyone signs in with OpenID, Actual confirms the server password.
+    private var needsOwnerPassword: Bool {
+        guard let options else { return false }
+        return !options.ownerCreated && options.methods.contains(.openid) && options.methods.contains(.password)
+    }
 
     var body: some View {
         NavigationStack {
@@ -63,23 +74,24 @@ struct ConnectionView: View {
                     TextField("https://actual.example.com", text: $serverURL)
                         .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                         .accessibilityLabel("Server address")
-                    SecureField("Server password", text: $password)
-                    Button {
-                        guard let url = URL(string: serverURL.trimmingCharacters(in: .whitespacesAndNewlines)),
-                              ["https", "http"].contains(url.scheme?.lowercased() ?? ""), url.host != nil else {
-                            validation = "Enter your server’s full address, including https:// or http://."
-                            return
+                        .onSubmit { if options == nil { checkServer() } }
+                        .onChange(of: serverURL) { options = nil }
+                    if let options {
+                        if options.methods.contains(.password) {
+                            SecureField("Server password", text: $password)
                         }
-                        validation = nil
-                        Task {
-                            connected = await model.connect(url: url.absoluteString, password: password)
-                            if connected { password = "" }
+                        ForEach(options.methods, id: \.self) { method in
+                            Button { signIn(method) } label: {
+                                HStack { Text(method.title); Spacer(); if signingIn == method { ProgressView() } }
+                            }.disabled(method == .openid && needsOwnerPassword && password.isEmpty)
                         }
-                    } label: {
-                        HStack { Text(connected ? "Reconnect" : "Connect"); Spacer(); if model.isBusy { ProgressView() } }
+                    } else {
+                        Button(action: checkServer) {
+                            HStack { Text("Continue"); Spacer(); if model.isBusy { ProgressView() } }
+                        }
                     }
                 } header: { Text("Actual server") } footer: {
-                    Text("Use the address and password you use to open Actual in your browser.")
+                    Text(serverFooter)
                 }.disabled(model.isBusy)
                 if let validation { Section { Text(validation).foregroundStyle(.red) } }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
@@ -119,4 +131,65 @@ struct ConnectionView: View {
             .interactiveDismissDisabled(model.isBusy)
         }
     }
+
+    private var serverFooter: String {
+        guard let options else { return "Enter the address you use to open Actual in your browser." }
+        guard options.methods.contains(.openid), !options.ownerCreated else {
+            return "Sign in as you do in Actual in your browser."
+        }
+        let owner = "The first person to sign in with OpenID becomes the server owner. This can’t be changed later."
+        return needsOwnerPassword ? owner + " Enter the server password to confirm." : owner
+    }
+
+    /// The entered address, or nil after explaining what is wrong with it.
+    private func validatedURL() -> String? {
+        guard let url = URL(string: serverURL.trimmingCharacters(in: .whitespacesAndNewlines)),
+              ["https", "http"].contains(url.scheme?.lowercased() ?? ""), url.host != nil else {
+            validation = "Enter your server’s full address, including https:// or http://."
+            return nil
+        }
+        validation = nil
+        return url.absoluteString
+    }
+
+    private func checkServer() {
+        guard let url = validatedURL() else { return }
+        Task { options = await model.loginOptions(url: url) }
+    }
+
+    private func signIn(_ method: LoginMethod) {
+        guard let url = validatedURL() else { return }
+        signingIn = method
+        Task {
+            let succeeded = switch method {
+            case .password: await model.connect(url: url, password: password)
+            case .openid: await model.connectWithOpenID(url: url, password: password, authenticate: authenticate)
+            }
+            if succeeded {
+                connected = true
+                password = ""
+                // An OpenID sign-in leaves the server with an owner.
+                if method == .openid, let current = options {
+                    options = LoginOptions(methods: current.methods, ownerCreated: true)
+                }
+            }
+            signingIn = nil
+        }
+    }
+
+    /// Shows the provider in the system's browser sheet, which supports passkeys
+    /// and existing Safari sign-ins. Returns nil if the person cancels.
+    private func authenticate(_ url: URL) async throws -> URL? {
+        do {
+            return try await webAuthenticationSession.authenticate(
+                using: url, callback: .customScheme(OpenIDCallback.scheme),
+                preferredBrowserSession: nil, additionalHeaderFields: [:])
+        } catch let error as ASWebAuthenticationSessionError where error.code == .canceledLogin {
+            return nil
+        }
+    }
+}
+
+private extension LoginMethod {
+    var title: String { self == .openid ? "Sign in with OpenID" : "Sign in with password" }
 }

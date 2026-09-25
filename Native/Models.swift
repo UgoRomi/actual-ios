@@ -40,6 +40,32 @@ struct Bootstrap: Decodable, Sendable {
 
 struct BudgetListing: Decodable, Sendable { let budgets: [BudgetFile] }
 
+enum LoginMethod: String, Decodable, Sendable { case password, openid }
+
+/// How a server lets people sign in, its active method first.
+struct LoginOptions: Decodable, Sendable {
+    let methods: [LoginMethod]
+    /// False until someone signs in with OpenID; that person becomes the server owner.
+    let ownerCreated: Bool
+}
+
+struct OpenIDStart: Decodable, Sendable { let url: String }
+
+/// Actual's OpenID callback sends the session token to `returnURL/openid-cb?token=…`.
+/// It accepts return addresses on the server's host or localhost.
+enum OpenIDCallback {
+    static let scheme = "actualnative"
+    static let returnURL = "\(scheme)://localhost"
+
+    static func token(from url: URL) -> String? {
+        guard url.scheme == scheme, url.host == "localhost", url.path == "/openid-cb",
+              let token = URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                .queryItems?.first(where: { $0.name == "token" })?.value,
+              !token.isEmpty else { return nil }
+        return token
+    }
+}
+
 /// The open budget's metadata, accounts with balances, and payees.
 struct BudgetOverview: Decodable, Sendable {
     let budgetName: String

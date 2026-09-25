@@ -1,6 +1,6 @@
 import { init, lib } from "@actual/core";
 import { getPrefs } from "@actual/prefs";
-import { setServer } from "@actual/server-config";
+import { getServer, setServer } from "@actual/server-config";
 import { createPayee } from "@actual/source/server/accounts/payees.ts";
 import { getBudgetType } from "@actual/source/server/budget/base.ts";
 import { loadKey } from "@actual/source/server/encryption/index.ts";
@@ -50,6 +50,56 @@ function fail(result: unknown) {
   if (result && typeof result === "object" && "error" in result && result.error)
     throw new Error(typeof result.error === "string" ? result.error : JSON.stringify(result.error));
   return result;
+}
+// One server per installation: any server until one is connected, then only that one.
+async function serverURL(value: unknown): Promise<string> {
+  const url = text(value).replace(/\/+$/, "");
+  native("validate.url", { url });
+  const connected = await storage.getItem("server-url");
+  if (connected && connected !== url)
+    throw new Error(
+      "This installation is connected to a different Actual server. Multiple servers are not supported yet.",
+    );
+  return url;
+}
+// Asks a server that may not be connected yet, then restores the connected one.
+async function withServer<T>(url: string, body: () => Promise<T>): Promise<T> {
+  const previous = getServer()?.BASE_SERVER ?? null;
+  setServer(url);
+  try {
+    return await body();
+  } finally {
+    setServer(previous);
+  }
+}
+const unreachable = "Could not reach your Actual server. Check the address and your connection.";
+function openIdError(reason: string, password: string): string {
+  switch (reason) {
+    // Actual asks for the server password when no one has signed in with OpenID yet.
+    case "invalid-password":
+      return password
+        ? "The server password is incorrect."
+        : "Enter the server password to confirm the first OpenID sign-in.";
+    case "network-failure":
+      return unreachable;
+    case "openid-not-configured":
+      return "OpenID is not set up on this server.";
+    case "openid-setup-failed":
+      return "Your server could not reach its OpenID provider. Check the OpenID settings in Actual.";
+    case "Invalid redirect URL":
+      return "Your server could not start OpenID sign-in for this app. Check the OpenID settings in Actual.";
+    default:
+      return "OpenID sign-in could not start: " + reason;
+  }
+}
+// A session token from the server's OpenID callback, kept only if the server accepts it.
+async function useSessionToken(token: string) {
+  if (!token) throw new Error("OpenID sign-in did not finish. Try again.");
+  await lib.send("subscribe-set-token", { token });
+  const user = await lib.send("subscribe-get-user");
+  if (user?.offline) throw new Error(unreachable);
+  if (!user || ("tokenExpired" in user && user.tokenExpired))
+    throw new Error("Your server did not accept this sign-in. Try again.");
 }
 // desktop-client's shouldApplyRuleChange: rules fill empty fields and may
 // extend notes, but never replace what the user entered.
@@ -335,22 +385,55 @@ async function perform(method: string, args: Obj): Promise<unknown> {
         throw new Error("Choose a valid account to refresh.");
       return syncBankAccounts(typeof args.accountId === "string" ? args.accountId : undefined);
     }
+    case "loginMethods": {
+      const url = await serverURL(args.url);
+      const server = await lib.send("subscribe-needs-bootstrap", { url });
+      if ("error" in server)
+        throw new Error(server.error === "network-failure" ? unreachable : "This address did not respond like an Actual server.");
+      if (!server.bootstrapped) throw new Error("Finish setting up this server in Actual first.");
+      // Like Actual's login screen, offer the server's methods, its active one first.
+      const methods = (server.availableLoginMethods ?? [])
+        .filter((m) => m.method === "password" || m.method === "openid")
+        .sort((a, b) => Number(b.active) - Number(a.active))
+        .map((m) => m.method);
+      if (!methods.length) throw new Error("This server uses a sign-in method this app does not support.");
+      // The first person to sign in with OpenID becomes the server owner.
+      let ownerCreated = true;
+      if (methods.includes("openid")) {
+        try {
+          ownerCreated = (await withServer(url, () => lib.send("owner-created"))) === true;
+        } catch {
+          throw new Error(unreachable);
+        }
+      }
+      return { methods, ownerCreated };
+    }
+    case "openIdSignIn": {
+      // Returns the provider's page. After sign-in, the server sends a session
+      // token to returnUrl; Actual accepts return addresses on localhost.
+      const url = await serverURL(args.url);
+      const password = text(args.password);
+      const result = await withServer(url, () =>
+        lib.send("subscribe-sign-in", { loginMethod: "openid", returnUrl: text(args.returnUrl), password }),
+      );
+      if ("error" in result && result.error) throw new Error(openIdError(result.error, password));
+      if (!("redirectUrl" in result) || typeof result.redirectUrl !== "string")
+        throw new Error("Your server did not start OpenID sign-in. Try again.");
+      return { url: result.redirectUrl };
+    }
     case "connect": {
-      const url = text(args.url).replace(/\/+$/, "");
-      native("validate.url", { url });
+      const url = await serverURL(args.url);
       const oldURL = await storage.getItem("server-url");
       const oldToken = await storage.getItem("user-token");
-      if (oldURL && oldURL !== url)
-        throw new Error(
-          "This installation is connected to a different Actual server. Multiple servers are not supported yet.",
-        );
       setServer(url);
       try {
-        fail(
-          await lib.send("subscribe-sign-in", {
-            password: text(args.password),
-          }),
-        );
+        if (args.token !== undefined) await useSessionToken(text(args.token));
+        else
+          fail(
+            await lib.send("subscribe-sign-in", {
+              password: text(args.password),
+            }),
+          );
         await storage.setItem("server-url", url);
         const files = await lib.send("get-remote-files");
         return {
@@ -572,7 +655,7 @@ export function request(id: string, method: string, argsJSON: string) {
       void activeSync.then(reply, reject);
       return;
     }
-    if (["bootstrap", "open", "download", "demo", "close", "connect"].includes(method)) {
+    if (["bootstrap", "open", "download", "demo", "close", "connect", "loginMethods", "openIdSignIn"].includes(method)) {
       // A sync must finish against the budget/server with which it started.
       await activeSync?.catch(() => {});
     }

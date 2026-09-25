@@ -19,7 +19,7 @@ This is a development build, with no App Store submission or distribution signin
 
 Split transactions, and transfers linked to part of a split, are view only, except that they can be cleared, locked, and unlocked while reconciling. Account/category creation, bank setup, reports, schedules/rule editors, widgets, and Shortcuts remain in Actual web/desktop. Existing Actual transaction rules still run through its engine.
 
-Server connection supports password authentication and one server per installation. Use HTTPS with a valid certificate; HTTP is allowed only for localhost development. OpenID Connect, custom certificate trust, and periodic syncing while the app is closed are not implemented. Your server password and budget encryption password are separate.
+Server connection supports password and OpenID sign-in, and one server per installation. After you enter its address, the app offers the sign-in methods your server allows, its active one first. OpenID opens your provider in the system sign-in sheet, so passkeys and existing Safari sign-ins work; your server then returns the session to the app at `actualnative://localhost`. As in Actual, the first OpenID sign-in makes you the server owner and asks for the server password to confirm. Password sign-in stays available unless your server enforces OpenID. Use HTTPS with a valid certificate; HTTP is allowed only for localhost development. Custom certificate trust and periodic syncing while the app is closed are not implemented. Your server password and budget encryption password are separate.
 
 Bank refresh uses connections already set up in Actual web/desktop. Like Actual, a server-backed budget syncs first, so imports match transactions that other devices already imported instead of duplicating them; if that sync fails, the bank is not contacted. Imported transactions are saved on this device and trigger asynchronous budget sync, just like transaction and allocation edits. Reconnect expired bank authorizations in Actual web/desktop. Unlinked and closed accounts refresh locally without contacting a bank.
 
@@ -76,6 +76,8 @@ node Engine/typecheck.mjs
 ```
 
 The sync test starts a temporary server on a free localhost port, downloads an encrypted fixture, adds a transaction, pauses the server, edits in a fresh process, and verifies the next process can sync the exact amount and balance back to Actual's upstream API. It stops its server and prints the disposable data/log location.
+
+`./scripts/test-openid.sh` checks OpenID sign-in the same way, against a temporary server with OpenID enabled and a minimal local provider that approves at once. Pass `--simulator SIMULATOR_ID` to run the sign-in UI test on a fresh simulator instead.
 
 Simulator UI checks are in `Tests/UITests`. See [docs/validation.md](docs/validation.md) for the command and observed coverage.
 

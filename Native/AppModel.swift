@@ -369,17 +369,62 @@ final class AppModel {
         _ = await perform("open", arguments: ["id": .string(id)])
     }
 
+    /// The server's sign-in methods, or nil after reporting why they could not load.
+    func loginOptions(url: String) async -> LoginOptions? {
+        guard !isBusy else { return nil }
+        isBusy = true
+        defer { finishOperation() }
+        do {
+            let options = try await client().call("loginMethods", arguments: ["url": .string(url)], as: LoginOptions.self)
+            errorMessage = nil
+            return options
+        } catch { errorMessage = error.localizedDescription; return nil }
+    }
+
     @discardableResult
     func connect(url: String, password: String) async -> Bool {
+        await connect { engine in
+            try await engine.call(
+                "connect", arguments: ["url": .string(url), "password": .string(password)], as: BudgetListing.self)
+        }
+    }
+
+    /// Signs in through the server's OpenID provider. `authenticate` shows the
+    /// provider's page and returns the address it finishes on, or nil if cancelled.
+    /// Actual asks for the server password only before its first OpenID sign-in.
+    @discardableResult
+    func connectWithOpenID(
+        url: String, password: String, authenticate: (URL) async throws -> URL?
+    ) async -> Bool {
+        await connect { engine in
+            let start = try await engine.call("openIdSignIn", arguments: [
+                "url": .string(url), "password": .string(password), "returnUrl": .string(OpenIDCallback.returnURL),
+            ], as: OpenIDStart.self)
+            guard let provider = URL(string: start.url), ["https", "http"].contains(provider.scheme?.lowercased() ?? "")
+            else { throw EngineFailure("Your server returned an invalid sign-in address.") }
+            guard let callback = try await authenticate(provider) else { return nil }
+            guard let token = OpenIDCallback.token(from: callback)
+            else { throw EngineFailure("OpenID sign-in did not finish. Try again.") }
+            return try await engine.call(
+                "connect", arguments: ["url": .string(url), "token": .string(token)], as: BudgetListing.self)
+        }
+    }
+
+    /// Signs in and lists the server's budgets. `signIn` returns nil if the person cancels.
+    private func connect(_ signIn: (EngineClient) async throws -> BudgetListing?) async -> Bool {
         guard !isBusy else { return false }
         isBusy = true
         defer { finishOperation() }
         _ = await syncTask?.value
+        let previousBudgets = serverBudgets
         serverBudgets = []
         do {
-            serverBudgets = try await client().call(
-                "connect", arguments: ["url": .string(url), "password": .string(password)], as: BudgetListing.self
-            ).budgets
+            guard let listing = try await signIn(client()) else {
+                serverBudgets = previousBudgets
+                errorMessage = nil
+                return false
+            }
+            serverBudgets = listing.budgets
             errorMessage = nil
             syncStatus = "Connected to server"
             return true

@@ -193,3 +193,19 @@ Disabling the linked-reconciled check, or the split-linked check, made this test
 The UI test `testDemoTransfer` transfers from Capital One Checking to Ally Savings through the payee list. It checks that the account cannot transfer to itself, the payee and category rows, and both register rows. It then deletes the transfer from Ally Savings and checks that both sides are gone. It passed with the demo navigation and reconciliation tests on a new iPhone 17 Pro / iOS 26.0 simulator, run with `-parallel-testing-enabled NO`. The first runs failed in the test itself: it typed a `.` decimal on a simulator using `,`, and then tapped the form's delete button instead of the dialog's. Screenshots of the payee list, editor, both registers, and the delete confirmation were inspected.
 
 Strict bridge type checking, native engine/recovery tests, bank-sync regressions, automatic sync, and the 10,000-transaction regression also passed. Transfers on a physical device and against a live server were not verified.
+
+## OpenID sign-in (2026-09-25)
+
+`./scripts/test-openid.sh` starts a temporary server, creates the encrypted fixture with a server password, and enables OpenID through `/openid/enable`, as Actual's Settings does. The provider is `Tests/openid-provider.cjs`, a minimal local OpenID provider that approves at once as one user. It checks the client secret, redirect address, and PKCE verifier, and signs its ID tokens. The native harness runs through `AppModel` and the bridge:
+
+- The server offers its active OpenID method first, then password. No OpenID owner exists yet.
+- Before the first OpenID sign-in, a missing or wrong server password is rejected, as in Actual, and the provider's page is never opened. Cancelling on the provider's page reports nothing. A return address without a token, and an unknown session token, are rejected, and the previous token is kept.
+- Following the redirects as a browser would, the server sends the session to `actualnative://localhost/openid-cb?token=…`. The app keeps the token, lists the budgets that now belong to the new owner, then downloads and syncs the encrypted budget.
+- Later OpenID sign-ins need no server password.
+- A fresh installation can still sign in with the server password while OpenID is active, since the server does not enforce OpenID.
+
+Pointing the return address at another host made the test fail at its first OpenID step: the server accepts only its own host or `localhost`. Strict bridge type checking, the native engine, encrypted sync, automatic sync, bank-sync, and 10,000-transaction regressions also passed.
+
+`./scripts/test-openid.sh --simulator SIMULATOR_ID` runs the UI test `testOpenIDSignIn` against a fresh server instead. The test enters the address and checks that OpenID stays disabled until the server password is entered. It confirms the system's sign-in prompt and waits for the server's budgets. It passed on a new iPhone 17 Pro / iOS 27.0 simulator. The server log shows the provider's redirect back to `/openid/callback`, then the session's validation and budget listing. The first run failed in the test itself: the simulator was set to Italian, so the prompt's button read "Continua". The test now taps the prompt's last button. Screenshots of the sign-in options, the prompt, and the connected state were inspected. They showed that the owner warning stayed after the first sign-in, and that OpenID stayed disabled once the password field was cleared. The form now records that the owner exists, and the test checks that OpenID is enabled after sign-in.
+
+A live identity provider such as Pocket ID, passkeys, and sign-in on a physical device were not verified. If the server's callback fails, for example because Actual's user directory has no user for this account, the sign-in sheet shows the server's error text, as in Actual's web app. Close the sheet to return.

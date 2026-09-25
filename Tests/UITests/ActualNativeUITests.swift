@@ -63,6 +63,53 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["No matching transactions"].exists)
     }
 
+    /// Opt-in: signs in to a disposable OpenID server; run `scripts/test-openid.sh --simulator`.
+    @MainActor
+    func testOpenIDSignIn() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard let server = environment["ACTUAL_OPENID_TEST_SERVER"],
+              let password = environment["ACTUAL_OPENID_TEST_PASSWORD"] else {
+            throw XCTSkip("Requires a disposable OpenID server; see docs/validation.md")
+        }
+        let app = XCUIApplication()
+        app.launch()
+        let connect = app.buttons["Connect to your server"]
+        XCTAssertTrue(connect.waitForExistence(timeout: 30), "Start from a fresh simulator")
+        connect.tap()
+        let address = app.textFields["Server address"]
+        XCTAssertTrue(address.waitForExistence(timeout: 10))
+        address.tap()
+        address.typeText(server)
+        app.buttons["Continue"].tap()
+
+        let openID = app.buttons["Sign in with OpenID"]
+        XCTAssertTrue(openID.waitForExistence(timeout: 30))
+        XCTAssertTrue(app.buttons["Sign in with password"].exists)
+        XCTAssertFalse(openID.isEnabled, "The first OpenID sign-in confirms the server password")
+        let field = app.secureTextFields["Server password"]
+        field.tap()
+        field.typeText(password)
+        capture("13-openid-sign-in")
+        openID.tap()
+
+        // iOS asks before the app opens the provider's page, which approves at once.
+        // Its last button continues, whatever the simulator's language.
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        let alerts = [app.alerts.firstMatch, springboard.alerts.firstMatch]
+        let deadline = Date().addingTimeInterval(15)
+        while Date() < deadline, !alerts.contains(where: \.exists) { Thread.sleep(forTimeInterval: 0.25) }
+        if let alert = alerts.first(where: \.exists) {
+            capture("14-openid-consent")
+            alert.buttons.element(boundBy: alert.buttons.count - 1).tap()
+        }
+
+        let budget = app.buttons.containing(NSPredicate(format: "label CONTAINS 'Native Sync Fixture'")).firstMatch
+        XCTAssertTrue(budget.waitForExistence(timeout: 60), "OpenID sign-in should list the server's budgets")
+        XCTAssertFalse(app.staticTexts["Something needs attention"].exists)
+        XCTAssertTrue(openID.isEnabled, "Once an owner exists, OpenID sign-in needs no server password")
+        capture("15-openid-connected")
+    }
+
     @MainActor
     func testDemoBudgetNavigationAndTransactionEditor() {
         let app = XCUIApplication()
