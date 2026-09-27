@@ -72,7 +72,7 @@ struct BudgetOverview: Decodable, Sendable {
     let cloudFileId: String?
     let currencyCode: String
     let syncWarning: SyncWarning?
-    let accounts: [Account]
+    var accounts: [Account]
     let payees: [Payee]
 
     var openAccounts: [Account] { accounts.filter { !$0.closed } }
@@ -110,7 +110,7 @@ enum BudgetType: String, Decodable, Sendable { case envelope, tracking }
 struct Account: Decodable, Identifiable, Sendable {
     let id: String
     let name: String
-    let balance: Int
+    var balance: Int
     let offbudget: Bool
     let closed: Bool
     var bankSyncEnabled: Bool? = nil
@@ -164,20 +164,20 @@ struct BudgetCategory: Decodable, Identifiable, Sendable {
 
 struct Transaction: Decodable, Identifiable, Sendable {
     let id: String
-    let accountId: String
-    let date: String
-    let payeeId: String?
-    let payeeName: String?
-    let categoryId: String?
-    let categoryName: String?
-    let amount: Int
-    let notes: String?
-    let cleared: Bool
-    let isParent: Bool
-    let isChild: Bool
-    let isTransfer: Bool
+    var accountId: String
+    var date: String
+    var payeeId: String?
+    var payeeName: String?
+    var categoryId: String?
+    var categoryName: String?
+    var amount: Int
+    var notes: String?
+    var cleared: Bool
+    var isParent: Bool
+    var isChild: Bool
+    var isTransfer: Bool
 
-    let reconciled: Bool?
+    var reconciled: Bool?
     /// Transfers only: the other account, which Actual stores as the payee.
     var transferAccountId: String? = nil
     /// The linked transaction in the other account.
@@ -198,6 +198,80 @@ struct Transaction: Decodable, Identifiable, Sendable {
     }
     /// An uncategorized transfer, such as one between two on-budget accounts, shows as a transfer.
     var detail: String { transferAccountId != nil && categoryId == nil ? "Transfer" : categoryName ?? "Uncategorized" }
+}
+
+/// A transaction edit shown before the engine saves it, as Actual's mobile app
+/// shows edits right away. It applies to the register and balances as last
+/// loaded, so applying it where the engine has already saved it changes nothing.
+enum TransactionChange: Sendable {
+    /// Adds a transaction, or replaces the one with its ID.
+    case save(Transaction)
+    /// Deletes a transaction and, for a transfer, its linked transaction.
+    case delete(id: String)
+    case setCleared(id: String, cleared: Bool)
+    case unlock(id: String)
+
+    /// Whether the budget month may change: clearing and unlocking change only balances.
+    var changesBudget: Bool {
+        switch self {
+        case .save, .delete: true
+        case .setCleared, .unlock: false
+        }
+    }
+
+    func apply(to transactions: inout [Transaction], accounts: inout [Account]) {
+        switch self {
+        case .save(let saved):
+            let previous = transactions.firstIndex { $0.id == saved.id }.map { transactions.remove(at: $0) }
+            Self.insert(saved, into: &transactions)
+            Self.adjust(&accounts, removing: previous, adding: saved)
+            // Actual gives a transfer's linked transaction the same amount and notes.
+            guard let previous, let linkedID = previous.transferId, previous.transferAccountId == saved.transferAccountId,
+                  let index = transactions.firstIndex(where: { $0.id == linkedID }) else { return }
+            var linked = transactions[index]
+            let before = linked
+            linked.amount = -saved.amount
+            linked.notes = saved.notes
+            transactions[index] = linked
+            Self.adjust(&accounts, removing: before, adding: linked)
+        case .delete(let id):
+            guard let index = transactions.firstIndex(where: { $0.id == id }) else { return }
+            let removed = transactions.remove(at: index)
+            Self.adjust(&accounts, removing: removed, adding: nil)
+            if let linkedID = removed.transferId, let linked = transactions.firstIndex(where: { $0.id == linkedID }) {
+                Self.adjust(&accounts, removing: transactions.remove(at: linked), adding: nil)
+            }
+        case .setCleared(let id, let cleared):
+            guard let index = transactions.firstIndex(where: { $0.id == id }), transactions[index].cleared != cleared else { return }
+            let before = transactions[index]
+            transactions[index].cleared = cleared
+            Self.adjust(&accounts, removing: before, adding: transactions[index])
+        case .unlock(let id):
+            for index in transactions.indices {
+                if transactions[index].id == id { transactions[index].reconciled = false }
+                if transactions[index].transferId == id { transactions[index].transferReconciled = false }
+            }
+        }
+    }
+
+    /// In the engine's order: newest date first, then by ID.
+    private static func insert(_ transaction: Transaction, into transactions: inout [Transaction]) {
+        let index = transactions.firstIndex {
+            $0.date < transaction.date || ($0.date == transaction.date && $0.id > transaction.id)
+        } ?? transactions.endIndex
+        transactions.insert(transaction, at: index)
+    }
+
+    /// Moves a transaction's amount out of, and into, its account's balances.
+    private static func adjust(_ accounts: inout [Account], removing old: Transaction?, adding new: Transaction?) {
+        for (transaction, sign) in [(old, -1), (new, 1)] {
+            guard let transaction, let index = accounts.firstIndex(where: { $0.id == transaction.accountId }) else { continue }
+            accounts[index].balance += sign * transaction.amount
+            if transaction.cleared, let cleared = accounts[index].clearedBalance {
+                accounts[index].clearedBalance = cleared + sign * transaction.amount
+            }
+        }
+    }
 }
 
 struct Payee: Decodable, Identifiable, Sendable { let id: String; let name: String }

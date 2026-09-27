@@ -24,3 +24,9 @@ xcrun swiftc -parse-as-library \
   -module-cache-path "${project_root}/.build/ModuleCache" \
   -lsqlite3 -o .build/engine-recovery
 .build/engine-recovery "${project_root}/Native/Resources"
+
+xcrun swiftc -parse-as-library \
+  Native/Models.swift Native/AppModel.swift Native/Core/*.swift Tests/OptimisticEdits.swift \
+  -module-cache-path "${project_root}/.build/ModuleCache" \
+  -lsqlite3 -o .build/optimistic-edits
+.build/optimistic-edits "${project_root}/Native/Resources"

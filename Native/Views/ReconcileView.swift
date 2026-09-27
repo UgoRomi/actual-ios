@@ -102,10 +102,10 @@ struct ClearedToggle: View {
         Button {
             if transaction.isReconciled { confirmsUnlock = true }
             else {
+                let cleared = !transaction.cleared
                 Task {
-                    await model.perform("setCleared", arguments: [
-                        "id": .string(transaction.id), "cleared": .bool(!transaction.cleared),
-                    ])
+                    await model.edit("setCleared", arguments: ["id": .string(transaction.id), "cleared": .bool(cleared)],
+                                     showing: .setCleared(id: transaction.id, cleared: cleared))
                 }
             }
         } label: {
@@ -120,7 +120,10 @@ struct ClearedToggle: View {
                             : transaction.cleared ? "Mark uncleared" : "Mark cleared")
         .confirmationDialog("Unlock this transaction?", isPresented: $confirmsUnlock, titleVisibility: .visible) {
             Button("Unlock transaction") {
-                Task { await model.perform("unlockTransaction", arguments: ["id": .string(transaction.id)]) }
+                Task {
+                    await model.edit("unlockTransaction", arguments: ["id": .string(transaction.id)],
+                                     showing: .unlock(id: transaction.id))
+                }
             }
             Button("Cancel", role: .cancel) { }
         } message: {

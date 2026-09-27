@@ -555,8 +555,12 @@ async function perform(method: string, args: Obj): Promise<unknown> {
         // what the user entered: rules fill empty fields and may extend notes.
         // A rule's payee always applies, as when a payee is chosen in Actual.
         // The batch handler saves without running rules again.
+        // The app may choose the ID, so it can show the transaction before it is saved.
+        const newId = text(args.newId);
+        if (newId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(newId))
+          throw new Error("Invalid transaction ID");
         const draft = {
-          id: crypto.randomUUID(),
+          id: newId || crypto.randomUUID(),
           sort_order: Date.now(),
           ...fields,
           payee: fields.payee ?? undefined,

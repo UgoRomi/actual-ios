@@ -32,6 +32,12 @@ final class AppModel {
     var bankSyncErrorMessage: String?
     var bankSyncAccountID: String?
     var reconciliation: Reconciliation?
+    /// The engine's latest register and accounts, before pending edits.
+    private var loadedOverview: BudgetOverview?
+    private var loadedTransactions: [Transaction] = []
+    /// Transaction edits shown before the engine has saved and reloaded them.
+    private var pendingEdits: [(id: Int, change: TransactionChange)] = []
+    private var editCount = 0
     private var syncTask: Task<Bool, Never>?
     private var syncRequested = false
     private var budgetGeneration = 0
@@ -102,12 +108,30 @@ final class AppModel {
         let (loadedOverview, loadedBudget, loadedTransactions) = try await (newOverview, newBudget, newTransactions)
         guard generation == budgetGeneration else { return }
         func current(_ part: BudgetPart) -> Bool { tickets[part] == loadRequests[part] }
-        if let loadedOverview, current(.overview) { overview = loadedOverview }
         if let loadedBudget, current(.month), requestedMonth == month { budget = loadedBudget }
-        if let loadedTransactions, current(.register) { transactions = loadedTransactions }
+        let overviewResult = loadedOverview.flatMap { current(.overview) ? $0 : nil }
+        let registerResult = loadedTransactions.flatMap { current(.register) ? $0 : nil }
+        guard overviewResult != nil || registerResult != nil else { return }
+        if let overviewResult { self.loadedOverview = overviewResult }
+        if let registerResult { self.loadedTransactions = registerResult }
+        showPendingEdits()
+    }
+
+    /// Shows the loaded register and balances with edits the engine has not yet reloaded.
+    private func showPendingEdits() {
+        var register = loadedTransactions
+        var shown = loadedOverview
+        var accounts = shown?.accounts ?? []
+        for edit in pendingEdits { edit.change.apply(to: &register, accounts: &accounts) }
+        shown?.accounts = accounts
+        overview = shown
+        transactions = register
     }
 
     private func clearBudget() {
+        loadedOverview = nil
+        loadedTransactions = []
+        pendingEdits = []
         overview = nil
         budget = nil
         transactions = []
@@ -214,6 +238,7 @@ final class AppModel {
 
     private func resetBudgetSyncState() {
         budgetGeneration += 1
+        pendingEdits = []
         syncRequested = false
         syncErrorMessage = nil
         lastSyncedAt = nil
@@ -322,6 +347,46 @@ final class AppModel {
             errorMessage = operationError
             return false
         }
+    }
+
+    /// Saves a transaction edit, showing it right away as Actual's mobile app does,
+    /// without blocking other edits. If the engine rejects it, the change is undone
+    /// and the error shown.
+    @discardableResult
+    func edit(_ method: String, arguments: [String: JSONValue], showing change: TransactionChange) async -> Bool {
+        guard !isBusy else { return false }
+        errorMessage = nil
+        let generation = budgetGeneration
+        editCount += 1
+        let id = editCount
+        pendingEdits.append((id, change))
+        showPendingEdits()
+        // Until the reload that includes it, or until it fails.
+        defer {
+            if generation == budgetGeneration {
+                pendingEdits.removeAll { $0.id == id }
+                showPendingEdits()
+            }
+        }
+        do { _ = try await client().call(method, arguments: arguments) }
+        catch {
+            guard generation == budgetGeneration else { return false }
+            errorMessage = error.localizedDescription
+            pendingEdits.removeAll { $0.id == id }
+            showPendingEdits()
+            // The shown register may be out of date, which is often why an edit fails.
+            try? await load([.overview, .register])
+            return false
+        }
+        guard generation == budgetGeneration else { return true }
+        syncStatus = "Saved on this device"
+        do { try await load(change.changesBudget ? BudgetPart.all : [.overview, .register]) }
+        catch {
+            // The write succeeded. Do not invite a duplicate transaction by reporting it as unsaved.
+            errorMessage = "Saved, but the latest view could not load. Refresh to try again. \(error.localizedDescription)"
+        }
+        beginBudgetSync()
+        return true
     }
 
     /// Accept that another device's discarded changes may show different

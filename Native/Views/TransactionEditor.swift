@@ -146,7 +146,9 @@ struct TransactionEditor: View {
                             "id": .string(transaction.id), "allowReconciled": .bool(isReconciled),
                             "allowReconciledTransfer": .bool(isTransferReconciled),
                         ]
-                        Task { if await model.perform("deleteTransaction", arguments: arguments) { dismiss() } }
+                        // As in Actual's mobile app, close right away; a failure shows in the register.
+                        Task { await model.edit("deleteTransaction", arguments: arguments, showing: .delete(id: transaction.id)) }
+                        dismiss()
                     }
                 }
                 Button("Cancel", role: .cancel) { }
@@ -225,15 +227,42 @@ struct TransactionEditor: View {
             arguments["allowReconciled"] = .bool(confirmed && isReconciled)
             arguments["allowReconciledTransfer"] = .bool(confirmed && isTransferReconciled)
         }
+        // Actual's IDs are lowercase UUIDs.
+        let id = transaction?.id ?? UUID().uuidString.lowercased()
+        if transaction == nil { arguments["newId"] = .string(id) }
         let cleanedPayee = payee.trimmingCharacters(in: .whitespacesAndNewlines)
+        let match = model.overview?.payees.first { $0.name == cleanedPayee }
         if !transferAccount.isEmpty {
             arguments["transferAccountId"] = .string(transferAccount)
-        } else if let match = model.overview?.payees.first(where: { $0.name == cleanedPayee }) {
+        } else if let match {
             arguments["payeeId"] = .string(match.id)
         } else if !cleanedPayee.isEmpty { arguments["payeeName"] = .string(cleanedPayee) }
         else { arguments["payeeId"] = .null }
+        let preview = preview(id: id, amount: isOutflow ? -parsed : parsed, payeeID: match?.id, payeeName: cleanedPayee)
         let commandArguments = arguments
-        Task { if await model.perform("saveTransaction", arguments: commandArguments) { dismiss() } }
+        // As in Actual's mobile app, close right away; a failure shows in the register.
+        Task { await model.edit("saveTransaction", arguments: commandArguments, showing: .save(preview)) }
+        dismiss()
+    }
+
+    /// The saved transaction as the register will show it, until the engine reloads it.
+    /// Rules may still change a new transaction's payee or category.
+    private func preview(id: String, amount: Int, payeeID: String?, payeeName: String) -> Transaction {
+        let existing = current
+        let sameTransfer = !transferAccount.isEmpty && existing?.transferAccountId == transferAccount
+        let categoryID = category.isEmpty || isOffBudget || isBudgetTransfer ? nil : category
+        // As in the engine, a reconciled transaction stays cleared, and moving it unlocks it.
+        let reconciled = existing?.isReconciled == true && existing?.accountId == account
+        return Transaction(
+            id: id, accountId: account, date: BudgetDate.day(date),
+            payeeId: transferAccount.isEmpty ? payeeID : sameTransfer ? existing?.payeeId : nil,
+            payeeName: transferAccount.isEmpty ? (payeeName.isEmpty ? nil : payeeName) : transferTarget?.name,
+            categoryId: categoryID, categoryName: categoryID == nil ? "Uncategorized" : categoryName,
+            amount: amount, notes: notes, cleared: existing?.isReconciled == true ? existing?.cleared ?? cleared : cleared,
+            isParent: false, isChild: false, isTransfer: !transferAccount.isEmpty, reconciled: reconciled,
+            transferAccountId: transferAccount.isEmpty ? nil : transferAccount,
+            transferId: sameTransfer ? existing?.transferId : nil,
+            transferReconciled: sameTransfer ? existing?.transferReconciled : nil)
     }
 }
 

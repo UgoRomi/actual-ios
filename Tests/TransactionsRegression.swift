@@ -56,6 +56,8 @@ import SQLite3
         precondition(!sent.canEdit, "A transfer linked to part of a split stays view only")
         print("PASS: transfer titles, categories, search, and split-linked view-only state")
 
+        try verifyPendingEdits()
+
         // Thousands of days matter: a single-day fixture misses the original repeated-scan bug.
         let synthetic: [Transaction] = (0..<10_000).map { index in
             let year = 2010 + index / 336
@@ -68,6 +70,79 @@ import SQLite3
         if let path = CommandLine.arguments.dropFirst().first {
             try benchmark(readTransactions(path), label: "Read-only SQLite fixture", baseline: CommandLine.arguments.contains("--baseline"))
         }
+    }
+
+    /// Edits shown before the engine saves them. Each applies once, even to a
+    /// register that already includes it, so a reload during the save cannot count it twice.
+    static func verifyPendingEdits() throws {
+        func account(_ id: String, balance: Int, cleared: Int) -> Account {
+            Account(id: id, name: id, balance: balance, offbudget: false, closed: false, clearedBalance: cleared)
+        }
+        func balances(_ accounts: [Account]) -> [String] { accounts.map { "\($0.id):\($0.balance)/\($0.clearedBalance ?? 0)" } }
+        func applied(_ changes: [TransactionChange], to rows: [Transaction], _ accounts: [Account]) -> ([Transaction], [Account]) {
+            var rows = rows, accounts = accounts
+            for change in changes { change.apply(to: &rows, accounts: &accounts) }
+            return (rows, accounts)
+        }
+        var uncleared = transaction("coffee", amount: -500)
+        uncleared.cleared = false
+        var sent = transaction("sent", date: "2026-09-20", amount: -5000, transfer: true, transferAccount: "b")
+        sent.transferId = "received"
+        var received = transaction("received", date: "2026-09-20", account: "b", amount: 5000, transfer: true, transferAccount: "a")
+        received.transferId = "sent"
+        received.reconciled = true
+        sent.transferReconciled = true
+        let rows = [uncleared, received, sent, transaction("rent", date: "2026-09-01", amount: -100_000)]
+        let accounts = [account("a", balance: -105_500, cleared: -105_000), account("b", balance: 5000, cleared: 5000)]
+
+        // Clearing moves the amount into the cleared balance, once.
+        let clear = TransactionChange.setCleared(id: "coffee", cleared: true)
+        var (cleared, clearedAccounts) = applied([clear, clear], to: rows, accounts)
+        precondition(cleared.first { $0.id == "coffee" }?.cleared == true)
+        precondition(balances(clearedAccounts) == ["a:-105500/-105500", "b:5000/5000"])
+        (cleared, clearedAccounts) = applied([.setCleared(id: "coffee", cleared: false)], to: cleared, clearedAccounts)
+        precondition(balances(clearedAccounts) == balances(accounts), "Unclearing restores the cleared balance")
+
+        // A new transaction takes its place in the engine's order: newest date first, then ID.
+        var added = transaction("new", date: "2026-09-21", amount: -700)
+        added.cleared = false
+        let (withNew, newAccounts) = applied([.save(added), .save(added)], to: rows, accounts)
+        precondition(withNew.map(\.id) == ["coffee", "new", "received", "sent", "rent"], "\(withNew.map(\.id))")
+        precondition(balances(newAccounts) == ["a:-106200/-105000", "b:5000/5000"])
+
+        // An edit moves the difference, and moving accounts moves the amount between them.
+        var moved = uncleared
+        moved.amount = -800
+        moved.accountId = "b"
+        moved.date = "2026-08-31"
+        let (edited, editedAccounts) = applied([.save(moved), .save(moved)], to: rows, accounts)
+        precondition(edited.map(\.id) == ["received", "sent", "rent", "coffee"])
+        precondition(balances(editedAccounts) == ["a:-105000/-105000", "b:4200/5000"])
+
+        // A transfer's linked transaction gets the same amount and notes.
+        var resent = sent
+        resent.amount = -6000
+        resent.notes = "Savings"
+        let (transfer, transferAccounts) = applied([.save(resent)], to: rows, accounts)
+        let linked = transfer.first { $0.id == "received" }
+        precondition(linked?.amount == 6000 && linked?.notes == "Savings")
+        precondition(balances(transferAccounts) == ["a:-106500/-106000", "b:6000/6000"])
+
+        // Deleting a transfer deletes both sides, once.
+        let (deleted, deletedAccounts) = applied([.delete(id: "sent"), .delete(id: "sent")], to: rows, accounts)
+        precondition(deleted.map(\.id) == ["coffee", "rent"])
+        precondition(balances(deletedAccounts) == ["a:-100500/-100000", "b:0/0"])
+
+        // Unlocking also tells the linked transaction's editor.
+        let (unlocked, _) = applied([.unlock(id: "received")], to: rows, accounts)
+        precondition(unlocked.first { $0.id == "received" }?.isReconciled == false)
+        precondition(unlocked.first { $0.id == "sent" }?.transferReconciled == false)
+
+        // Applied to a register that already includes an edit, it changes nothing.
+        let (once, onceAccounts) = applied([.save(moved), .delete(id: "sent"), clear], to: rows, accounts)
+        let (twice, twiceAccounts) = applied([.save(moved), .delete(id: "sent"), clear], to: once, onceAccounts)
+        precondition(twice.map(\.id) == once.map(\.id) && balances(twiceAccounts) == balances(onceAccounts))
+        print("PASS: pending edits clear, add, edit, move, transfer, delete, and unlock once, in the engine's order")
     }
 
     static func benchmark(_ rows: [Transaction], label: String, baseline: Bool) throws {
