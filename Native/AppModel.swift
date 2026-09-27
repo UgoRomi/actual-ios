@@ -34,12 +34,16 @@ final class AppModel {
     var reconciliation: Reconciliation?
     /// The result of applying targets to the month.
     var targetsMessage: String?
+    /// Changes whenever saved budget data may have changed, so reports reload.
+    var dataRevision = 0
     /// The engine's latest register and accounts, before pending edits.
     private var loadedOverview: BudgetOverview?
     private var loadedTransactions: [Transaction] = []
     /// Transaction edits shown before the engine has saved and reloaded them.
     private var pendingEdits: [(id: Int, change: TransactionChange)] = []
     private var editCount = 0
+    /// An allocation or targets changed the month's budgeted amounts.
+    private var budgetChanged = false
     private var syncTask: Task<Bool, Never>?
     private var syncRequested = false
     private var budgetGeneration = 0
@@ -111,6 +115,10 @@ final class AppModel {
         guard generation == budgetGeneration else { return }
         func current(_ part: BudgetPart) -> Bool { tickets[part] == loadRequests[part] }
         if let loadedBudget, current(.month), requestedMonth == month { budget = loadedBudget }
+        // Reports depend on transactions and balances, and on budgeted amounts for spending.
+        // Moving between months changes neither.
+        if parts != [.month] || budgetChanged { dataRevision += 1 }
+        budgetChanged = false
         let overviewResult = loadedOverview.flatMap { current(.overview) ? $0 : nil }
         let registerResult = loadedTransactions.flatMap { current(.register) ? $0 : nil }
         guard overviewResult != nil || registerResult != nil else { return }
@@ -324,6 +332,7 @@ final class AppModel {
             // Allocations and targets change only the month. Cleared and reconciled
             // states change only balances and the register. Other transaction
             // changes also affect the month and payees.
+            if ["budget", "saveTargets", "applyTargets"].contains(method) { budgetChanged = true }
             let parts: Set<BudgetPart> = switch method {
             case "budget", "saveTargets", "applyTargets": [.month]
             case "setCleared", "unlockTransaction", "finishReconciliation": [.overview, .register]
@@ -408,6 +417,28 @@ final class AppModel {
             return
         }
         beginBudgetSync()
+    }
+
+    /// The budget's report dashboards. Reading reports changes nothing.
+    func reportsDashboard() async throws -> ReportsDashboard {
+        try await client().call("reportsDashboard", as: ReportsDashboard.self)
+    }
+
+    /// One widget's data, with its saved range unless `timeFrame` chooses another.
+    /// Cash flow `detail` adds income, expenses, and balance by day or month.
+    func report(_ widgetID: String, timeFrame: ReportTimeFrame? = nil, interval: String? = nil,
+                detail: Bool = false) async throws -> ReportData {
+        var options: [String: JSONValue] = ["detail": .bool(detail)]
+        if let timeFrame { options["timeFrame"] = timeFrame.json }
+        if let interval { options["interval"] = .string(interval) }
+        return try await client().call("report", arguments: ["id": .string(widgetID), "options": .object(options)],
+                                       as: ReportData.self)
+    }
+
+    /// The transactions a calendar widget counts on one day.
+    func reportTransactions(_ widgetID: String, date: String) async throws -> [ReportTransaction] {
+        try await client().call("reportTransactions", arguments: ["id": .string(widgetID), "date": .string(date)],
+                                as: [ReportTransaction].self)
     }
 
     /// A category's targets for the editor. Reading them changes nothing.

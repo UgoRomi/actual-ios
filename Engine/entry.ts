@@ -22,6 +22,7 @@ import {
   setCleared,
   unlockTransaction,
 } from "./reconcile";
+import { dashboard, report, reportTransactions } from "./reports";
 import { applyTargets, categoryTargets, previewTargets, saveTargets } from "./targets";
 
 declare function _reply(id: string, ok: boolean, payload: string): void;
@@ -394,6 +395,12 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       return runMutator(() => budgetMonth(text(args.month)));
     case "register":
       return runMutator(register);
+    case "reportsDashboard":
+      return runMutator(dashboard);
+    case "report":
+      return runMutator(() => report(text(args.id), object(args.options ?? {})));
+    case "reportTransactions":
+      return runMutator(() => reportTransactions(text(args.id), text(args.date)));
     case "acknowledgeSyncWarning": {
       // Actual only warns when another device's changes are discarded; this
       // device may then show different values for them. Once the user accepts

@@ -11,6 +11,7 @@ struct RootView: View {
                     Tab("Budget", systemImage: "chart.pie") { BudgetView() }
                     Tab("Accounts", systemImage: "creditcard") { AccountsView() }
                     Tab("Transactions", systemImage: "list.bullet.rectangle") { TransactionsView() }
+                    Tab("Reports", systemImage: "chart.bar.xaxis") { ReportsView() }
                 }
             } else { WelcomeView() }
         }

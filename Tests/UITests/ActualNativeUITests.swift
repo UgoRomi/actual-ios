@@ -288,6 +288,69 @@ final class ActualNativeUITests: XCTestCase {
         capture("targets-budget")
     }
 
+    /// Opens the demo's default dashboard and each kind of report on it.
+    @MainActor
+    func testDemoReports() {
+        let app = XCUIApplication()
+        app.launch()
+        let demoButton = app.buttons["Explore a demo budget"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        let reportsTab = app.tabBars.buttons["Reports"]
+        XCTAssertTrue(reportsTab.waitForExistence(timeout: 60), "The demo budget should open")
+        reportsTab.tap()
+        func card(_ title: String) -> XCUIElement {
+            app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
+        }
+        XCTAssertTrue(card("Total Income (YTD)").waitForExistence(timeout: 30), "The default dashboard should load")
+        XCTAssertTrue(app.staticTexts["Net Worth"].waitForExistence(timeout: 30))
+        capture("reports-dashboard")
+
+        /// Rows show as one element with their value, so match the beginning of any label.
+        func shows(_ label: String) -> Bool {
+            app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", label)).firstMatch
+                .waitForExistence(timeout: 20)
+        }
+        func open(_ title: String, _ check: () -> Void = {}) {
+            let button = card(title)
+            XCTAssertTrue(button.waitForExistence(timeout: 20), "\(title) should be on the dashboard")
+            button.tap()
+            XCTAssertTrue(app.navigationBars[title].waitForExistence(timeout: 10))
+            check()
+            capture("reports-" + title.lowercased().replacingOccurrences(of: " ", with: "-"))
+            app.navigationBars[title].buttons.firstMatch.tap()
+        }
+        // In dashboard order, so each card is reached by scrolling down.
+        open("Avg Per Month") {
+            XCTAssertTrue(shows("Months"), "Averages show how they divide")
+        }
+        open("Net Worth") {
+            XCTAssertTrue(app.buttons["Monthly"].waitForExistence(timeout: 20))
+            app.buttons["Saved range"].tap()
+            app.buttons["1 year"].tap()
+            XCTAssertTrue(app.buttons["1 year"].waitForExistence(timeout: 10), "The chosen range should show")
+        }
+        open("Cash Flow") {
+            XCTAssertTrue(shows("Income"))
+            XCTAssertTrue(app.switches["Show balance"].exists)
+        }
+        open("This Month") {
+            XCTAssertTrue(app.buttons["Average"].waitForExistence(timeout: 20))
+            app.buttons["Budgeted"].tap()
+            XCTAssertTrue(shows("Budgeted to date"))
+        }
+        open("Transaction Calendar") {
+            let day = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "spending")).firstMatch
+            XCTAssertTrue(day.waitForExistence(timeout: 20), "Days with transactions can be chosen")
+            day.tap()
+            XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "·")).firstMatch
+                .waitForExistence(timeout: 10), "The day's transactions should list")
+        }
+        app.swipeUp()
+        app.swipeUp()
+        XCTAssertTrue(app.staticTexts["Dashboard Tips"].waitForExistence(timeout: 10), "Text widgets show their Markdown")
+        capture("reports-text")
+    }
+
     /// Reconciles a demo account to zero: toggle cleared, adjust, lock, then review a locked transaction.
     @MainActor
     func testDemoReconciliation() {

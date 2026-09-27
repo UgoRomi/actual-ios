@@ -20,7 +20,7 @@ done
 cd "${project_root}"
 node Engine/build.mjs
 mkdir -p .build
-xcrun swiftc -parse-as-library Native/Models.swift Native/Targets.swift Native/AppModel.swift Native/Core/*.swift Tests/EngineOpenID.swift \
+xcrun swiftc -parse-as-library Native/Models.swift Native/Targets.swift Native/Reports.swift Native/AppModel.swift Native/Core/*.swift Tests/EngineOpenID.swift \
   -module-cache-path "${project_root}/.build/ModuleCache" -lsqlite3 -o .build/engine-openid
 
 free_port() {

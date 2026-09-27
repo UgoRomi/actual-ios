@@ -264,3 +264,20 @@ Target amounts use the calculator keypad, like other amounts. A target's amount 
 Screenshots of the target form, the targets list, and the funded budget row were inspected. A `Menu` for choosing the kind of a new automation did not open under XCUITest in the sheet. The app now follows the web editor instead: **Add Automation** starts a fixed amount, and its **Type** picker changes the kind.
 
 Not verified end to end: schedule, percentage, history, weekly-cap, and early-spending forms on screen (their saved formats are validated by the engine); targets synced to Actual web and shown there; tracking budgets; and VoiceOver.
+
+## Reports (2026-09-27)
+
+Reports follow Actual's `desktop-client/src/components/reports` at the pinned revision: `Overview.tsx` for the read-only, one-column mobile dashboard, `reportRanges.ts` and `dateRangePresets.ts` for ranges, the card and page components in `reports/`, and the calculations in `spreadsheets/`. `Engine/reports.ts` ports the net worth, cash flow, spending, summary, and calendar calculations, including net worth's alignment of transfer legs posted on different dates. It reads each widget's saved filters and time frame itself and returns integer minor units; upstream's fractional averages and daily budgets are rounded when returned, as Actual rounds them for display.
+
+`./scripts/test-engine.sh` runs `Tests/EngineReports.swift` on a new demo budget, which has Actual's default dashboard. It checks every value against sums read directly from Actual's `v_transactions` view, with splits inline as Actual's queries see them:
+- Dashboard: the default widgets top to bottom, then left to right; seeded widgets in order; Markdown content and alignment; a custom report whose report is missing; an experimental widget hidden until its feature flag is on.
+- Net worth: the total at the end of every month in the default six months and in a one-year range, assets less debt, and the change. A year to date by week ends today. A widget filtered to one account shows only that account.
+- Cash flow: on-budget income and expenses without transfers through today, the daily detail's totals, transfers and running balance, and a monthly detail over a year.
+- Spending: this month to date against last month, the budgeted amount, and the three-month average, with the card's difference.
+- Summary: sum, average per month, average per transaction, and percentage, with the default dashboard's year-to-date expense filters.
+- Calendar: a live three-month range, each month's income and spending without transfers, and one day's transactions.
+- Custom reports and removed widgets fail with a clear message.
+
+The UI test `testDemoReports` passed on a new iPhone 17 Pro / iOS 27 simulator. It opens the demo's dashboard and the detail pages of a summary, net worth (switched to one year), cash flow, spending (switched to the budget comparison), and the calendar (showing one day's transactions), then scrolls to the text widget. Screenshots of each were inspected. The demo navigation test also passed with the new tab, as did the bank-sync and automatic-sync suites.
+
+Not verified end to end: dashboards with several pages, stacked net worth, custom reports and other widgets on real budgets, tracking budgets' spending comparison, dark appearance, and VoiceOver.
