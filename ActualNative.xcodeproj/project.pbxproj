@@ -11,6 +11,8 @@
 		02E6863D200C189845137667 /* Native/Views/TransactionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F19188F7225770AF6FD525C0 /* Native/Views/TransactionsView.swift */; };
 		A7E3C1D95B2F4E8061C4D2A1 /* Native/Views/ReconcileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8F4D2EA6C305F9172D5E3B2 /* Native/Views/ReconcileView.swift */; };
 		0AED486DC5028236E648FC8C /* Native/Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66177DE593ACD3F7FBE818F7 /* Native/Models.swift */; };
+		9750BCB19B18BC9E2218101D /* Native/Targets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D9944038F13D5EE416AC7AF /* Native/Targets.swift */; };
+		6E1F6E9757C9755493C9A6A3 /* Native/Views/TargetsEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4E7BEFC3B3FF10A7AD58AF0 /* Native/Views/TargetsEditor.swift */; };
 		2A6FB75C0E638CB7BA4B4263 /* Native/Views/TransactionEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35ADAC2A7B4B204230C2E4AE /* Native/Views/TransactionEditor.swift */; };
 		2EDA2189B4348994B63A09C1 /* Native/Core/EngineClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A2A897C9FC5F69A2DAC930 /* Native/Core/EngineClient.swift */; };
 		32AFA9370EEE8272B9DC4A78 /* Native/Resources in Copy Engine Resources */ = {isa = PBXBuildFile; fileRef = 26AB470B66CA9603C9E53F67 /* Native/Resources */; };
@@ -65,6 +67,8 @@
 		9E4B2C7A1F6D3E8B5A0C4F21 /* Native/Views/AmountField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/AmountField.swift; sourceTree = "<group>"; };
 		443F99244216BE707150CE77 /* Native/Views/AccountsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/AccountsView.swift; sourceTree = "<group>"; };
 		66177DE593ACD3F7FBE818F7 /* Native/Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Models.swift; sourceTree = "<group>"; };
+		3D9944038F13D5EE416AC7AF /* Native/Targets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Targets.swift; sourceTree = "<group>"; };
+		E4E7BEFC3B3FF10A7AD58AF0 /* Native/Views/TargetsEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/TargetsEditor.swift; sourceTree = "<group>"; };
 		6F51DF911B0314245CE3C35C /* Native/Core/SQLiteHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Core/SQLiteHost.swift; sourceTree = "<group>"; };
 		83416C8B7281940A2D331143 /* Native/Views/BudgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/BudgetView.swift; sourceTree = "<group>"; };
 		C3A2A897C9FC5F69A2DAC930 /* Native/Core/EngineClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Core/EngineClient.swift; sourceTree = "<group>"; };
@@ -110,6 +114,7 @@
 				1A35017A7DDD556AA595E322 /* Native/Core/NativeHost.swift */,
 				6F51DF911B0314245CE3C35C /* Native/Core/SQLiteHost.swift */,
 				66177DE593ACD3F7FBE818F7 /* Native/Models.swift */,
+				3D9944038F13D5EE416AC7AF /* Native/Targets.swift */,
 				3D1C8D9F0C3BC17165ACEE19 /* Native/Theme.swift */,
 				443F99244216BE707150CE77 /* Native/Views/AccountsView.swift */,
 				9E4B2C7A1F6D3E8B5A0C4F21 /* Native/Views/AmountField.swift */,
@@ -117,6 +122,7 @@
 				B8F4D2EA6C305F9172D5E3B2 /* Native/Views/ReconcileView.swift */,
 				22F448B416504426D44ADE65 /* Native/Views/RootView.swift */,
 				D33B550F88C0FAFC47CAA9B5 /* Native/Views/SettingsView.swift */,
+				E4E7BEFC3B3FF10A7AD58AF0 /* Native/Views/TargetsEditor.swift */,
 				35ADAC2A7B4B204230C2E4AE /* Native/Views/TransactionEditor.swift */,
 				F19188F7225770AF6FD525C0 /* Native/Views/TransactionsView.swift */,
 				0AAF66868F872CE43E775077 /* Native/Assets.xcassets */,
@@ -255,6 +261,8 @@
 				D8E0347376C8932445254001 /* Native/Core/NativeHost.swift in Sources */,
 				3724999EFF609E935F4E5519 /* Native/Core/SQLiteHost.swift in Sources */,
 				0AED486DC5028236E648FC8C /* Native/Models.swift in Sources */,
+				9750BCB19B18BC9E2218101D /* Native/Targets.swift in Sources */,
+				6E1F6E9757C9755493C9A6A3 /* Native/Views/TargetsEditor.swift in Sources */,
 				CA222D1BB6E2CDD8B11B84EC /* Native/Theme.swift in Sources */,
 				AF716BBB3F56F5E55D747809 /* Native/Views/AccountsView.swift in Sources */,
 				5C1A7E0B9D2F4A6E8B3C1D20 /* Native/Views/AmountField.swift in Sources */,

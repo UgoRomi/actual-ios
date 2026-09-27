@@ -32,6 +32,8 @@ final class AppModel {
     var bankSyncErrorMessage: String?
     var bankSyncAccountID: String?
     var reconciliation: Reconciliation?
+    /// The result of applying targets to the month.
+    var targetsMessage: String?
     /// The engine's latest register and accounts, before pending edits.
     private var loadedOverview: BudgetOverview?
     private var loadedTransactions: [Transaction] = []
@@ -291,14 +293,15 @@ final class AppModel {
     }
 
     @discardableResult
-    func perform(_ method: String, arguments: [String: JSONValue] = [:]) async -> Bool {
+    func perform(_ method: String, arguments: [String: JSONValue] = [:], result: ((Data) -> Void)? = nil) async -> Bool {
         guard !isBusy else { return false }
         isBusy = true
         errorMessage = nil
         defer { finishOperation() }
         let switchesBudget = ["open", "download", "demo"].contains(method)
         let isEdit = ["saveTransaction", "deleteTransaction", "budget", "setCleared", "unlockTransaction",
-                      "createReconciliationTransaction", "finishReconciliation"].contains(method)
+                      "createReconciliationTransaction", "finishReconciliation", "saveTargets",
+                      "applyTargets"].contains(method)
         if method == "sync" {
             guard let task = beginBudgetSync() else {
                 errorMessage = "This budget is local only. Open a synced budget to synchronize."
@@ -311,17 +314,18 @@ final class AppModel {
             _ = await syncTask?.value
         }
         do {
-            _ = try await client().call(method, arguments: arguments)
+            let data = try await client().call(method, arguments: arguments)
+            result?(data)
             if switchesBudget {
                 clearAccountState()
                 resetBudgetSyncState()
             }
             if isEdit { syncStatus = "Saved on this device" }
-            // An allocation changes only the month. Cleared and reconciled
+            // Allocations and targets change only the month. Cleared and reconciled
             // states change only balances and the register. Other transaction
             // changes also affect the month and payees.
             let parts: Set<BudgetPart> = switch method {
-            case "budget": [.month]
+            case "budget", "saveTargets", "applyTargets": [.month]
             case "setCleared", "unlockTransaction", "finishReconciliation": [.overview, .register]
             default: BudgetPart.all
             }
@@ -404,6 +408,40 @@ final class AppModel {
             return
         }
         beginBudgetSync()
+    }
+
+    /// A category's targets for the editor. Reading them changes nothing.
+    func categoryTargets(categoryID: String, month: String) async throws -> CategoryTargets {
+        try await client().call("categoryTargets", arguments: [
+            "categoryId": .string(categoryID), "month": .string(month),
+        ], as: CategoryTargets.self)
+    }
+
+    /// What unsaved targets would budget for the month, and any problems with them.
+    func previewTargets(categoryID: String, month: String, templates: [TargetTemplate]) async throws -> TargetPreview {
+        try await client().call("previewTargets", arguments: [
+            "categoryId": .string(categoryID), "month": .string(month), "templates": .array(templates.map(\.json)),
+        ], as: TargetPreview.self)
+    }
+
+    func saveTargets(categoryID: String, templates: [TargetTemplate]) async -> Bool {
+        await perform("saveTargets", arguments: [
+            "categoryId": .string(categoryID), "templates": .array(templates.map(\.json)),
+        ])
+    }
+
+    /// Budgets what targets ask for, as Actual's budget menus do: for one category,
+    /// for categories with nothing budgeted yet, or overwriting every category with targets.
+    @discardableResult
+    func applyTargets(month: String, categoryID: String? = nil, overwrite: Bool = false) async -> Bool {
+        var arguments: [String: JSONValue] = ["month": .string(month), "overwrite": .bool(overwrite)]
+        if let categoryID { arguments["categoryId"] = .string(categoryID) }
+        var message: String?
+        let applied = await perform("applyTargets", arguments: arguments) { data in
+            message = (try? JSONDecoder().decode(TargetsApplied.self, from: data))?.message
+        }
+        if applied, categoryID == nil { targetsMessage = message }
+        return applied
     }
 
     func startReconciliation(accountID: String, targetBalance: Int) {

@@ -245,6 +245,49 @@ final class ActualNativeUITests: XCTestCase {
                       "Foreground handling must preserve an open editor's draft")
     }
 
+    /// Adds a fixed monthly target to a demo category, saves it, and applies it to the month.
+    @MainActor
+    func testDemoTargets() {
+        let app = XCUIApplication()
+        app.launch()
+        let demoButton = app.buttons["Explore a demo budget"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        XCTAssertTrue(app.tabBars.buttons["Budget"].waitForExistence(timeout: 60), "The demo budget should open")
+        app.tabBars.buttons["Budget"].tap()
+
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Food")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.tap()
+        let targets = app.buttons["Add Targets"]
+        XCTAssertTrue(targets.waitForExistence(timeout: 10), "The budget editor should offer targets")
+        targets.tap()
+        XCTAssertTrue(app.navigationBars["Targets"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Projected for")).firstMatch
+            .waitForExistence(timeout: 10))
+
+        app.buttons["Add Automation"].tap()
+        XCTAssertTrue(app.navigationBars["Fixed amount"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.textFields["Amount"].exists)
+        capture("targets-fixed-amount")
+        app.navigationBars["Fixed amount"].buttons.firstMatch.tap()
+        let summary = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Budget ")).firstMatch
+        XCTAssertTrue(summary.waitForExistence(timeout: 10), "The list should summarize the target")
+        let save = app.navigationBars["Targets"].buttons["Save"]
+        XCTAssertTrue(wait(for: save, enabled: true),"A valid target should be savable once previewed")
+        capture("targets-list")
+        save.tap()
+
+        let apply = app.buttons["Apply Target"]
+        XCTAssertTrue(apply.waitForExistence(timeout: 10), "A category with targets can apply them")
+        apply.tap()
+        // The demo's spending is random. As in Actual, overspending shows before target funding.
+        let funded = app.buttons.matching(NSPredicate(
+            format: "label BEGINSWITH %@ AND label CONTAINS %@ AND (label CONTAINS %@ OR label CONTAINS %@)",
+            "Food", "Budgeted 100", "funded", "Overspent")).firstMatch
+        XCTAssertTrue(funded.waitForExistence(timeout: 10), "The budget row should show the applied target")
+        capture("targets-budget")
+    }
+
     /// Reconciles a demo account to zero: toggle cleared, adjust, lock, then review a locked transaction.
     @MainActor
     func testDemoReconciliation() {

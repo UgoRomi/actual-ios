@@ -3,8 +3,10 @@ import { getPrefs } from "@actual/prefs";
 import { getServer, setServer } from "@actual/server-config";
 import { createPayee } from "@actual/source/server/accounts/payees.ts";
 import { getBudgetType } from "@actual/source/server/budget/base.ts";
+import { getCategoriesWithTemplateNotes } from "@actual/source/server/budget/statements.ts";
 import { loadKey } from "@actual/source/server/encryption/index.ts";
 import { runMutator } from "@actual/source/server/mutators.ts";
+import * as sheet from "@actual/source/server/sheet.ts";
 import { currentMonth, sheetForMonth } from "@actual/source/shared/months.ts";
 import { makeChild, recalculateSplit } from "@actual/source/shared/transactions.ts";
 import * as storage from "@actual/storage";
@@ -20,6 +22,7 @@ import {
   setCleared,
   unlockTransaction,
 } from "./reconcile";
+import { applyTargets, categoryTargets, previewTargets, saveTargets } from "./targets";
 
 declare function _reply(id: string, ok: boolean, payload: string): void;
 type Obj = Record<string, unknown>;
@@ -232,6 +235,22 @@ async function budgetMonth(month: string) {
           })
         ).value
       : null;
+  // Categories with targets, from the editor or from notes Actual has yet to
+  // read. Applying targets sets each category's goal for the month.
+  const { data: rows } = await lib.send(
+    "query",
+    lib.q("categories").select(["id", "goal_def", "template_settings"]).serialize(),
+  );
+  const noted = new Set((await getCategoriesWithTemplateNotes()).map((c) => c.id));
+  const targeted = new Set<string>(
+    rows
+      .filter((c: Obj) => c.goal_def || (object(c.template_settings ?? {}).source !== "ui" && noted.has(text(c.id))))
+      .map((c: Obj) => text(c.id)),
+  );
+  const cell = (name: string) => {
+    const value = sheet.getCellValue(sheetForMonth(month), name);
+    return typeof value === "number" ? value : null;
+  };
   const groups = budget.categoryGroups
     .filter((g) => !g.hidden)
     .map((group) => ({
@@ -246,6 +265,10 @@ async function budgetMonth(month: string) {
           spent: category.spent ?? category.received ?? 0,
           balance: category.balance || 0,
           isIncome: Boolean(category.is_income),
+          hasTargets: targeted.has(text(category.id)),
+          goal: cell("goal-" + category.id),
+          // A long-term goal compares the balance with the goal, not the budgeted amount.
+          longGoal: cell("long-goal-" + category.id) === 1,
         })),
     }));
   return {
@@ -334,7 +357,8 @@ async function perform(method: string, args: Obj): Promise<unknown> {
   if (
     [
       "saveTransaction", "deleteTransaction", "budget", "sync", "syncAccounts", "setCleared",
-      "unlockTransaction", "createReconciliationTransaction", "finishReconciliation",
+      "unlockTransaction", "createReconciliationTransaction", "finishReconciliation", "saveTargets",
+      "applyTargets",
     ].includes(method)
   ) {
     const warning = syncWarning();
@@ -499,6 +523,15 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       });
       return {};
     }
+    case "categoryTargets":
+      return runMutator(() => categoryTargets(text(args.categoryId), text(args.month)));
+    case "previewTargets":
+      return runMutator(() => previewTargets(text(args.categoryId), text(args.month), args.templates));
+    case "saveTargets":
+      await saveTargets(text(args.categoryId), args.templates);
+      return {};
+    case "applyTargets":
+      return applyTargets(text(args.month), text(args.categoryId) || null, args.overwrite === true);
     case "saveTransaction": {
       const id = text(args.id);
       const existing = id

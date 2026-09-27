@@ -1,14 +1,16 @@
 import Foundation
 import Synchronization
 
-enum JSONValue: Codable, Sendable {
-    case null, bool(Bool), number(Int), string(String), array([JSONValue]), object([String: JSONValue])
+enum JSONValue: Codable, Sendable, Equatable {
+    /// Amounts are always exact integers; `double` carries other numbers, such as percentages.
+    case null, bool(Bool), number(Int), double(Double), string(String), array([JSONValue]), object([String: JSONValue])
 
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         if container.decodeNil() { self = .null }
         else if let value = try? container.decode(Bool.self) { self = .bool(value) }
         else if let value = try? container.decode(Int.self) { self = .number(value) }
+        else if let value = try? container.decode(Double.self) { self = .double(value) }
         else if let value = try? container.decode(String.self) { self = .string(value) }
         else if let value = try? container.decode([JSONValue].self) { self = .array(value) }
         else { self = .object(try container.decode([String: JSONValue].self)) }
@@ -20,6 +22,7 @@ enum JSONValue: Codable, Sendable {
         case .null: try container.encodeNil()
         case .bool(let value): try container.encode(value)
         case .number(let value): try container.encode(value)
+        case .double(let value): try container.encode(value)
         case .string(let value): try container.encode(value)
         case .array(let value): try container.encode(value)
         case .object(let value): try container.encode(value)
@@ -160,6 +163,17 @@ struct BudgetCategory: Decodable, Identifiable, Sendable {
     let spent: Int
     let balance: Int
     let isIncome: Bool
+    /// Targets set in Actual's budget automations editor or in the category's notes.
+    let hasTargets: Bool
+    /// The amount the category's targets ask for, set when targets are applied to the month.
+    let goal: Int?
+    /// A long-term goal, which Actual compares with the balance instead of the budgeted amount.
+    let longGoal: Bool
+
+    /// How far the category is from its goal, as Actual's balance tooltip shows it.
+    var goalDifference: Int? {
+        goal.map { (longGoal ? balance : budgeted) - $0 }
+    }
 }
 
 struct Transaction: Decodable, Identifiable, Sendable {

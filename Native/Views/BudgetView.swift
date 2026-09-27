@@ -3,6 +3,7 @@ import SwiftUI
 struct BudgetView: View {
     @Environment(AppModel.self) private var model
     @State private var selectedCategory: BudgetCategory?
+    @State private var confirmOverwrite = false
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -37,11 +38,39 @@ struct BudgetView: View {
             .background(ActualTheme.background)
             .navigationTitle("Budget")
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) { targetsMenu }
                 ToolbarItem(placement: .topBarTrailing) { SettingsButton() }
             }
             .refreshable { await model.refresh() }
             .sheet(item: $selectedCategory) { category in BudgetEditor(category: category, month: model.month) }
+            .confirmationDialog("Overwrite this month’s budget with targets?", isPresented: $confirmOverwrite, titleVisibility: .visible) {
+                Button("Overwrite with Targets", role: .destructive) { Task { await model.applyTargets(month: model.month, overwrite: true) } }
+            } message: {
+                Text("Every category with targets gets the amount they ask for, replacing what is budgeted now.")
+            }
+            .alert("Targets", isPresented: Binding(get: { model.targetsMessage != nil }, set: { if !$0 { model.targetsMessage = nil } })) {
+                Button("OK") {}
+            } message: {
+                Text(model.targetsMessage ?? "")
+            }
         }
+    }
+
+    /// Actual's budget month menu actions for targets.
+    private var targetsMenu: some View {
+        Menu("Targets", systemImage: "target") {
+            Button {
+                Task { await model.applyTargets(month: model.month) }
+            } label: {
+                Label("Apply Targets", systemImage: "wand.and.stars")
+                Text("Budget categories that have nothing budgeted yet")
+            }
+            Button(role: .destructive) { confirmOverwrite = true } label: {
+                Label("Overwrite with Targets", systemImage: "arrow.clockwise")
+                Text("Replace what every category with targets has budgeted")
+            }
+        }
+        .disabled(model.isBusy || model.budget == nil)
     }
 
     private var monthControl: some View {
@@ -97,17 +126,46 @@ struct BudgetView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
                 Text(category.name).font(.body.weight(.medium))
+                if category.hasTargets {
+                    Image(systemName: "target").font(.caption).foregroundStyle(.secondary)
+                        .accessibilityLabel("Has targets")
+                }
                 Spacer(minLength: 12)
-                MoneyText(value: category.balance, currency: model.currency).font(.headline)
+                Text(Money.formatted(category.balance, currency: model.currency))
+                    .monospacedDigit().font(.headline).foregroundStyle(TargetStatus(category).balanceColor)
             }
             HStack {
                 Text("Budgeted \(Money.formatted(category.budgeted, currency: model.currency))")
                 Spacer(minLength: 8)
-                Text(category.balance < 0 ? "Overspent" : "Available")
+                let status = TargetStatus(category)
+                Text(status.label(currency: model.currency)).foregroundStyle(status.labelColor)
             }.font(.caption).foregroundStyle(.secondary)
         }.padding(18).contentShape(Rectangle())
             .accessibilityElement(children: .combine)
             .accessibilityHint("Edit budgeted amount")
+    }
+}
+
+/// A category's funding against its goal, colored like Actual's balance:
+/// overspent in red, then underfunded in orange and funded in green when targets set a goal.
+struct TargetStatus {
+    let category: BudgetCategory
+    init(_ category: BudgetCategory) { self.category = category }
+
+    var isUnderfunded: Bool { (category.goalDifference ?? 0) < 0 }
+    var balanceColor: Color {
+        if category.balance < 0 { return .red }
+        guard category.goal != nil else { return .primary }
+        return isUnderfunded ? .orange : .green
+    }
+    var labelColor: Color { category.balance >= 0 && isUnderfunded ? .orange : .secondary }
+
+    func label(currency: String) -> String {
+        if category.balance < 0 { return "Overspent" }
+        guard let difference = category.goalDifference else { return "Available" }
+        if difference == 0 { return "Fully funded" }
+        let amount = Money.formatted(abs(difference), currency: currency)
+        return difference > 0 ? "Overfunded (\(amount))" : "Underfunded (\(amount))"
     }
 }
 
@@ -146,9 +204,15 @@ struct BudgetEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var amount = ""
     @State private var validation: String?
+    @State private var path = NavigationPath()
+    @State private var detent = PresentationDetent.medium
+    @State private var didAppear = false
+
+    /// The category as last loaded, so saved targets show here.
+    private var current: BudgetCategory { model.budget?.categories.first { $0.id == category.id } ?? category }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             Form {
                 Section {
                     AmountField(label: "Budgeted amount", text: $amount, placeholder: "Budgeted amount", focusesOnAppear: true)
@@ -156,6 +220,29 @@ struct BudgetEditor: View {
                 Section {
                     LabeledContent("Spent") { MoneyText(value: category.spent, currency: model.currency) }
                     LabeledContent("Available") { MoneyText(value: category.balance, currency: model.currency) }
+                }
+                Section {
+                    if let goal = current.goal {
+                        LabeledContent(current.longGoal ? "Long-term goal" : "Target this month") {
+                            MoneyText(value: goal, currency: model.currency)
+                        }
+                        let status = TargetStatus(current)
+                        LabeledContent("Status") {
+                            Text(status.label(currency: model.currency)).foregroundStyle(status.labelColor)
+                        }
+                    }
+                    NavigationLink(value: TargetsRoute()) {
+                        Label(current.hasTargets ? "Edit Targets" : "Add Targets", systemImage: "target")
+                    }
+                    if current.hasTargets {
+                        Button("Apply Target", systemImage: "wand.and.stars") {
+                            Task { if await model.applyTargets(month: month, categoryID: category.id) { dismiss() } }
+                        }.disabled(model.isBusy)
+                    }
+                } header: {
+                    Text("Targets")
+                } footer: {
+                    if current.hasTargets { Text("Applying replaces the budgeted amount with what the targets ask for this month.") }
                 }
                 if let validation { Section { Text(validation).foregroundStyle(.red) } }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
@@ -173,8 +260,18 @@ struct BudgetEditor: View {
                     }.disabled(model.isBusy).bold()
                 }
             }
-            .onAppear { amount = Money.editable(category.budgeted) }
-            .interactiveDismissDisabled(model.isBusy)
-        }.presentationDetents([.medium, .large])
+            .navigationDestination(for: TargetsRoute.self) { _ in
+                TargetsEditor(category: current, month: month, path: $path)
+            }
+            .onAppear {
+                // Also runs when returning from targets; keep what was typed.
+                guard !didAppear else { return }
+                didAppear = true
+                amount = Money.editable(category.budgeted)
+            }
+            .interactiveDismissDisabled(model.isBusy || !path.isEmpty)
+        }
+        .presentationDetents([.medium, .large], selection: $detent)
+        .onChange(of: path.isEmpty) { _, isEmpty in if !isEmpty { detent = .large } }
     }
 }

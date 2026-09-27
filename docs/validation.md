@@ -238,3 +238,29 @@ A new transaction opens with its amount focused and the keypad up, as upstream's
 Adding, editing, deleting, clearing, and unlocking a transaction show immediately. Upstream's mobile editor also saves without waiting and navigates back (`onSave(...); navigate(-1)`). `AppModel` keeps the engine's last-loaded register and accounts, and shows them with pending `TransactionChange`s applied. Each change is applied against that base, so applying it where the engine has already saved it changes nothing. A reload that lands mid-save therefore neither drops nor double-counts it. A change stays pending until the reload after its save, and is removed at once if the engine rejects it; the error then shows in the register. Edits no longer set `isBusy`, so the register stays usable while one saves. New transactions pass their ID to the engine as `newId`, so the shown row and the saved one match. Rules may still change a new transaction's payee or category; the reload shows their result. A transfer's linked transaction is updated only for amount and notes, and a new transfer's linked side appears on reload.
 
 `./scripts/test-transactions.sh` applies each change, twice, to a register with a reconciled transfer and checks order and balances. `./scripts/test-engine.sh` runs `Tests/OptimisticEdits.swift` on the demo. It checks that a cleared change shows before the save finishes, without blocking a second edit, and that a new transaction shows at once and keeps its ID. It also checks that a deletion shows at once, that an invalid date is undone and explained, and that the register and balances then match a fresh reload. The editor, reconciliation, and transfer UI tests passed on a new iPhone 17 Pro / iOS 27 simulator. They check autofocus, the calendar closing, clearing from a row, the lock after reconciling, and saving and deleting with the editor closing immediately. Screenshots of the register and editor were inspected. Save failures after the editor has closed lose the draft, as in upstream's mobile app.
+
+## Category targets (2026-09-27)
+
+Targets follow Actual's budget automations editor (`desktop-client/src/components/modals/BudgetAutomationsModal` and `components/budget/goals`) and its `budget/*` template handlers. `Engine/targets.ts` ports the client-side parts: reading `#template` notes, migrating legacy templates, and the editor's validation messages. It saves with `budget/set-category-automations` using the `ui` source, previews with `budget/dry-run-category-template`, and applies with `budget/apply-single-template`, `budget/apply-goal-template`, and `budget/overwrite-goal-template`. Template amounts are decimal currency units in Actual, and integer minor units across the bridge, converted with the budget currency's decimal places as upstream does. Unlike the web editor, opening a category with notes templates does not store them; only saving writes. As on the web, saving first stores the category's `#cleanup` lines, which Actual ignores once the editor manages it.
+
+`./scripts/test-engine.sh` exercises targets on the demo budget:
+- It previews a fixed amount exactly and flags a refill without a cap.
+- It flags percentages over 100%, accepts a fractional percentage, and refuses to save invalid targets.
+- It stores decimal amounts with the `ui` source, reads them back in minor units, and applies one category's target, so its budgeted amount and goal match.
+- With a long-term goal added, it checks the goal and the balance comparison.
+- It reads notes templates, with descriptions and a `#cleanup` line, without writing `goal_def`, and reports unreadable notes lines.
+- Saving migrated targets keeps the notes. Overwriting the month budgets every category with targets, skipping unreadable lines as Actual does. Applying without overwrite leaves budgeted categories alone.
+
+Applying budgets no more than is available, and a balance cap limits it to the cap less the carried-over balance. Both match Actual; the test frees this month's funds first.
+
+The UI test `testDemoTargets` passed on a new iPhone 17 Pro simulator:
+- It adds a fixed amount to Food, sees the live projection and summary, saves, and applies.
+- It checks that the row shows the applied amount and its funding. As in Actual, an overspent category shows **Overspent** instead, which the demo's random spending can cause.
+
+In the full UI suite on a new simulator, the demo navigation, reconciliation, and transfer tests also passed; the opt-in fixture tests were skipped.
+
+Target amounts use the calculator keypad, like other amounts. A target's amount updates whenever the entry is a complete amount or calculation, so a partial entry such as `40+` keeps the previous amount until it is finished. The suite passed again with the keypad field.
+
+Screenshots of the target form, the targets list, and the funded budget row were inspected. A `Menu` for choosing the kind of a new automation did not open under XCUITest in the sheet. The app now follows the web editor instead: **Add Automation** starts a fixed amount, and its **Type** picker changes the kind.
+
+Not verified end to end: schedule, percentage, history, weekly-cap, and early-spending forms on screen (their saved formats are validated by the engine); targets synced to Actual web and shown there; tracking budgets; and VoiceOver.

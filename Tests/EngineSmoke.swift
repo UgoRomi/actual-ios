@@ -54,6 +54,7 @@ import Foundation
     try await newTransactions(data: data.appendingPathComponent("budget"), resources: resources)
     try await reconciliation(data: data.appendingPathComponent("budget"), resources: resources)
     try await transfers(data: data.appendingPathComponent("budget"), resources: resources)
+    try await targets(data: data.appendingPathComponent("budget"), resources: resources)
     try await budgetDeletion(data: data.appendingPathComponent("deletion"), resources: resources)
     print(
       "PASS: actual engine demo, add, edit, budget allocation, offline reopen, exact balances, delete"
