@@ -203,6 +203,7 @@ final class ActualNativeUITests: XCTestCase {
         addTransaction.tap()
         XCTAssertTrue(app.navigationBars["New transaction"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.textFields["Amount"].exists)
+        XCTAssertTrue(app.buttons["Clear"].waitForExistence(timeout: 5), "A new transaction should open the calculator keypad")
         let payeeRow = app.buttons["payee-row"]
         let categoryRow = app.buttons["category-row"]
         XCTAssertTrue(payeeRow.exists && categoryRow.exists)
@@ -289,7 +290,7 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["All reconciled!"].exists)
         capture("10-reconciled")
         lock.tap()
-        let locked = app.staticTexts.containing(NSPredicate(format: "label CONTAINS 'Reconciled'")).firstMatch
+        let locked = app.buttons["Unlock reconciled transaction"].firstMatch
         XCTAssertTrue(locked.waitForExistence(timeout: 10), "Cleared transactions should lock")
         XCTAssertFalse(lock.exists)
         capture("11-locked")
@@ -322,12 +323,22 @@ final class ActualNativeUITests: XCTestCase {
         checking.buttons["Add transaction"].tap()
         XCTAssertTrue(app.navigationBars["New transaction"].waitForExistence(timeout: 10))
         let amount = app.textFields["Amount"]
-        amount.tap()
+        XCTAssertTrue(app.buttons["Clear"].waitForExistence(timeout: 5), "The amount should be focused")
         tapKeys(app, "40+3\(decimalSeparator)21")
         XCTAssertEqual(amount.value as? String, "40+3\(decimalSeparator)21")
         capture("transfer-calculator")
         tapKeys(app, "=")
         XCTAssertEqual(amount.value as? String, "43\(decimalSeparator)21", "= shows the calculation's result")
+
+        // Choosing another date closes the calendar.
+        app.datePickers.firstMatch.tap()
+        let nextMonth = app.buttons["DatePicker.NextMonth"]
+        XCTAssertTrue(nextMonth.waitForExistence(timeout: 5), "Tapping the date opens a calendar")
+        // The month's last other day, so the transfer stays near the top of the register.
+        let days = app.datePickers.containing(.button, identifier: "DatePicker.NextMonth").collectionViews.buttons
+            .matching(NSPredicate(format: "isSelected == false"))
+        days.element(boundBy: days.count - 1).tap()
+        XCTAssertTrue(wait(forAbsence: nextMonth), "Choosing a date closes the calendar")
 
         let payeeRow = app.buttons["payee-row"]
         let categoryRow = app.buttons["category-row"]
@@ -351,6 +362,10 @@ final class ActualNativeUITests: XCTestCase {
         let sent = app.staticTexts["Transfer to Ally Savings"]
         XCTAssertTrue(sent.waitForExistence(timeout: 10), "The transfer should appear in the sending account")
         capture("15-transfer-register")
+        // Each row clears from its checkmark.
+        let sentRow = app.cells.containing(.staticText, identifier: "Transfer to Ally Savings").firstMatch
+        sentRow.buttons["Mark cleared"].tap()
+        XCTAssertTrue(sentRow.buttons["Mark uncleared"].waitForExistence(timeout: 10), "Tapping the checkmark clears the transaction")
         app.navigationBars.buttons["Accounts"].tap()
         app.staticTexts["Ally Savings"].tap()
         XCTAssertTrue(app.navigationBars["Ally Savings"].waitForExistence(timeout: 10))

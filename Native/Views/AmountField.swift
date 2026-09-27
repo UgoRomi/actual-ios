@@ -9,10 +9,12 @@ struct AmountField: View {
     var placeholder = Money.editable(0)
     var large = false
     var focusesOnAppear = false
+    var textColor = UIColor.label
 
     var body: some View {
         let descender = AmountTextField.font(large: large).descender
-        Representable(label: label, text: $text, placeholder: placeholder, large: large, focusesOnAppear: focusesOnAppear)
+        Representable(label: label, text: $text, placeholder: placeholder, large: large,
+                      focusesOnAppear: focusesOnAppear, textColor: textColor)
             // Align with neighboring text by the field's baseline rather than its bottom.
             .alignmentGuide(.firstTextBaseline) { $0[.bottom] + descender }
     }
@@ -23,6 +25,7 @@ struct AmountField: View {
         let placeholder: String
         let large: Bool
         let focusesOnAppear: Bool
+        let textColor: UIColor
 
         func makeUIView(context: Context) -> AmountTextField {
             let field = AmountTextField(focusesOnAppear: focusesOnAppear)
@@ -40,7 +43,7 @@ struct AmountField: View {
             context.coordinator.text = $text
             if field.text != text { field.text = text }
             field.isEnabled = context.environment.isEnabled
-            field.textColor = field.isEnabled ? .label : .secondaryLabel
+            field.textColor = field.isEnabled ? textColor : .secondaryLabel
         }
 
         func sizeThatFits(_ proposal: ProposedViewSize, uiView field: AmountTextField, context: Context) -> CGSize? {

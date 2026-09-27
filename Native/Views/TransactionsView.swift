@@ -35,10 +35,9 @@ struct TransactionsView: View {
                     ForEach(section.transactions) { transaction in
                         HStack(spacing: 4) {
                             Button { selectedTransaction = transaction } label: {
-                                TransactionRow(transaction: transaction, currency: model.currency,
-                                               showsStatus: reconciliation == nil)
+                                TransactionRow(transaction: transaction, currency: model.currency)
                             }.buttonStyle(.plain)
-                            if reconciliation != nil { ClearedToggle(transaction: transaction) }
+                            ClearedToggle(transaction: transaction)
                         }
                     }
                 } header: {
@@ -75,8 +74,6 @@ struct TransactionsView: View {
 struct TransactionRow: View {
     let transaction: Transaction
     let currency: String
-    /// While reconciling, a separate toggle shows the cleared state.
-    var showsStatus = true
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             Image(systemName: transaction.isTransfer ? "arrow.left.arrow.right" : transaction.isParent ? "square.split.2x2" : transaction.amount < 0 ? "arrow.up.right" : "arrow.down.left")
@@ -92,15 +89,7 @@ struct TransactionRow: View {
                 if let notes = transaction.notes, !notes.isEmpty { Text(notes).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
             }
             Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 5) {
-                MoneyText(value: transaction.amount, currency: currency).font(.body.weight(.semibold))
-                if showsStatus {
-                    Group {
-                        if transaction.isReconciled { Text("\(Image(systemName: "lock.fill")) Reconciled") }
-                        else { Text(transaction.cleared ? "Cleared" : "Uncleared") }
-                    }.font(.caption2).foregroundStyle(.secondary)
-                }
-            }
+            MoneyText(value: transaction.amount, currency: currency, positiveColor: .green).font(.body.weight(.semibold))
         }.padding(.vertical, 6).contentShape(Rectangle())
             .accessibilityElement(children: .combine)
     }

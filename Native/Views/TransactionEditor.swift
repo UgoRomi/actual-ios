@@ -80,7 +80,9 @@ struct TransactionEditor: View {
                     }.pickerStyle(.segmented)
                     HStack(alignment: .firstTextBaseline) {
                         Text(isOutflow ? "−" : "+").foregroundStyle(.secondary)
-                        AmountField(label: "Amount", text: $amount, large: true)
+                        // A new transaction starts with its amount, as in Actual.
+                        AmountField(label: "Amount", text: $amount, large: true, focusesOnAppear: transaction == nil,
+                                    textColor: isOutflow ? .label : .systemGreen)
                         if !model.currency.isEmpty { Text(model.currency).font(.caption).foregroundStyle(.secondary) }
                     }.padding(.vertical, 8)
                 }.disabled(!editable || model.isBusy)
@@ -92,6 +94,8 @@ struct TransactionEditor: View {
                         }
                     }
                     DatePicker("Date", selection: $date, displayedComponents: .date)
+                        // Rebuilding the picker closes its calendar once a date is chosen.
+                        .id(date)
                     NavigationLink {
                         PayeePicker(selection: $payee, transferAccount: $transferAccount,
                                     payees: model.overview?.payees ?? [], accounts: transferAccounts)

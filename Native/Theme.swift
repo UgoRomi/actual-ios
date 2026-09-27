@@ -10,10 +10,12 @@ enum ActualTheme {
 struct MoneyText: View {
     let value: Int
     var currency = ""
+    /// Transaction amounts show income in green.
+    var positiveColor = Color.primary
     var body: some View {
         Text(Money.formatted(value, currency: currency))
             .monospacedDigit()
-            .foregroundStyle(value < 0 ? Color.red : Color.primary)
+            .foregroundStyle(value < 0 ? Color.red : value > 0 ? positiveColor : Color.primary)
     }
 }
 

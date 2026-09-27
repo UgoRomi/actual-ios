@@ -92,7 +92,7 @@ struct ReconcilingBanner: View {
     private func money(_ value: Int) -> String { Money.formatted(value, currency: model.currency) }
 }
 
-/// Clears a transaction while reconciling. Reconciled transactions unlock after a warning.
+/// Clears or unclears a transaction from its row. Reconciled transactions unlock after a warning.
 struct ClearedToggle: View {
     let transaction: Transaction
     @Environment(AppModel.self) private var model
