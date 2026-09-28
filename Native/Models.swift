@@ -106,6 +106,48 @@ struct BudgetMonth: Decodable, Sendable {
     let groups: [CategoryGroup]
 
     var categories: [BudgetCategory] { groups.flatMap(\.categories) }
+
+    /// Expense groups with the categories the filter shows, leaving out groups with none.
+    func expenseGroups(_ filter: BudgetFilter) -> [CategoryGroup] {
+        groups.compactMap { group in
+            let categories = group.categories.filter { !$0.isIncome && filter.includes($0) }
+            guard !categories.isEmpty else { return nil }
+            var filtered = group
+            filtered.categories = categories
+            return filtered
+        }
+    }
+
+    func count(_ filter: BudgetFilter) -> Int {
+        categories.count { !$0.isIncome && filter.includes($0) }
+    }
+}
+
+/// The Budget screen's quick filters for expense categories.
+enum BudgetFilter: CaseIterable, Identifiable, Sendable {
+    case all
+    /// A negative balance, which the category's row shows in red.
+    case overspent
+    /// Budgeted, or for a long-term goal saved, less than the targets ask for.
+    case underfunded
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .all: "All"
+        case .overspent: "Overspent"
+        case .underfunded: "Underfunded"
+        }
+    }
+
+    func includes(_ category: BudgetCategory) -> Bool {
+        switch self {
+        case .all: true
+        case .overspent: category.balance < 0
+        case .underfunded: (category.goalDifference ?? 0) < 0
+        }
+    }
 }
 
 enum BudgetType: String, Decodable, Sendable { case envelope, tracking }
@@ -153,7 +195,11 @@ struct BankSyncAccountResult: Decodable, Identifiable, Sendable {
 struct CategoryGroup: Decodable, Identifiable, Sendable {
     let id: String
     let name: String
-    let categories: [BudgetCategory]
+    var categories: [BudgetCategory]
+    /// Actual's group totals, which include the group's hidden categories.
+    var budgeted = 0
+    var spent = 0
+    var balance = 0
 }
 
 struct BudgetCategory: Decodable, Identifiable, Sendable {

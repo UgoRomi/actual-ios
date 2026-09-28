@@ -281,3 +281,15 @@ Reports follow Actual's `desktop-client/src/components/reports` at the pinned re
 The UI test `testDemoReports` passed on a new iPhone 17 Pro / iOS 27 simulator. It opens the demo's dashboard and the detail pages of a summary, net worth (switched to one year), cash flow, spending (switched to the budget comparison), and the calendar (showing one day's transactions), then scrolls to the text widget. Screenshots of each were inspected. The demo navigation test also passed with the new tab, as did the bank-sync and automatic-sync suites.
 
 Not verified end to end: dashboards with several pages, stacked net worth, custom reports and other widgets on real budgets, tracking budgets' spending comparison, dark appearance, and VoiceOver.
+
+## Compact budget screen and quick filters (2026-09-28)
+
+The Budget screen follows Actual's mobile budget at the pinned revision (`desktop-client/src/components/mobile/budget`). Category rows fit on one line, with **Budgeted** and **Balance** columns as in `BudgetTable.tsx`. Group headers show Actual's `group-budget` and `group-leftover` sheet values, which `api/budget-month` returns with each group, as `ExpenseGroupListItem.tsx` does. Like Actual, these include the group's hidden categories. The month switcher, budget name, and summary card take about half their previous height.
+
+The **Overspent** filter lists every expense category with a negative balance, as its red row shows. Actual's mobile overspending banner (`useOverspentCategories`) leaves out categories that roll over overspending, because it offers to cover them; this filter lists them too. **Underfunded** lists categories whose goal difference is negative, which the row shows in orange unless the category is also overspent.
+
+`./scripts/test-engine.sh` checks, in the demo's envelope budget and again as a tracking budget, that every expense group's budgeted, spent, and balance totals equal the sums of its categories; the demo hides none. It also checks that the Overspent filter shows exactly the negative-balance categories, in budget order, and keeps each group's full totals. The targets test checks that a long-term goal is listed as Underfunded until the balance reaches it. Strict bridge type checking passed.
+
+`testDemoBudgetNavigationAndTransactionEditor` and `testDemoTargets` passed on a new iPhone 17 Pro / iOS 26.0 simulator. The first now selects **Overspent** and checks that every listed row is overspent. Rows keep an accessibility label with the category's name, budgeted amount, balance, and funding status, which the targets test reads. Screenshots were inspected in light and dark appearance, with the Overspent filter selected, with a funded target, and at an accessibility text size. At accessibility sizes, the summary, group headers, and rows stack their amounts under the name, and the filters scroll sideways. `docs/screenshots/02-budget.png` and `06-budget-dark.png` show the new layout.
+
+Not verified end to end: iPad width, VoiceOver, and budgets with hidden categories in a visible group.

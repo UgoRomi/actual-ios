@@ -109,6 +109,12 @@ extension EngineSmoke {
     applied = try await category(edited.id)
     check(applied.goal == 100_000 && applied.longGoal && applied.budgeted == 12_345, "\(applied)")
     check(applied.goalDifference == applied.balance - 100_000)
+    // The Budget screen's Underfunded filter shows a long-term goal until the balance reaches it.
+    let funding = try await snapshot(engine, month: month).budget
+    let underfunded = funding.expenseGroups(.underfunded).flatMap(\.categories)
+    check(underfunded.contains { $0.id == edited.id } == (applied.balance < 100_000), "\(applied)")
+    check(underfunded.count == funding.count(.underfunded))
+    check(underfunded.allSatisfy { ($0.goalDifference ?? 0) < 0 })
 
     // Notes targets are read without changing the category, as the web editor shows them.
     _ = try await engine.call("close")

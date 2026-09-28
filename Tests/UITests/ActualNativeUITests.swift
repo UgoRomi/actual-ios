@@ -167,6 +167,17 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Available to budget"].exists, "The native budget summary should load")
         capture("02-budget")
 
+        // The Overspent quick filter shows only overspent rows, or says there are none.
+        let rows = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Budgeted' AND label CONTAINS 'Balance'"))
+        XCTAssertTrue(rows.firstMatch.exists, "Category rows should show budgeted and balance amounts")
+        app.buttons["Overspent"].tap()
+        XCTAssertTrue(app.buttons["Overspent"].isSelected)
+        let none = app.staticTexts["No overspent categories"]
+        XCTAssertTrue(none.waitForExistence(timeout: 2) || rows.firstMatch.exists)
+        for index in 0..<rows.count { XCTAssertTrue(rows.element(boundBy: index).label.hasSuffix("Overspent")) }
+        capture("budget-overspent")
+        app.buttons["All"].tap()
+
         // Budget a calculation with the keypad, which opens with the editor.
         let foodBudget = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Food'")).firstMatch
         foodBudget.tap()
