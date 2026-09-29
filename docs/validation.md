@@ -296,3 +296,15 @@ Not verified end to end: dashboards with several pages, stacked net worth, custo
 The UI tests `testDemoBudgetActions`, `testDemoManagement`, `testDemoSplitTransaction`, and `testDemoSchedules` passed on an iPhone 17 Pro simulator, reusing one demo budget across runs, so the new tests use names unique to each run. Screenshots of the banners, month menu, budget summary, move form, category editor, split editor, reopened split, schedule editor, and schedules list were inspected. First runs failed in the tests themselves: a menu toggle is a button to XCUITest, fields with a placeholder prompt needed an explicit label, rows below the keypad had to be scrolled into view, and an iOS 27 confirmation repeats its button's label.
 
 Not verified end to end: syncing these changes with Actual web on a server budget, bank-linked accounts when closing, schedules with date patterns set in Actual, tracking budgets' rollover, dark appearance, and VoiceOver.
+
+## Upcoming, uncategorized, payees, rules, formatting, and split transfers (2026-09-29)
+
+`./scripts/test-engine.sh`, `node Engine/typecheck.mjs`, and `./scripts/test-transactions.sh` passed, with new checks for upcoming scheduled transactions (the due date at a range's midpoint, removed once paid), payees (rename, merge moving transactions, deleting unused ones), rules (validation, creation, matches, applying, editing, schedule rules kept), formatting settings (saved, limited to Actual's choices, and applied to amounts and dates), split parts with their own payee and with a transfer that adds, updates, and removes its other side, and the category and uncategorized lists.
+
+The schedules test failed intermittently while skipping a date. Actual looks up a schedule's rule with an AQL calculation, which reads the first column of the result, and rows crossed the native SQLite bridge as dictionaries, which do not keep column order. The bridge now returns rows as values in SQLite's column order; a host test checks it, and the engine suites then passed in several runs in a row.
+
+`./scripts/test-sync.sh` passed with native offline edits synced through a disposable server and read back with Actual's API: a budget amount and rollover, a new group, category, and category note, a split with a transfer part (both balances exact), a renamed payee, a schedule, a rule, and the number format.
+
+The UI tests `testDemoUpcomingAndCategoryTransactions` and `testDemoPayeesRulesAndFormatting` passed on an iPhone 17 Pro simulator; screenshots of the upcoming section and its menu, a category's transactions, payees, rules, a new rule, the formatting settings, and the budget in the 1.000,33 format were inspected. First runs failed in the tests: the category's Transactions link shared its label with the tab, and the iOS 27 scheduled menu has no Cancel button. A new rule's empty payee is valid in Actual (payee is nothing), so the test checks the new rule instead of an error.
+
+Not verified end to end: rules with every operator on real budgets, merging payees used by schedules, and the date format on budgets using locales other than the device's.

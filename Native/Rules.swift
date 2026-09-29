@@ -87,6 +87,8 @@ struct RuleItem: Decodable, Sendable, Equatable, Identifiable {
     static func defaultValue(field: String, op: String) -> JSONValue {
         if ["oneOf", "notOneOf"].contains(op) { return .array([]) }
         if ["onBudget", "offBudget"].contains(op) { return .null }
+        // As Actual's editor starts a condition, with nothing chosen, which its validation reports.
+        if op != "set", type(of: field) == "id", !["contains", "doesNotContain", "matches"].contains(op) { return .null }
         switch type(of: field) {
         case "number": return op == "isbetween" ? .object(["num1": .number(0), "num2": .number(0)]) : .number(0)
         case "boolean": return .bool(false)

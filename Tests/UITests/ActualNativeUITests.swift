@@ -518,6 +518,82 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(wait(forAbsence: row), "The deleted schedule should leave the list")
     }
 
+    /// Shows upcoming scheduled transactions with their menu, and a category's transactions.
+    @MainActor
+    func testDemoUpcomingAndCategoryTransactions() {
+        let app = XCUIApplication()
+        app.launch()
+        let demoButton = app.buttons["Explore a demo budget"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        let transactions = app.tabBars.buttons["Transactions"]
+        XCTAssertTrue(transactions.waitForExistence(timeout: 60), "The demo budget should open")
+        transactions.tap()
+        XCTAssertTrue(app.staticTexts["Upcoming"].waitForExistence(timeout: 10), "The demo's schedules are upcoming")
+        let scheduled = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ OR label CONTAINS %@ OR label CONTAINS %@",
+                                                         "Missed", "Due", "Upcoming")).firstMatch
+        XCTAssertTrue(scheduled.waitForExistence(timeout: 10))
+        capture("register-upcoming")
+        scheduled.tap()
+        XCTAssertTrue(app.buttons["Post Transaction Today"].waitForExistence(timeout: 5), "The scheduled menu offers posting")
+        capture("register-upcoming-menu")
+        // On iOS 27 the menu is a popover without Cancel; tap outside it.
+        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+
+        app.tabBars.buttons["Budget"].tap()
+        let food = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Food")).firstMatch
+        XCTAssertTrue(food.waitForExistence(timeout: 10))
+        food.tap()
+        let link = app.buttons["category-transactions"]
+        scroll(app, to: link)
+        link.tap()
+        XCTAssertTrue(app.navigationBars["Food"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Total"].waitForExistence(timeout: 10), "Food has transactions this month")
+        capture("category-transactions")
+    }
+
+    /// Opens payees and rules from Settings, checks a rule's validation, and changes the number format.
+    @MainActor
+    func testDemoPayeesRulesAndFormatting() {
+        let app = XCUIApplication()
+        app.launch()
+        let demoButton = app.buttons["Explore a demo budget"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        XCTAssertTrue(app.tabBars.buttons["Budget"].waitForExistence(timeout: 60), "The demo budget should open")
+        app.tabBars.buttons["Budget"].tap()
+        app.buttons["Settings"].firstMatch.tap()
+
+        app.buttons["Payees"].tap()
+        XCTAssertTrue(app.navigationBars["Payees"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.cells.element(boundBy: 1).waitForExistence(timeout: 10), "The demo's payees are listed")
+        capture("payees")
+        app.navigationBars["Payees"].buttons.firstMatch.tap()
+
+        app.buttons["Rules"].tap()
+        XCTAssertTrue(app.navigationBars["Rules"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "If ")).firstMatch
+            .waitForExistence(timeout: 10), "Rules read as sentences")
+        capture("rules")
+        // A new rule starts as Actual's does: if the payee is nothing, set the category.
+        app.buttons["Add rule"].tap()
+        XCTAssertTrue(app.navigationBars["New Rule"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["payee is nothing"].exists)
+        capture("rule-new")
+        app.navigationBars["New Rule"].buttons["Cancel"].tap()
+        app.navigationBars["Rules"].buttons.firstMatch.tap()
+
+        let numbers = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Numbers")).firstMatch
+        scroll(app, to: numbers)
+        numbers.tap()
+        app.buttons["1.000,33"].tap()
+        XCTAssertTrue(numbers.waitForExistence(timeout: 10))
+        XCTAssertTrue(numbers.label.contains("1.000,33"), numbers.label)
+        capture("formatting")
+        app.buttons["Done"].tap()
+        let summary = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Available to budget")).firstMatch
+        XCTAssertTrue(summary.waitForExistence(timeout: 10))
+        capture("budget-dot-comma")
+    }
+
     /// Opens the demo's default dashboard and each kind of report on it.
     @MainActor
     func testDemoReports() {

@@ -77,7 +77,8 @@ const encryptionPassword = "disposable-encryption-test";
     const transaction = transactions.find((t) => t.notes === "native offline restart");
     assert.ok(transaction, "Native transaction arrived via sync");
     assert.equal(transaction.amount, -2345);
-    assert.equal(await api.getAccountBalance(fixture.accountId), 97655);
+    // Less the native split's 3,000.
+    assert.equal(await api.getAccountBalance(fixture.accountId), 94655);
     const ruleRows = await api.getTransactions(fixture.ruleAccountId, "2026-01-01", "2026-12-31");
     const transferRows = await api.getTransactions(
       fixture.transferAccountId,
@@ -93,8 +94,41 @@ const encryptionPassword = "disposable-encryption-test";
     assert.equal(source.amount, -5000);
     assert.equal(target.amount, 5000);
     assert.equal(await api.getAccountBalance(fixture.ruleAccountId), -5000);
-    assert.equal(await api.getAccountBalance(fixture.transferAccountId), 5000);
+    // Plus the native split's 2,000 transfer part.
+    assert.equal(await api.getAccountBalance(fixture.transferAccountId), 7000);
     console.log("PASS: rule-created native transfer, edited offline from its other side, syncs both entries and exact balances");
+
+    // This app's other offline edits, as Actual sees them after sync.
+    const month = await api.getBudgetMonth("2026-09");
+    const budgeted = month.categoryGroups.flatMap((g) => g.categories).find((c) => c.id === fixture.categoryId);
+    assert.equal(budgeted.budgeted, 12345);
+    assert.equal(budgeted.carryover, true, "Rollover set natively");
+    const groups = await api.getCategoryGroups();
+    const group = groups.find((g) => g.name === "Native Sync Group");
+    const category = group?.categories?.find((c) => c.name === "Native Sync Category");
+    assert.ok(category, "Native category group and category arrived");
+    assert.equal((await api.getNote(category.id))?.note, "native sync note");
+    const split = transactions.find((t) => t.notes === "native sync split");
+    assert.ok(split?.is_parent, "Native split arrived");
+    assert.equal(split.amount, -3000);
+    const parts = split.subtransactions;
+    assert.equal(parts.length, 2);
+    assert.deepEqual(parts.map((p) => p.amount).sort((a, b) => a - b), [-2000, -1000]);
+    assert.equal(parts.find((p) => p.amount === -1000).category, category.id);
+    const transferPart = parts.find((p) => p.amount === -2000);
+    const linked = transferRows.find((t) => t.id === transferPart.transfer_id);
+    assert.equal(linked?.amount, 2000, "The transfer part has its other side");
+    const payees = await api.getPayees();
+    assert.ok(payees.some((p) => p.name === "Native Sync Store" && p.id === split.payee), "Payee renamed natively");
+    const schedule = (await api.getSchedules()).find((s) => s.name === "Native Sync Schedule");
+    assert.ok(schedule, "Native schedule arrived");
+    assert.equal(schedule.amount, -777);
+    assert.equal(schedule.next_date, "2026-10-01");
+    const rules = await api.getRules();
+    const rule = rules.find((r) => r.conditions.some((c) => c.value === "native sync rule"));
+    assert.equal(rule?.actions[0].value, category.id, "Native rule arrived");
+    assert.equal((await internal.send("preferences/get")).numberFormat, "dot-comma");
+    console.log("PASS: upstream Actual API sees native budget moves, categories, notes, split transfer, payee, schedule, rule, and setting");
     console.log("PASS: upstream Actual API sees native encrypted offline edit and exact balance");
   }
   await api.shutdown();

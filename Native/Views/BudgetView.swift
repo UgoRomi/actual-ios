@@ -425,7 +425,7 @@ struct BudgetEditor: View {
                 Section {
                     NavigationLink(value: BudgetRoute.transactions(.category(id: category.id, month: month), title: category.name)) {
                         Label("Transactions", systemImage: "list.bullet.rectangle")
-                    }
+                    }.accessibilityIdentifier("category-transactions")
                     NavigationLink(value: ManageCategoryRoute()) {
                         Label("Edit Category", systemImage: "pencil")
                     }
