@@ -9,6 +9,10 @@ struct TransactionsView: View {
     @State private var selectedTransaction: Transaction?
     @State private var isAdding = false
     @State private var showsReconcile = false
+    @State private var renaming = false
+    @State private var editingNotes = false
+    @State private var closing = false
+    @Environment(\.dismiss) private var dismiss
 
     private var account: Account? { accountID.flatMap { id in model.overview?.accounts.first { $0.id == id } } }
     private var reconciliation: Reconciliation? {
@@ -53,8 +57,9 @@ struct TransactionsView: View {
             if accountID != nil {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Reconcile", systemImage: "checkmark.seal") { showsReconcile = true }
-                        .disabled(model.isBusy || account == nil)
+                        .disabled(model.isBusy || account == nil || account?.closed == true)
                 }
+                ToolbarItem(placement: .topBarTrailing) { accountMenu }
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Add transaction", systemImage: "plus") { isAdding = true }
@@ -68,6 +73,36 @@ struct TransactionsView: View {
         .sheet(isPresented: $isAdding) { TransactionEditor(accountID: accountID) }
         .sheet(isPresented: $showsReconcile) { if let accountID { ReconcileSheet(accountID: accountID) } }
         .sheet(item: $selectedTransaction) { transaction in TransactionEditor(transaction: transaction, accountID: transaction.accountId) }
+        .sheet(isPresented: $renaming) {
+            if let account {
+                NameSheet(title: "Rename Account", initial: account.name) { name in
+                    await model.manage("updateAccount", ["id": .string(account.id), "name": .string(name)])
+                }
+            }
+        }
+        .sheet(isPresented: $editingNotes) {
+            if let account { NotesSheet(id: "account-\(account.id)", title: account.name, initial: account.notes ?? "") }
+        }
+        .sheet(isPresented: $closing) {
+            // A closed account without transactions is deleted; leave its page.
+            if let account { CloseAccountSheet(account: account) { if self.account == nil { dismiss() } } }
+        }
+    }
+
+    /// Actual's mobile account menu.
+    private var accountMenu: some View {
+        Menu("Account options", systemImage: "ellipsis.circle") {
+            Button("Rename Account", systemImage: "pencil") { renaming = true }
+            Button("Account Notes", systemImage: "note.text") { editingNotes = true }
+            if account?.closed == true {
+                Button("Reopen Account", systemImage: "arrow.uturn.backward") {
+                    if let accountID { Task { await model.manage("reopenAccount", ["id": .string(accountID)]) } }
+                }
+            } else {
+                Button("Close Account", systemImage: "archivebox", role: .destructive) { closing = true }
+            }
+        }
+        .disabled(model.isBusy || account == nil)
     }
 }
 
@@ -83,8 +118,7 @@ struct TransactionRow: View {
                 .background(ActualTheme.background, in: Circle())
             VStack(alignment: .leading, spacing: 5) {
                 Text(transaction.title).font(.body.weight(.medium)).foregroundStyle(.primary)
-                Text(transaction.isParent ? "Split transaction · view only"
-                     : transaction.canEdit ? transaction.detail : "\(transaction.detail) · view only")
+                Text(transaction.canEdit ? transaction.detail : "\(transaction.detail) · view only")
                     .font(.caption).foregroundStyle(.secondary)
                 if let notes = transaction.notes, !notes.isEmpty { Text(notes).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
             }

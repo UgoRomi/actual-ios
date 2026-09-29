@@ -281,3 +281,18 @@ Reports follow Actual's `desktop-client/src/components/reports` at the pinned re
 The UI test `testDemoReports` passed on a new iPhone 17 Pro / iOS 27 simulator. It opens the demo's dashboard and the detail pages of a summary, net worth (switched to one year), cash flow, spending (switched to the budget comparison), and the calendar (showing one day's transactions), then scrolls to the text widget. Screenshots of each were inspected. The demo navigation test also passed with the new tab, as did the bank-sync and automatic-sync suites.
 
 Not verified end to end: dashboards with several pages, stacked net worth, custom reports and other widgets on real budgets, tracking budgets' spending comparison, dark appearance, and VoiceOver.
+
+## Budget actions, management, splits, and schedules (2026-09-29)
+
+`./scripts/test-engine.sh` and `node Engine/typecheck.mjs` passed with four new engine suites against the demo budget, with upstream Actual 26.9.0:
+
+- Budget actions: copy last month, zero, 3-month average, one category's copy and 6-month average, To Budget to a category, category to category and to To Budget, over-balance and same-category rejections, movement notes, covering overspending from To Budget and from a category, covering an overbudgeted month, holding (added to an existing hold) and releasing, disabling the automatic hold, and rollover from this month on.
+- Management: group and category creation, renaming with unique names, reordering, hiding, notes for a category, group, month, and account, deletion with the required receiving category, local accounts on and off budget with starting balances, renaming, closing with a transfer and category, reopening, deleting an account without transactions, and force closing.
+- Splits: unbalanced splits rejected and not saved, creation, editing parts, moving the whole split to another account and date, removing parts, unknown parts rejected, unsplitting, splitting again, and deleting with its parts.
+- Schedules: required dates and unique names, repeating and one-time schedules, upcoming dates, a range amount, posting today (at the range's midpoint) and the paid status, skipping, completing, restarting, a schedule without an account refusing to post, and deletion.
+
+`./scripts/test-transactions.sh` passed after register search was extended to split parts' categories and notes.
+
+The UI tests `testDemoBudgetActions`, `testDemoManagement`, `testDemoSplitTransaction`, and `testDemoSchedules` passed on an iPhone 17 Pro simulator, reusing one demo budget across runs, so the new tests use names unique to each run. Screenshots of the banners, month menu, budget summary, move form, category editor, split editor, reopened split, schedule editor, and schedules list were inspected. First runs failed in the tests themselves: a menu toggle is a button to XCUITest, fields with a placeholder prompt needed an explicit label, rows below the keypad had to be scrolled into view, and an iOS 27 confirmation repeats its button's label.
+
+Not verified end to end: syncing these changes with Actual web on a server budget, bank-linked accounts when closing, schedules with date patterns set in Actual, tracking budgets' rollover, dark appearance, and VoiceOver.

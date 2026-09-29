@@ -309,7 +309,7 @@ final class AppModel {
         let switchesBudget = ["open", "download", "demo"].contains(method)
         let isEdit = ["saveTransaction", "deleteTransaction", "budget", "setCleared", "unlockTransaction",
                       "createReconciliationTransaction", "finishReconciliation", "saveTargets",
-                      "applyTargets", "budgetAction"].contains(method)
+                      "applyTargets", "budgetAction"].contains(method) || Self.managementMethods.contains(method)
         if method == "sync" {
             guard let task = beginBudgetSync() else {
                 errorMessage = "This budget is local only. Open a synced budget to synchronize."
@@ -482,6 +482,38 @@ final class AppModel {
         await perform("budgetAction", arguments: [
             "month": .string(month), "action": .string(action.name), "args": .object(action.arguments),
         ])
+    }
+
+    /// Category, group, account, and notes changes. Each reloads the whole budget,
+    /// since names, balances, and the register can all change.
+    static let managementMethods: Set<String> = [
+        "createCategoryGroup", "updateCategoryGroup", "deleteCategoryGroup", "createCategory", "updateCategory",
+        "deleteCategory", "moveCategory", "moveCategoryGroup", "saveNotes", "createAccount", "updateAccount",
+        "closeAccount", "reopenAccount",
+        // Schedules: posting adds a transaction, and saving can add a payee.
+        "saveSchedule", "deleteSchedule", "skipSchedule", "postSchedule", "completeSchedule",
+    ]
+
+    /// Every schedule with its status. Reading schedules changes nothing.
+    func schedules() async throws -> [Schedule] {
+        try await client().call("schedules", as: [Schedule].self)
+    }
+
+    /// The next dates a schedule's date falls on.
+    func upcomingDates(_ date: ScheduleDate, count: Int = 5) async throws -> [String] {
+        try await client().call("upcomingDates", arguments: ["date": date.json, "count": .number(count)], as: [String].self)
+    }
+
+    @discardableResult
+    func manage(_ method: String, _ arguments: [String: JSONValue]) async -> Bool {
+        precondition(Self.managementMethods.contains(method))
+        return await perform(method, arguments: arguments)
+    }
+
+    /// Whether deleting a category must move its transactions and budgets to another one, as Actual asks.
+    func categoryNeedsTransfer(_ id: String) async throws -> Bool {
+        struct Answer: Decodable { let required: Bool }
+        return try await client().call("categoryNeedsTransfer", arguments: ["id": .string(id)], as: Answer.self).required
     }
 
     func startReconciliation(accountID: String, targetBalance: Int) {

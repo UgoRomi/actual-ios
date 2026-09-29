@@ -341,6 +341,183 @@ final class ActualNativeUITests: XCTestCase {
         capture("budget-actions-category")
     }
 
+    /// Adds a category group and a category, hides and reveals it, and adds and closes an account.
+    @MainActor
+    func testDemoManagement() {
+        let app = XCUIApplication()
+        app.launch()
+        let demoButton = app.buttons["Explore a demo budget"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        XCTAssertTrue(app.tabBars.buttons["Budget"].waitForExistence(timeout: 60), "The demo budget should open")
+        app.tabBars.buttons["Budget"].tap()
+
+        // The demo budget stays between runs, so names are unique to this one.
+        let suffix = String(Int(Date().timeIntervalSince1970) % 100_000)
+        let group = "UI Group \(suffix)", category = "UI Category \(suffix)", wallet = "UI Wallet \(suffix)"
+        func name(_ text: String) {
+            let field = app.textFields["Name"]
+            XCTAssertTrue(field.waitForExistence(timeout: 5))
+            field.tap()
+            field.typeText(text)
+        }
+        app.buttons["Month actions"].tap()
+        app.buttons["Add Category Group"].tap()
+        name(group)
+        app.buttons["Add"].tap()
+        let options = app.buttons["\(group) group options"]
+        XCTAssertTrue(options.waitForExistence(timeout: 10), "The new group should show")
+        scroll(app, to: options)
+        options.tap()
+        XCTAssertTrue(app.navigationBars[group].waitForExistence(timeout: 10))
+        app.buttons["Add Category"].tap()
+        name(category)
+        app.buttons["Add"].tap()
+        capture("manage-group")
+        app.buttons["Done"].tap()
+
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", category)).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "The new category should show")
+        scroll(app, to: row)
+        row.tap()
+        let edit = app.buttons["Edit Category"]
+        XCTAssertTrue(edit.waitForExistence(timeout: 10))
+        app.swipeUp()
+        edit.tap()
+        let hidden = app.switches["Hidden"]
+        XCTAssertTrue(hidden.waitForExistence(timeout: 10))
+        capture("manage-category")
+        hidden.switches.firstMatch.tap()
+        XCTAssertTrue(wait(for: hidden, value: "1"), "The category should be hidden")
+        app.navigationBars.buttons.firstMatch.tap()
+        app.buttons["Cancel"].tap()
+        func toggleHidden() {
+            app.buttons["Month actions"].tap()
+            app.buttons["Show Hidden Categories"].tap()
+        }
+        // The choice is remembered, so an earlier run may have left hidden categories showing.
+        if !wait(forAbsence: row) { toggleHidden() }
+        XCTAssertTrue(wait(forAbsence: row), "A hidden category should leave the budget")
+        toggleHidden()
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "Hidden categories should show on request")
+        toggleHidden()
+
+        app.tabBars.buttons["Accounts"].tap()
+        app.buttons["Add account"].tap()
+        name(wallet)
+        app.buttons["Add"].tap()
+        let walletRow = app.staticTexts[wallet]
+        XCTAssertTrue(walletRow.waitForExistence(timeout: 10), "The new account should show")
+        scroll(app, to: walletRow)
+        walletRow.tap()
+        app.buttons["Account options"].tap()
+        app.buttons["Close Account"].tap()
+        XCTAssertTrue(app.staticTexts["This account has no transactions, so it will be permanently deleted."]
+            .waitForExistence(timeout: 10))
+        capture("manage-close-account")
+        app.navigationBars["Close Account"].buttons["Close Account"].tap()
+        XCTAssertTrue(wait(forAbsence: walletRow), "An account without transactions is deleted")
+    }
+
+    /// Adds a transaction split between two parts, then reopens it to see its parts.
+    @MainActor
+    func testDemoSplitTransaction() {
+        let app = XCUIApplication()
+        app.launch()
+        let demoButton = app.buttons["Explore a demo budget"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        let transactions = app.tabBars.buttons["Transactions"]
+        XCTAssertTrue(transactions.waitForExistence(timeout: 60), "The demo budget should open")
+        transactions.tap()
+        app.buttons["Add transaction"].tap()
+        XCTAssertTrue(app.buttons["Clear"].waitForExistence(timeout: 10))
+        app.buttons["Clear"].tap()
+        tapKeys(app, "30=")
+        let payee = "Split UI \(Int(Date().timeIntervalSince1970) % 100_000)"
+        app.buttons["payee-row"].tap()
+        let search = app.searchFields.firstMatch
+        XCTAssertTrue(search.waitForExistence(timeout: 5))
+        search.typeText(payee)
+        app.buttons["Add “\(payee)”"].tap()
+
+        app.swipeUp()
+        app.buttons["Split Transaction"].tap()
+        let parts = app.textFields.matching(identifier: "Split amount")
+        XCTAssertTrue(parts.element(boundBy: 1).waitForExistence(timeout: 5), "Splitting should add two parts")
+        parts.element(boundBy: 0).tap()
+        app.buttons["Clear"].tap()
+        tapKeys(app, "20=")
+        let left = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Amount left")).firstMatch
+        scroll(app, to: left)
+        XCTAssertTrue(left
+            .waitForExistence(timeout: 5), "An unbalanced split shows what is left")
+        parts.element(boundBy: 1).tap()
+        app.buttons["Clear"].tap()
+        tapKeys(app, "10=")
+        let category = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Category")).firstMatch
+        category.tap()
+        let food = app.buttons["Food"].firstMatch
+        XCTAssertTrue(food.waitForExistence(timeout: 5))
+        food.tap()
+        let balanced = app.staticTexts["The parts add up to the total."]
+        scroll(app, to: balanced)
+        XCTAssertTrue(balanced.waitForExistence(timeout: 5))
+        capture("split-editor")
+        app.navigationBars["New transaction"].buttons["Save"].tap()
+
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@",
+                                                   payee, "Split · 2 parts")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "The register should show the split")
+        row.tap()
+        let secondPart = app.staticTexts["Split 2"]
+        XCTAssertTrue(app.navigationBars["Transaction"].waitForExistence(timeout: 10))
+        scroll(app, to: secondPart)
+        XCTAssertTrue(secondPart.exists, "Reopening shows the parts")
+        capture("split-reopened")
+    }
+
+    /// Adds a repeating schedule, sees it listed with its status, and deletes it.
+    @MainActor
+    func testDemoSchedules() {
+        let app = XCUIApplication()
+        app.launch()
+        let demoButton = app.buttons["Explore a demo budget"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        let tab = app.tabBars.buttons["Schedules"]
+        XCTAssertTrue(tab.waitForExistence(timeout: 60), "The demo budget should open")
+        tab.tap()
+        app.buttons["Add schedule"].tap()
+        XCTAssertTrue(app.navigationBars["New Schedule"].waitForExistence(timeout: 10))
+        let name = "UI Rent \(Int(Date().timeIntervalSince1970) % 100_000)"
+        let field = app.textFields["Name"]
+        field.tap()
+        field.typeText(name)
+        let amount = app.textFields["Amount"]
+        amount.tap()
+        XCTAssertTrue(app.buttons["Clear"].waitForExistence(timeout: 5))
+        app.buttons["Clear"].tap()
+        tapKeys(app, "50=")
+        let nextDates = app.staticTexts["Next dates"]
+        scroll(app, to: nextDates)
+        XCTAssertTrue(nextDates.waitForExistence(timeout: 10), "A repeating schedule previews its dates")
+        capture("schedule-editor")
+        app.navigationBars["New Schedule"].buttons["Save"].tap()
+
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", name)).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "The new schedule should be listed")
+        XCTAssertTrue(row.label.contains("Due"), "Starting today, it is due: \(row.label)")
+        capture("schedules-list")
+        row.tap()
+        let delete = app.buttons["Delete Schedule"]
+        scroll(app, to: delete)
+        let formButton = delete.frame
+        delete.tap()
+        // The confirmation's button, not the form's.
+        let confirmations = app.buttons.matching(NSPredicate(format: "label == %@", "Delete Schedule"))
+        XCTAssertTrue(confirmations.element(boundBy: 1).waitForExistence(timeout: 5))
+        confirmations.allElementsBoundByIndex.first { $0.frame != formButton && $0.isHittable }?.tap()
+        XCTAssertTrue(wait(forAbsence: row), "The deleted schedule should leave the list")
+    }
+
     /// Opens the demo's default dashboard and each kind of report on it.
     @MainActor
     func testDemoReports() {
@@ -569,6 +746,17 @@ final class ActualNativeUITests: XCTestCase {
     @MainActor
     private func describes(_ element: XCUIElement, _ text: String) -> Bool {
         element.label.contains(text) || (element.value as? String)?.contains(text) == true
+    }
+
+    @MainActor
+    private func scroll(_ app: XCUIApplication, to element: XCUIElement) {
+        for _ in 0..<8 where !element.isHittable { app.swipeUp() }
+    }
+
+    @MainActor
+    private func wait(for element: XCUIElement, value: String) -> Bool {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "value == %@", value), object: element)
+        return XCTWaiter.wait(for: [expectation], timeout: 10) == .completed
     }
 
     @MainActor

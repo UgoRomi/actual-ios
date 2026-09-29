@@ -19,6 +19,8 @@ struct TransactionEditor: View {
     @State private var showDeleteConfirmation = false
     @State private var confirmsReconciledSave = false
     @State private var initialized = false
+    /// A split's parts, in the transaction's direction. Empty for an ordinary transaction.
+    @State private var splits: [SplitDraft] = []
 
     private var editable: Bool { transaction?.canEdit ?? true }
     /// The latest load: this transaction, or a transfer's linked transaction,
@@ -63,7 +65,7 @@ struct TransactionEditor: View {
                         Label("View only", systemImage: "lock")
                         Text(transaction?.transferInSplit == true
                              ? "This transfer is linked to part of a split transaction. Edit it in the Actual web or desktop app."
-                             : "Edit split transactions in the Actual web or desktop app.")
+                             : "This split includes a transfer. Edit it in the Actual web or desktop app.")
                             .font(.subheadline).foregroundStyle(.secondary)
                     }
                 } else if isReconciled {
@@ -102,16 +104,19 @@ struct TransactionEditor: View {
                     } label: {
                         LabeledContent("Payee", value: payeeLabel)
                     }.accessibilityIdentifier("payee-row")
-                    NavigationLink {
-                        CategoryPicker(selection: $category, groups: model.budget?.groups ?? [])
-                    } label: {
-                        LabeledContent("Category", value: categoryName)
-                    }.disabled(isOffBudget || isBudgetTransfer).accessibilityIdentifier("category-row")
+                    if splits.isEmpty {
+                        NavigationLink {
+                            CategoryPicker(selection: $category, groups: model.budget?.visibleGroups ?? [])
+                        } label: {
+                            LabeledContent("Category", value: categoryName)
+                        }.disabled(isOffBudget || isBudgetTransfer).accessibilityIdentifier("category-row")
+                    }
                     if isReconciled { Toggle("Reconciled", isOn: .constant(true)).disabled(true) }
                     else { Toggle("Cleared", isOn: $cleared) }
                     TextField("Notes", text: $notes, axis: .vertical).lineLimit(2...5)
                 } header: { Text("Details") } footer: { if editable { transferFooter } }
                 .disabled(!editable || model.isBusy)
+                splitSection.disabled(!editable || model.isBusy)
                 if let validation { Section { Text(validation).foregroundStyle(.red) } }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
                 if transaction != nil && editable {
@@ -164,6 +169,71 @@ struct TransactionEditor: View {
         }
     }
 
+    /// The total less the parts, in the transaction's direction; nil when an amount is invalid.
+    private var amountLeft: Int? {
+        guard let total = Money.parse(amount) else { return nil }
+        var left = total
+        for part in splits {
+            guard let value = part.amount.isEmpty ? 0 : Money.parse(part.amount) else { return nil }
+            left -= value
+        }
+        return left
+    }
+
+    /// Actual's split editing: each part has its own amount, category, and notes.
+    @ViewBuilder private var splitSection: some View {
+        if splits.isEmpty {
+            if transferAccount.isEmpty {
+                Section {
+                    Button("Split Transaction", systemImage: "square.split.2x2") { split() }
+                } footer: { Text("Divide this amount between categories.") }
+            }
+        } else {
+            ForEach($splits) { $part in
+                Section {
+                    AmountField(label: "Split amount", text: $part.amount)
+                    NavigationLink {
+                        CategoryPicker(selection: $part.category, groups: model.budget?.visibleGroups ?? [])
+                    } label: {
+                        LabeledContent("Category", value: isOffBudget ? "Off budget" : name(ofCategory: part.category))
+                    }.disabled(isOffBudget)
+                    TextField("Notes", text: $part.notes, axis: .vertical).lineLimit(1...3)
+                    Button("Delete Split", systemImage: "trash", role: .destructive) {
+                        splits.removeAll { $0.id == part.id }
+                    }
+                } header: {
+                    Text("Split \((splits.firstIndex { $0.id == part.id } ?? 0) + 1)")
+                }
+            }
+            Section {
+                Button("Add Split", systemImage: "plus") {
+                    // As in Actual, a new part starts with what is left.
+                    let left = max(amountLeft ?? 0, 0)
+                    splits.append(SplitDraft(amount: left == 0 ? "" : Money.editable(left)))
+                }
+            } footer: {
+                if let left = amountLeft, left != 0 {
+                    Text("Amount left: \(Money.formatted(left, currency: model.currency))").foregroundStyle(.orange)
+                } else if amountLeft == nil {
+                    Text("Enter each amount with no more than two decimal places.").foregroundStyle(.red)
+                } else {
+                    Text("The parts add up to the total.")
+                }
+            }
+        }
+    }
+
+    private func name(ofCategory id: String) -> String {
+        guard !id.isEmpty else { return "Uncategorized" }
+        return model.budget?.categories.first { $0.id == id }?.name
+            ?? transaction?.splits?.first { $0.categoryId == id }?.categoryName ?? "Uncategorized"
+    }
+
+    /// Like Actual's Split: the first part keeps the amount and category, and a second starts empty.
+    private func split() {
+        splits = [SplitDraft(amount: amount, category: isOffBudget || isBudgetTransfer ? "" : category), SplitDraft()]
+    }
+
     /// What saving does in the other account, as Actual's transfer handling does.
     @ViewBuilder private var transferFooter: some View {
         if let transferTarget {
@@ -209,6 +279,7 @@ struct TransactionEditor: View {
         category = transaction.categoryId ?? ""
         notes = transaction.notes ?? ""
         cleared = transaction.cleared
+        splits = (transaction.splits ?? []).map(SplitDraft.init)
     }
 
     /// A confirmation covers whatever is reconciled now, as its message describes.
@@ -238,10 +309,49 @@ struct TransactionEditor: View {
             arguments["payeeId"] = .string(match.id)
         } else if !cleanedPayee.isEmpty { arguments["payeeName"] = .string(cleanedPayee) }
         else { arguments["payeeId"] = .null }
-        let preview = preview(id: id, amount: isOutflow ? -parsed : parsed, payeeID: match?.id, payeeName: cleanedPayee)
+        var shown = preview(id: id, amount: isOutflow ? -parsed : parsed, payeeID: match?.id, payeeName: cleanedPayee)
+        var method = "saveTransaction"
+        // A split, or a split whose parts were all removed, saves with its parts.
+        let parts = splits.filter { !$0.isEmpty }
+        if !parts.isEmpty || transaction?.isParent == true {
+            guard transferAccount.isEmpty else { validation = "A split can’t be a transfer. Choose a payee."; return }
+            var saved: [SplitPart] = []
+            for part in parts {
+                guard let cents = part.amount.isEmpty ? 0 : Money.parse(part.amount), cents >= 0 else {
+                    validation = "Enter each split amount as a positive number, with no more than two decimal places."
+                    return
+                }
+                let categoryID = part.category.isEmpty || isOffBudget ? nil : part.category
+                saved.append(SplitPart(id: part.savedID ?? part.id, amount: isOutflow ? -cents : cents,
+                                       categoryId: categoryID, categoryName: categoryID.map(name(ofCategory:)),
+                                       notes: part.notes, isTransfer: false))
+            }
+            let left = parsed - saved.reduce(0) { $0 + abs($1.amount) }
+            // As in Actual, a split saves only once its parts add up to the total.
+            guard parts.isEmpty || left == 0 else {
+                validation = "The split amounts must add up to the total. Amount left: \(Money.formatted(left, currency: model.currency))."
+                return
+            }
+            method = "saveSplit"
+            arguments["splits"] = .array(zip(parts, saved).map { draft, part in
+                var fields: [String: JSONValue] = [
+                    "amount": .number(part.amount), "notes": .string(part.notes),
+                    "categoryId": part.categoryId.map { .string($0) } ?? .null,
+                ]
+                if let savedID = draft.savedID { fields["id"] = .string(savedID) }
+                return .object(fields)
+            })
+            if !parts.isEmpty {
+                shown.isParent = true
+                shown.splits = saved
+                shown.categoryId = nil
+                shown.categoryName = nil
+            }
+        }
         let commandArguments = arguments
         // As in Actual's mobile app, close right away; a failure shows in the register.
-        Task { await model.edit("saveTransaction", arguments: commandArguments, showing: .save(preview)) }
+        let previewed = shown, command = method
+        Task { await model.edit(command, arguments: commandArguments, showing: .save(previewed)) }
         dismiss()
     }
 
@@ -264,6 +374,35 @@ struct TransactionEditor: View {
             transferId: sameTransfer ? existing?.transferId : nil,
             transferReconciled: sameTransfer ? existing?.transferReconciled : nil)
     }
+}
+
+/// A split part being edited. Existing parts keep their ID, so saving updates them.
+struct SplitDraft: Identifiable {
+    let id: String
+    /// Set for a part already saved.
+    let savedID: String?
+    var amount: String
+    var category: String
+    var notes: String
+
+    init(amount: String = "", category: String = "", notes: String = "") {
+        id = UUID().uuidString
+        savedID = nil
+        self.amount = amount
+        self.category = category
+        self.notes = notes
+    }
+
+    init(_ part: SplitPart) {
+        id = part.id
+        savedID = part.id
+        amount = Money.editable(abs(part.amount))
+        category = part.categoryId ?? ""
+        notes = part.notes
+    }
+
+    /// A part with nothing entered, which saving leaves out.
+    var isEmpty: Bool { (Money.parse(amount) ?? 0) == 0 && category.isEmpty && notes.isEmpty }
 }
 
 /// Search existing payees, add a new one by name, or choose another account for a transfer.

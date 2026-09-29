@@ -16,6 +16,9 @@ import { native } from "./native";
 import { uploadSnapshotIfDue } from "./adapters/cloud-storage";
 import { canSyncBank, syncBankAccounts } from "./bank-sync";
 import { budgetAction, envelopeSummary } from "./budget-actions";
+import { manage, managementMethods } from "./management";
+import { saveSplit } from "./splits";
+import { scheduleCommand, schedules, scheduleWrites } from "./schedules";
 import {
   clearedBalance,
   createReconciliationTransaction,
@@ -207,6 +210,9 @@ async function overview() {
       // The latest balance reported by a linked bank, offered when reconciling.
       bankBalance: account.balance_current,
       lastReconciled: account.last_reconciled,
+      notes:
+        (lib.db.runQuery("SELECT note FROM notes WHERE id = ?", ["account-" + account.id], true) as Obj[])[0]
+          ?.note ?? null,
     });
   }
   return {
@@ -253,16 +259,26 @@ async function budgetMonth(month: string) {
     const value = sheet.getCellValue(sheetForMonth(month), name);
     return typeof value === "number" ? value : null;
   };
+  // Notes for categories, groups, and this month, as Actual's notes buttons show them.
+  const notes = new Map(
+    (lib.db.runQuery("SELECT id, note FROM notes WHERE note IS NOT NULL AND note != ''", [], true) as Obj[]).map(
+      (row) => [text(row.id), text(row.note)],
+    ),
+  );
+  // Hidden groups and categories are included, flagged, so the app can show them on request.
   const groups = budget.categoryGroups
-    .filter((g) => !g.hidden)
     .map((group) => ({
       id: group.id,
       name: group.name,
+      hidden: Boolean(group.hidden),
+      isIncome: Boolean(group.is_income),
+      notes: notes.get(text(group.id)) ?? null,
       categories: (group.categories ?? [])
-        .filter((c) => !c.hidden)
         .map((category) => ({
           id: category.id,
           name: category.name,
+          hidden: Boolean(category.hidden),
+          notes: notes.get(text(category.id)) ?? null,
           budgeted: category.budgeted || 0,
           spent: category.spent ?? category.received ?? 0,
           balance: category.balance || 0,
@@ -285,6 +301,7 @@ async function budgetMonth(month: string) {
     totalBudgeted: budgetType === "envelope" ? -budget.totalBudgeted : budget.totalBudgeted,
     totalSpent: budget.totalSpent,
     envelope: budgetType === "envelope" ? envelopeSummary(month) : null,
+    notes: notes.get("budget-" + month) ?? null,
     groups,
   };
 }
@@ -326,6 +343,18 @@ async function register() {
       transferId: row.transfer_id ?? null,
       transferReconciled: Boolean(linked?.reconciled),
       transferInSplit: Boolean(linked?.is_child),
+      // A split's parts, in Actual's order.
+      splits: row.is_parent
+        ? (row.subtransactions ?? []).map((child) => ({
+            id: child.id,
+            amount: child.amount,
+            categoryId: child.category ?? null,
+            categoryName: child.category ? categoryMap.get(child.category)?.name ?? null : null,
+            notes: child.notes || "",
+            // Parts that are transfers are edited in Actual for now.
+            isTransfer: Boolean(child.transfer_id || (child.payee && payeeMap.get(child.payee)?.transfer_acct)),
+          }))
+        : null,
     };
   });
   return transactions.sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
@@ -333,7 +362,7 @@ async function register() {
 // Reconciled transactions need the user's confirmation, as in Actual, and so
 // does a transfer whose linked transaction is reconciled. It must be given for
 // both as they are now, not as they were when an editor opened.
-async function editable(id: string, allowReconciled: boolean, allowReconciledTransfer: boolean) {
+async function editable(id: string, allowReconciled: boolean, allowReconciledTransfer: boolean, wholeSplit = false) {
   const find = async (transactionId: string) =>
     (
       await lib.send(
@@ -343,7 +372,8 @@ async function editable(id: string, allowReconciled: boolean, allowReconciledTra
     ).data[0];
   const row = await find(id);
   if (!row) throw new Error("Transaction no longer exists");
-  if (row.is_parent || row.is_child) throw new Error("Edit split transactions in Actual for now.");
+  if (row.is_child) throw new Error("Open the whole split to edit its parts.");
+  if (row.is_parent && !wholeSplit) throw new Error("Save split transactions with their parts.");
   if (row.reconciled && !allowReconciled)
     throw new Error("This transaction was reconciled after you opened it. Close it and open it again to review your change.");
   const linked = row.transfer_id ? await find(row.transfer_id) : undefined;
@@ -363,7 +393,7 @@ async function perform(method: string, args: Obj): Promise<unknown> {
     [
       "saveTransaction", "deleteTransaction", "budget", "sync", "syncAccounts", "setCleared",
       "unlockTransaction", "createReconciliationTransaction", "finishReconciliation", "saveTargets",
-      "applyTargets", "budgetAction",
+      "applyTargets", "budgetAction", "saveSplit", ...managementMethods, ...scheduleWrites,
     ].includes(method)
   ) {
     const warning = syncWarning();
@@ -638,9 +668,13 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       }
       return {};
     }
+    case "saveSplit":
+      await saveSplit(args);
+      return {};
     case "deleteTransaction": {
       const id = text(args.id);
-      await editable(id, args.allowReconciled === true, args.allowReconciledTransfer === true);
+      // Deleting a split deletes its parts too.
+      await editable(id, args.allowReconciled === true, args.allowReconciledTransfer === true, true);
       // Actual deletes a transfer's linked transaction too.
       await lib.send("transactions-batch-update", { deleted: [{ id }] });
       return {};
@@ -681,6 +715,15 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       return { budgets: await budgets() };
     }
     default:
+      if ([...managementMethods, "categoryNeedsTransfer"].includes(method)) {
+        if (!getPrefs()?.id) throw new Error("Open a budget first.");
+        return manage(method, args);
+      }
+      if (method === "schedules") return runMutator(schedules);
+      if ([...scheduleWrites, "upcomingDates"].includes(method)) {
+        if (!getPrefs()?.id) throw new Error("Open a budget first.");
+        return scheduleCommand(method, args);
+      }
       throw new Error("Unknown operation: " + method);
   }
 }

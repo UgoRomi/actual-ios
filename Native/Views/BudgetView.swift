@@ -7,6 +7,13 @@ struct BudgetView: View {
     @State private var pendingMonthAction: BudgetAction?
     @State private var showsSummary = false
     @State private var route: BudgetRoute?
+    @State private var managedGroup: String?
+    @State private var managedCategory: String?
+    @State private var addingGroup = false
+    @State private var editingMonthNotes = false
+    /// Like Actual's "Show hidden categories", remembered on this device.
+    @AppStorage("budget.showHiddenCategories") private var showsHidden = false
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -23,20 +30,34 @@ struct BudgetView: View {
                                 .accessibilityHint("Show how To Budget adds up, and move money")
                         } else { summary(budget) }
                         BudgetBanners(budget: budget) { route = $0 }
+                        let shown = budget.groups(showingHidden: showsHidden)
                         if budget.groups.isEmpty {
-                            ContentUnavailableView("No categories yet", systemImage: "tray", description: Text("Set up categories in Actual to start planning your money."))
+                            ContentUnavailableView {
+                                Label("No categories yet", systemImage: "tray")
+                            } description: {
+                                Text("Add a category group to start planning your money.")
+                            } actions: {
+                                Button("Add Category Group") { addingGroup = true }.buttonStyle(.glass)
+                            }
                         }
-                        ForEach(budget.groups.filter { $0.categories.contains { !$0.isIncome } }) { group in
-                            VStack(alignment: .leading, spacing: 12) {
-                                Text(group.name).font(.title3.bold()).padding(.horizontal, 4)
-                                VStack(spacing: 0) {
-                                    ForEach(group.categories.filter { !$0.isIncome }) { category in
-                                        Button { selectedCategory = category } label: {
-                                            categoryRow(category)
-                                        }.buttonStyle(.plain).disabled(model.isBusy)
-                                        if category.id != group.categories.last(where: { !$0.isIncome })?.id { Divider().padding(.leading, 18) }
+                        ForEach(shown.filter { !$0.isIncome }) { group in
+                            groupSection(group) { category in
+                                Button { selectedCategory = category } label: { categoryRow(category) }
+                                    .buttonStyle(.plain).disabled(model.isBusy)
+                                    .contextMenu {
+                                        Button("Edit Category", systemImage: "pencil") { managedCategory = category.id }
                                     }
-                                }.background(ActualTheme.surface, in: RoundedRectangle(cornerRadius: 22))
+                            }
+                        }
+                        // Income, as Actual's mobile budget lists it after expenses.
+                        ForEach(shown.filter(\.isIncome)) { group in
+                            groupSection(group) { category in
+                                Button {
+                                    // Envelope budgets do not budget income.
+                                    if budget.budgetType == .tracking { selectedCategory = category }
+                                    else { managedCategory = category.id }
+                                } label: { incomeRow(category) }
+                                    .buttonStyle(.plain).disabled(model.isBusy)
                             }
                         }
                         SyncFooter()
@@ -53,6 +74,22 @@ struct BudgetView: View {
             .sheet(item: $selectedCategory) { category in BudgetEditor(category: category, month: model.month) }
             .sheet(isPresented: $showsSummary) { EnvelopeSummarySheet(month: model.month, monthDate: model.selectedMonth) }
             .sheet(item: $route) { route in BudgetRouteSheet(route: route, month: model.month) }
+            .sheet(isPresented: Binding(get: { managedGroup != nil }, set: { if !$0 { managedGroup = nil } })) {
+                if let managedGroup { GroupManageSheet(groupID: managedGroup) }
+            }
+            .sheet(isPresented: Binding(get: { managedCategory != nil }, set: { if !$0 { managedCategory = nil } })) {
+                if let managedCategory { CategoryManageSheet(categoryID: managedCategory) }
+            }
+            .sheet(isPresented: $addingGroup) {
+                NameSheet(title: "New Category Group", action: "Add") { name in
+                    await model.manage("createCategoryGroup", ["name": .string(name)])
+                }
+            }
+            .sheet(isPresented: $editingMonthNotes) {
+                NotesSheet(id: "budget-\(model.month)",
+                           title: model.selectedMonth.formatted(.dateTime.month(.wide).year()),
+                           initial: model.budget?.notes ?? "")
+            }
             .confirmationDialog(pendingMonthAction.map(Self.confirmationTitle) ?? "", isPresented: Binding(
                 get: { pendingMonthAction != nil }, set: { if !$0 { pendingMonthAction = nil } }
             ), titleVisibility: .visible, presenting: pendingMonthAction) { action in
@@ -85,6 +122,11 @@ struct BudgetView: View {
                 }
             }
             Section("Targets") { targetsItems }
+            Section {
+                Button("Month Notes", systemImage: "note.text") { editingMonthNotes = true }
+                Button("Add Category Group", systemImage: "folder.badge.plus") { addingGroup = true }
+                Toggle(isOn: $showsHidden) { Label("Show Hidden Categories", systemImage: "eye") }
+            }
         }
         .disabled(model.isBusy || model.budget == nil)
     }
@@ -176,6 +218,47 @@ struct BudgetView: View {
             Text(label).font(.caption).foregroundStyle(.white.opacity(0.7))
             Text(Money.formatted(value, currency: model.currency)).font(.headline).monospacedDigit().foregroundStyle(.white)
         }
+    }
+
+    /// A group's heading, with its menu, above its categories. Hidden groups and categories are dimmed.
+    private func groupSection(_ group: CategoryGroup, row: @escaping (BudgetCategory) -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(group.name).font(.title3.bold())
+                if group.hidden { Image(systemName: "eye.slash").foregroundStyle(.secondary).accessibilityLabel("Hidden") }
+                Spacer()
+                Button("\(group.name) group options", systemImage: "ellipsis") { managedGroup = group.id }
+                    .labelStyle(.iconOnly).buttonStyle(.glass).disabled(model.isBusy)
+            }.padding(.horizontal, 4)
+            if !group.categories.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(group.categories) { category in
+                        row(category).opacity(category.hidden ? 0.5 : 1)
+                        if category.id != group.categories.last?.id { Divider().padding(.leading, 18) }
+                    }
+                }.background(ActualTheme.surface, in: RoundedRectangle(cornerRadius: 22))
+            }
+        }.opacity(group.hidden ? 0.6 : 1)
+    }
+
+    /// Income received this month, and in tracking budgets what was budgeted.
+    private func incomeRow(_ category: BudgetCategory) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(category.name).font(.body.weight(.medium))
+                Spacer(minLength: 12)
+                Text(Money.formatted(category.spent, currency: model.currency))
+                    .monospacedDigit().font(.headline).foregroundStyle(.green)
+            }
+            HStack {
+                if model.budget?.budgetType == .tracking {
+                    Text("Budgeted \(Money.formatted(category.budgeted, currency: model.currency))")
+                }
+                Spacer(minLength: 8)
+                Text("Received")
+            }.font(.caption).foregroundStyle(.secondary)
+        }.padding(18).contentShape(Rectangle())
+            .accessibilityElement(children: .combine)
     }
 
     private func categoryRow(_ category: BudgetCategory) -> some View {
@@ -339,6 +422,11 @@ struct BudgetEditor: View {
                 } header: { Text("Balance") } footer: {
                     Text("With rollover, overspending carries into next month’s balance instead of reducing To Budget. It applies from this month onward.")
                 }.disabled(model.isBusy)
+                Section {
+                    NavigationLink(value: ManageCategoryRoute()) {
+                        Label("Edit Category", systemImage: "pencil")
+                    }
+                } footer: { Text("Rename, add notes, hide, reorder, move to another group, or delete.") }
                 if let validation { Section { Text(validation).foregroundStyle(.red) } }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
             }
@@ -360,6 +448,9 @@ struct BudgetEditor: View {
             }
             .navigationDestination(for: BudgetRoute.self) { route in
                 BudgetRouteView(route: route, month: month) { dismiss() }
+            }
+            .navigationDestination(for: ManageCategoryRoute.self) { _ in
+                CategoryManageForm(categoryID: category.id) { dismiss() }
             }
             .onAppear {
                 // Also runs when returning from targets; keep what was typed.

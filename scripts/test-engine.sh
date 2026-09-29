@@ -13,9 +13,9 @@ cd "${project_root}"
 node Engine/build.mjs
 mkdir -p .build
 xcrun swiftc -parse-as-library \
-  Native/Models.swift Native/Targets.swift Native/Reports.swift Native/Core/*.swift Tests/Support/BudgetSnapshot.swift \
+  Native/Models.swift Native/Schedules.swift Native/Targets.swift Native/Reports.swift Native/Core/*.swift Tests/Support/BudgetSnapshot.swift \
   Tests/EngineSmoke.swift Tests/EngineReconciliation.swift Tests/EngineTransfers.swift Tests/EngineBudgetDeletion.swift \
-  Tests/EngineTargets.swift Tests/EngineReports.swift Tests/EngineBudgetActions.swift \
+  Tests/EngineTargets.swift Tests/EngineReports.swift Tests/EngineBudgetActions.swift Tests/EngineManagement.swift Tests/EngineSplits.swift Tests/EngineSchedules.swift \
   -module-cache-path "${project_root}/.build/ModuleCache" \
   -lsqlite3 -o .build/engine-smoke
 .build/engine-smoke "${project_root}/Native/Resources"
@@ -27,7 +27,7 @@ xcrun swiftc -parse-as-library \
 .build/engine-recovery "${project_root}/Native/Resources"
 
 xcrun swiftc -parse-as-library \
-  Native/Models.swift Native/Targets.swift Native/Reports.swift Native/AppModel.swift Native/Core/*.swift \
+  Native/Models.swift Native/Schedules.swift Native/Targets.swift Native/Reports.swift Native/AppModel.swift Native/Core/*.swift \
   Tests/OptimisticEdits.swift \
   -module-cache-path "${project_root}/.build/ModuleCache" \
   -lsqlite3 -o .build/optimistic-edits

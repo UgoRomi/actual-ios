@@ -1,0 +1,144 @@
+import Foundation
+
+extension EngineSmoke {
+  /// Creates, renames, hides, reorders, annotates, and deletes categories and groups,
+  /// and creates, renames, closes, reopens, and deletes accounts, as Actual's mobile menus do.
+  static func management(data: URL, resources: URL) async throws {
+    let engine = try EngineClient(dataDirectory: data, resourceDirectory: resources, useKeychain: false)
+    _ = try await activeBudget(engine)
+    let month = BudgetDate.month(Date())
+    func check(_ condition: Bool, _ message: @autoclosure () -> String = "", line: UInt = #line) {
+      precondition(condition, message(), line: line)
+    }
+    @discardableResult
+    func call(_ method: String, _ arguments: [String: JSONValue]) async throws -> Data {
+      try await engine.call(method, arguments: arguments)
+    }
+    func created(_ method: String, _ arguments: [String: JSONValue]) async throws -> String {
+      struct Created: Decodable { let id: String }
+      return try JSONDecoder().decode(Created.self, from: try await call(method, arguments)).id
+    }
+    func expectFailure(_ method: String, _ arguments: [String: JSONValue], _ message: String, line: UInt = #line) async throws {
+      var failed = false
+      do { try await call(method, arguments) } catch {
+        failed = true
+        check(error.localizedDescription.contains(message), "Unexpected error: \(error.localizedDescription)", line: line)
+      }
+      check(failed, "\(method) should have failed", line: line)
+    }
+    func budget() async throws -> BudgetMonth {
+      try await engine.call("budgetMonth", arguments: ["month": .string(month)], as: BudgetMonth.self)
+    }
+    func group(_ id: String) async throws -> CategoryGroup {
+      guard let found = try await budget().groups.first(where: { $0.id == id }) else { throw EngineFailure("Group \(id) missing") }
+      return found
+    }
+    func overview() async throws -> BudgetOverview { try await engine.call("overview", as: BudgetOverview.self) }
+
+    // Groups and categories.
+    try await expectFailure("createCategoryGroup", ["name": .string("  ")], "Enter a name")
+    let groupID = try await created("createCategoryGroup", ["name": .string("Native Group")])
+    let first = try await created("createCategory", ["groupId": .string(groupID), "name": .string("Alpha")])
+    let second = try await created("createCategory", ["groupId": .string(groupID), "name": .string("Beta")])
+    var native = try await group(groupID)
+    check(native.name == "Native Group" && !native.isIncome && Set(native.categories.map(\.id)) == [first, second])
+    try await expectFailure("updateCategory", ["id": .string(second), "name": .string("alpha")], "already exists")
+    try await call("updateCategory", ["id": .string(first), "name": .string("Alpha Renamed")])
+    try await call("updateCategoryGroup", ["id": .string(groupID), "name": .string("Native Renamed")])
+    native = try await group(groupID)
+    check(native.name == "Native Renamed" && native.categories.contains { $0.name == "Alpha Renamed" })
+
+    // Reorder: move the last category first, then back to the end.
+    let order = native.categories.map(\.id)
+    try await call("moveCategory", ["id": .string(order[1]), "targetId": .string(order[0])])
+    check(try await group(groupID).categories.map(\.id) == [order[1], order[0]])
+    try await call("moveCategory", ["id": .string(order[1])])
+    check(try await group(groupID).categories.map(\.id) == order)
+
+    // Hidden categories and groups stay in the month, flagged.
+    try await call("updateCategory", ["id": .string(second), "hidden": .bool(true)])
+    try await call("updateCategoryGroup", ["id": .string(groupID), "hidden": .bool(true)])
+    let hidden = try await budget()
+    check(hidden.groups.first { $0.id == groupID }?.hidden == true)
+    check(hidden.categories.first { $0.id == second }?.hidden == true)
+    check(!hidden.visibleGroups.contains { $0.id == groupID })
+    try await call("updateCategoryGroup", ["id": .string(groupID), "hidden": .bool(false)])
+    check(try await budget().visibleGroups.first { $0.id == groupID }?.categories.map(\.id) == [first])
+
+    // Notes for a category, a group, and the month.
+    try await call("saveNotes", ["id": .string(first), "note": .string("Category note")])
+    try await call("saveNotes", ["id": .string(groupID), "note": .string("Group note")])
+    try await call("saveNotes", ["id": .string("budget-\(month)"), "note": .string("Month note")])
+    let noted = try await budget()
+    check(noted.categories.first { $0.id == first }?.notes == "Category note")
+    check(noted.groups.first { $0.id == groupID }?.notes == "Group note")
+    check(noted.notes == "Month note")
+
+    // A category with a budget must hand it to another category when deleted.
+    _ = try await engine.call("budget", arguments: [
+      "month": .string(month), "categoryId": .string(first), "amount": .number(4_200),
+    ])
+    struct Needs: Decodable { let required: Bool }
+    check(try await engine.call("categoryNeedsTransfer", arguments: ["id": .string(first)], as: Needs.self).required)
+    check(try await !engine.call("categoryNeedsTransfer", arguments: ["id": .string(second)], as: Needs.self).required)
+    try await expectFailure("deleteCategory", ["id": .string(first)], "Choose a category to receive")
+    try await expectFailure("deleteCategory", ["id": .string(first), "transferId": .string(first)], "not being deleted")
+    try await call("deleteCategory", ["id": .string(second)])
+    let receiver = try await created("createCategory", ["groupId": .string(groupID), "name": .string("Receiver")])
+    try await call("deleteCategory", ["id": .string(first), "transferId": .string(receiver)])
+    let afterDelete = try await budget()
+    check(!afterDelete.categories.contains { $0.id == first || $0.id == second })
+    check(afterDelete.categories.first { $0.id == receiver }?.budgeted == 4_200)
+
+    // A group whose categories have budgets needs a receiving category too.
+    guard let outside = afterDelete.expenseCategories.first(where: { !native.categories.map(\.id).contains($0.id) && $0.id != receiver })
+    else { throw EngineFailure("Demo fixture needs another expense category") }
+    try await expectFailure("deleteCategoryGroup", ["id": .string(groupID)], "Choose a category to receive")
+    let outsideBefore = outside.budgeted
+    try await call("deleteCategoryGroup", ["id": .string(groupID), "transferId": .string(outside.id)])
+    let afterGroup = try await budget()
+    check(!afterGroup.groups.contains { $0.id == groupID })
+    check(afterGroup.categories.first { $0.id == outside.id }?.budgeted == outsideBefore + 4_200)
+
+    // Accounts: create with a starting balance, rename, and names stay unique.
+    let savings = try await created("createAccount", [
+      "name": .string("Native Savings"), "balance": .number(12_345), "offBudget": .bool(false),
+    ])
+    let loan = try await created("createAccount", [
+      "name": .string("Native Loan"), "balance": .number(-50_000), "offBudget": .bool(true),
+    ])
+    let empty = try await created("createAccount", ["name": .string("Native Empty")])
+    var accounts = try await overview().accounts
+    check(accounts.first { $0.id == savings }?.balance == 12_345)
+    check(accounts.first { $0.id == loan }?.offbudget == true && accounts.first { $0.id == loan }?.balance == -50_000)
+    try await expectFailure("createAccount", ["name": .string("Native Savings")], "already exists")
+    try await expectFailure("updateAccount", ["id": .string(savings), "name": .string("")], "cannot be blank")
+    try await call("updateAccount", ["id": .string(savings), "name": .string("Native Reserve")])
+    try await call("saveNotes", ["id": .string("account-\(savings)"), "note": .string("Account note")])
+    accounts = try await overview().accounts
+    check(accounts.first { $0.id == savings }?.name == "Native Reserve")
+    check(accounts.first { $0.id == savings }?.notes == "Account note")
+
+    // Closing: a balance must move; on budget to off budget needs a category.
+    try await expectFailure("closeAccount", ["id": .string(savings)], "Choose an account to receive")
+    try await expectFailure("closeAccount", ["id": .string(savings), "transferAccountId": .string(loan)], "Choose a category for the transfer")
+    try await call("closeAccount", [
+      "id": .string(savings), "transferAccountId": .string(loan), "categoryId": .string(outside.id),
+    ])
+    accounts = try await overview().accounts
+    check(accounts.first { $0.id == savings }?.closed == true && accounts.first { $0.id == savings }?.balance == 0)
+    check(accounts.first { $0.id == loan }?.balance == -50_000 + 12_345)
+    try await expectFailure("closeAccount", ["id": .string(savings)], "already closed")
+    try await call("reopenAccount", ["id": .string(savings)])
+    check(try await overview().accounts.first { $0.id == savings }?.closed == false)
+
+    // Without transactions, closing deletes; force closing deletes one with transactions.
+    try await call("closeAccount", ["id": .string(empty)])
+    check(try await !overview().accounts.contains { $0.id == empty })
+    try await call("closeAccount", ["id": .string(loan), "forced": .bool(true)])
+    let register = try await engine.call("register", as: [Transaction].self)
+    check(!register.contains { $0.accountId == loan })
+    check(try await !overview().accounts.contains { $0.id == loan })
+    print("PASS: management of categories, groups, notes, and accounts")
+  }
+}

@@ -50,7 +50,7 @@ struct MoveMoneyForm: View {
         switch kind { case .transfer(let id), .cover(let id): id; default: nil }
     }
     private var groups: [CategoryGroup] {
-        (budget?.groups ?? []).compactMap { group in
+        (budget?.visibleGroups ?? []).compactMap { group in
             let categories = group.categories.filter { !$0.isIncome && $0.id != excluded }
             return categories.isEmpty ? nil : CategoryGroup(id: group.id, name: group.name, categories: categories)
         }

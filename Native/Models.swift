@@ -105,7 +105,22 @@ struct BudgetMonth: Decodable, Sendable {
     let totalSpent: Int
     /// Envelope budgets only: how To Budget adds up.
     let envelope: EnvelopeSummary?
+    /// The month's notes, where Actual records money moved between categories.
+    var notes: String? = nil
+    /// Every group, including hidden groups and categories.
     let groups: [CategoryGroup]
+
+    /// Groups and categories that are not hidden, as Actual lists them by default.
+    var visibleGroups: [CategoryGroup] { groups(showingHidden: false) }
+
+    func groups(showingHidden: Bool) -> [CategoryGroup] {
+        guard !showingHidden else { return groups }
+        return groups.filter { !$0.hidden }.map { group in
+            var visible = group
+            visible.categories = group.categories.filter { !$0.hidden }
+            return visible
+        }
+    }
 
     var categories: [BudgetCategory] { groups.flatMap(\.categories) }
     var expenseCategories: [BudgetCategory] { categories.filter { !$0.isIncome } }
@@ -208,6 +223,7 @@ struct Account: Decodable, Identifiable, Sendable {
     /// The latest balance reported by a linked bank.
     var bankBalance: Int? = nil
     var lastReconciled: String? = nil
+    var notes: String? = nil
 
     var canSyncBank: Bool { bankSyncEnabled == true && !closed }
     var lastBankSyncDate: Date? { Self.date(lastBankSync) }
@@ -238,12 +254,17 @@ struct BankSyncAccountResult: Decodable, Identifiable, Sendable {
 struct CategoryGroup: Decodable, Identifiable, Sendable {
     let id: String
     let name: String
-    let categories: [BudgetCategory]
+    var categories: [BudgetCategory]
+    var hidden = false
+    var isIncome = false
+    var notes: String? = nil
 }
 
 struct BudgetCategory: Decodable, Identifiable, Sendable {
     let id: String
     let name: String
+    var hidden = false
+    var notes: String? = nil
     let budgeted: Int
     let spent: Int
     let balance: Int
@@ -286,9 +307,14 @@ struct Transaction: Decodable, Identifiable, Sendable {
     var transferReconciled: Bool? = nil
     /// The linked transaction is part of a split, which Actual would unbalance or move.
     var transferInSplit: Bool? = nil
+    /// A split's parts, for its parent only.
+    var splits: [SplitPart]? = nil
 
-    /// Reconciled transactions and transfers can be edited too, after any warning.
-    var canEdit: Bool { !isParent && !isChild && transferInSplit != true }
+    /// Reconciled transactions, transfers, and splits can be edited too, after any warning.
+    /// Transfers inside a split link another account's transaction, which Actual edits.
+    var canEdit: Bool {
+        !isChild && transferInSplit != true && !(splits ?? []).contains(where: \.isTransfer)
+    }
     var isReconciled: Bool { reconciled == true }
     var title: String {
         // As in Actual's mobile register, a transfer names the other account and the direction.
@@ -298,7 +324,20 @@ struct Transaction: Decodable, Identifiable, Sendable {
         return payeeName.flatMap { $0.isEmpty ? nil : $0 } ?? "No payee"
     }
     /// An uncategorized transfer, such as one between two on-budget accounts, shows as a transfer.
-    var detail: String { transferAccountId != nil && categoryId == nil ? "Transfer" : categoryName ?? "Uncategorized" }
+    var detail: String {
+        if isParent { return "Split" + ((splits?.count).map { " · \($0) parts" } ?? "") }
+        return transferAccountId != nil && categoryId == nil ? "Transfer" : categoryName ?? "Uncategorized"
+    }
+}
+
+/// One part of a split transaction.
+struct SplitPart: Decodable, Identifiable, Sendable, Equatable {
+    let id: String
+    var amount: Int
+    var categoryId: String?
+    var categoryName: String?
+    var notes: String
+    var isTransfer: Bool
 }
 
 /// A transaction edit shown before the engine saves it, as Actual's mobile app
@@ -398,6 +437,12 @@ struct TransactionSection: Identifiable {
             return transaction.title.localizedCaseInsensitiveContains(search)
                 || transaction.detail.localizedCaseInsensitiveContains(search)
                 || (transaction.notes ?? "").localizedCaseInsensitiveContains(search)
+                // A split matches its parts' categories and notes.
+                || (transaction.isParent && (transaction.categoryName ?? "").localizedCaseInsensitiveContains(search))
+                || (transaction.splits ?? []).contains {
+                    ($0.categoryName ?? "").localizedCaseInsensitiveContains(search)
+                        || $0.notes.localizedCaseInsensitiveContains(search)
+                }
                 || Money.formatted(transaction.amount, formatter: formatter).localizedCaseInsensitiveContains(search)
         }
         let grouped = Dictionary(grouping: matching, by: \.date)

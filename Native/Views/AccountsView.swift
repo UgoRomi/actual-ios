@@ -2,6 +2,7 @@ import SwiftUI
 
 struct AccountsView: View {
     @Environment(AppModel.self) private var model
+    @State private var addingAccount = false
     var body: some View {
         NavigationStack {
             List {
@@ -9,7 +10,7 @@ struct AccountsView: View {
                 BankSyncNotice()
                 if let overview = model.overview {
                     if overview.accounts.isEmpty {
-                        ContentUnavailableView("No accounts yet", systemImage: "creditcard", description: Text("Add an account in Actual to see its balance and transactions here."))
+                        ContentUnavailableView("No accounts yet", systemImage: "creditcard", description: Text("Add an account with + to track its balance and transactions."))
                     }
                     accountSection("On budget", accounts: overview.accounts.filter { !$0.offbudget && !$0.closed })
                     accountSection("Off budget", accounts: overview.accounts.filter { $0.offbudget && !$0.closed })
@@ -18,8 +19,14 @@ struct AccountsView: View {
                 Section { SyncFooter() }.listRowBackground(Color.clear)
             }
             .navigationTitle("Accounts")
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { SettingsButton() } }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Add account", systemImage: "plus") { addingAccount = true }.disabled(model.isBusy)
+                }
+                ToolbarItem(placement: .topBarTrailing) { SettingsButton() }
+            }
             .refreshable { await model.refreshAccounts() }
+            .sheet(isPresented: $addingAccount) { NewAccountSheet() }
         }
     }
 

@@ -56,6 +56,9 @@ import Foundation
     try await transfers(data: data.appendingPathComponent("budget"), resources: resources)
     try await targets(data: data.appendingPathComponent("budget"), resources: resources)
     try await budgetActions(data: data.appendingPathComponent("budget"), resources: resources)
+    try await management(data: data.appendingPathComponent("budget"), resources: resources)
+    try await splits(data: data.appendingPathComponent("budget"), resources: resources)
+    try await schedules(data: data.appendingPathComponent("budget"), resources: resources)
     try await budgetDeletion(data: data.appendingPathComponent("deletion"), resources: resources)
     try await reports(data: data.appendingPathComponent("reports"), resources: resources)
     print(
