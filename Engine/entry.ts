@@ -17,6 +17,7 @@ import { uploadSnapshotIfDue } from "./adapters/cloud-storage";
 import { canSyncBank, syncBankAccounts } from "./bank-sync";
 import { budgetAction, envelopeSummary } from "./budget-actions";
 import { manage, managementMethods } from "./management";
+import { ruleCommand, rulesList, ruleWrites } from "./rules";
 import { saveSplit } from "./splits";
 import { scheduleCommand, schedulePreviews, schedules, scheduleWrites } from "./schedules";
 import {
@@ -393,7 +394,7 @@ async function perform(method: string, args: Obj): Promise<unknown> {
     [
       "saveTransaction", "deleteTransaction", "budget", "sync", "syncAccounts", "setCleared",
       "unlockTransaction", "createReconciliationTransaction", "finishReconciliation", "saveTargets",
-      "applyTargets", "budgetAction", "saveSplit", ...managementMethods, ...scheduleWrites,
+      "applyTargets", "budgetAction", "saveSplit", ...managementMethods, ...scheduleWrites, ...ruleWrites,
     ].includes(method)
   ) {
     const warning = syncWarning();
@@ -721,6 +722,11 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       }
       if (method === "schedules") return runMutator(schedules);
       if (method === "schedulePreviews") return runMutator(schedulePreviews);
+      if (method === "rules") return runMutator(rulesList);
+      if ([...ruleWrites, "ruleMatches"].includes(method)) {
+        if (!getPrefs()?.id) throw new Error("Open a budget first.");
+        return ruleCommand(method, args);
+      }
       if ([...scheduleWrites, "upcomingDates"].includes(method)) {
         if (!getPrefs()?.id) throw new Error("Open a budget first.");
         return scheduleCommand(method, args);

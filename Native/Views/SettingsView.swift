@@ -32,6 +32,7 @@ struct SettingsView: View {
                 if model.isBudgetOpen {
                     Section("Manage") {
                         NavigationLink { PayeesView() } label: { Label("Payees", systemImage: "person.2") }
+                        NavigationLink { RulesView() } label: { Label("Rules", systemImage: "wand.and.rays") }
                     }
                 }
                 Section {

@@ -498,9 +498,21 @@ final class AppModel {
         "createCategoryGroup", "updateCategoryGroup", "deleteCategoryGroup", "createCategory", "updateCategory",
         "deleteCategory", "moveCategory", "moveCategoryGroup", "saveNotes", "createAccount", "updateAccount",
         "closeAccount", "reopenAccount", "renamePayee", "deletePayees", "mergePayees",
+        "saveRule", "deleteRule", "applyRule",
         // Schedules: posting adds a transaction, and saving can add a payee.
         "saveSchedule", "deleteSchedule", "skipSchedule", "postSchedule", "completeSchedule",
     ]
+
+    /// Every rule, as Actual's rules page lists them.
+    func rules() async throws -> [Rule] {
+        try await client().call("rules", as: [Rule].self)
+    }
+
+    /// How many transactions a rule's conditions match now.
+    func ruleMatches(_ rule: Rule) async throws -> Int {
+        struct Count: Decodable { let count: Int }
+        return try await client().call("ruleMatches", arguments: rule.json, as: Count.self).count
+    }
 
     /// Payees with their rule counts, as Actual's payees page lists them.
     func managedPayees() async throws -> [ManagedPayee] {
