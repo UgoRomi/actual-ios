@@ -481,6 +481,8 @@ struct BudgetEditor: View {
     @State private var path = NavigationPath()
     @State private var detent = PresentationDetent.medium
     @State private var didAppear = false
+    /// The 12-month average once loaded; nil inside when it could not be read.
+    @State private var average: Int??
 
     /// Applies a budget menu action and closes, as Actual's category menu does.
     private func run(_ action: BudgetAction) {
@@ -499,6 +501,21 @@ struct BudgetEditor: View {
                 Section {
                     LabeledContent("Spent") { MoneyText(value: category.spent, currency: model.currency) }
                     LabeledContent("Available") { MoneyText(value: category.balance, currency: model.currency) }
+                    LabeledContent(category.isIncome ? "12-month average received" : "12-month average spent") {
+                        switch average {
+                        case .some(.some(let amount)): MoneyText(value: amount, currency: model.currency)
+                        case .some(.none): Text("—").foregroundStyle(.secondary)
+                        case .none: ProgressView()
+                        }
+                    }
+                    .accessibilityIdentifier("category-average")
+                    .task {
+                        // Runs again when returning from transactions, whose edits can change it.
+                        let loaded = try? await model.categoryAverage(categoryID: category.id, month: month)
+                        if !Task.isCancelled { average = .some(loaded) }
+                    }
+                } footer: {
+                    Text("The monthly average over up to 12 months before this one, from when the category was first used.")
                 }
                 Section {
                     if let goal = current.goal {

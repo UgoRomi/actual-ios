@@ -472,6 +472,15 @@ final class AppModel {
                                 as: [ReportTransaction].self)
     }
 
+    /// A category's average monthly activity over up to the last 12 months, as
+    /// Actual's Yearly Average budgets it. Spending is negative.
+    func categoryAverage(categoryID: String, month: String) async throws -> Int {
+        struct Average: Decodable { let amount: Int }
+        return try await client().call("categoryAverage", arguments: [
+            "categoryId": .string(categoryID), "month": .string(month),
+        ], as: Average.self).amount
+    }
+
     /// A category's targets for the editor. Reading them changes nothing.
     func categoryTargets(categoryID: String, month: String) async throws -> CategoryTargets {
         try await client().call("categoryTargets", arguments: [
