@@ -313,10 +313,8 @@ struct Transaction: Decodable, Identifiable, Sendable {
     var splits: [SplitPart]? = nil
 
     /// Reconciled transactions, transfers, and splits can be edited too, after any warning.
-    /// Transfers inside a split link another account's transaction, which Actual edits.
-    var canEdit: Bool {
-        !isChild && transferInSplit != true && !(splits ?? []).contains(where: \.isTransfer)
-    }
+    /// A transfer linked to part of a split is edited from the split, as Actual does.
+    var canEdit: Bool { !isChild && transferInSplit != true }
     var isReconciled: Bool { reconciled == true }
     var title: String {
         // As in Actual's mobile register, a transfer names the other account and the direction.
@@ -340,6 +338,10 @@ struct SplitPart: Decodable, Identifiable, Sendable, Equatable {
     var categoryName: String?
     var notes: String
     var isTransfer: Bool
+    var payeeId: String? = nil
+    var payeeName: String? = nil
+    /// A transfer part's other account.
+    var transferAccountId: String? = nil
 }
 
 /// A transaction edit shown before the engine saves it, as Actual's mobile app

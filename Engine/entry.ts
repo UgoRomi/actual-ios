@@ -359,7 +359,10 @@ async function register() {
             categoryId: child.category ?? null,
             categoryName: child.category ? categoryMap.get(child.category)?.name ?? null : null,
             notes: child.notes || "",
-            // Parts that are transfers are edited in Actual for now.
+            payeeId: child.payee ?? null,
+            payeeName: child.payee ? payeeMap.get(child.payee)?.name ?? null : null,
+            // A part that is a transfer names the other account, as its payee.
+            transferAccountId: child.payee ? payeeMap.get(child.payee)?.transfer_acct ?? null : null,
             isTransfer: Boolean(child.transfer_id || (child.payee && payeeMap.get(child.payee)?.transfer_acct)),
           }))
         : null,

@@ -99,6 +99,57 @@ extension EngineSmoke {
     check(plain?.isParent == false && plain?.categoryId == extra && plain?.splits == nil)
     check(try rows(id).count == 1)
 
+    // Parts with their own payee, and a part that transfers to another account, as in Actual.
+    let transferID = UUID().uuidString.lowercased()
+    var withTransfer = base
+    withTransfer["newId"] = .string(transferID)
+    var transferPart = part(-2_500, food, "to savings")
+    if case .object(var fields) = transferPart {
+      fields["transferAccountId"] = .string(other.id)
+      transferPart = .object(fields)
+    }
+    var ownPayee = part(-7_500, fun, "snacks")
+    if case .object(var fields) = ownPayee {
+      fields["payeeName"] = .string("Native Snack Bar")
+      ownPayee = .object(fields)
+    }
+    withTransfer["splits"] = .array([ownPayee, transferPart])
+    try await save(withTransfer)
+    guard let transferSplit = try await find(transferID), let parts = transferSplit.splits, parts.count == 2
+    else { throw EngineFailure("Transfer split missing") }
+    check(transferSplit.canEdit, "A split with a transfer part can be edited")
+    check(parts[0].payeeName == "Native Snack Bar" && parts[0].transferAccountId == nil)
+    check(parts[1].transferAccountId == other.id && parts[1].isTransfer && parts[1].categoryId == nil,
+          "A transfer between on-budget accounts has no category: \(parts[1])")
+    func linked() async throws -> Transaction? {
+      try await engine.call("register", as: [Transaction].self)
+        .first { $0.accountId == other.id && $0.transferAccountId == account.id && $0.notes == "to savings" }
+    }
+    check(try await linked()?.amount == 2_500, "The transfer part adds its other side")
+    check(try await linked()?.transferInSplit == true)
+    // Changing the transfer part updates its other side; removing it removes that too.
+    var retargeted = withTransfer
+    retargeted.removeValue(forKey: "newId")
+    retargeted["id"] = .string(transferID)
+    var movedPart = part(-3_000, food, "to savings", id: parts[1].id)
+    if case .object(var fields) = movedPart {
+      fields["transferAccountId"] = .string(other.id)
+      movedPart = .object(fields)
+    }
+    var keptPayee = part(-7_000, fun, "snacks", id: parts[0].id)
+    if case .object(var fields) = keptPayee {
+      fields["payeeId"] = parts[0].payeeId.map { .string($0) } ?? .null
+      keptPayee = .object(fields)
+    }
+    retargeted["splits"] = .array([keptPayee, movedPart])
+    try await save(retargeted)
+    check(try await linked()?.amount == 3_000, "The other side follows the part's amount")
+    check(try await find(transferID)?.splits?[0].payeeName == "Native Snack Bar", "A part keeps its own payee")
+    retargeted["splits"] = .array([part(-10_000, fun, "snacks", id: parts[0].id)])
+    try await save(retargeted)
+    check(try await linked() == nil, "Removing the transfer part removes its other side")
+    _ = try await engine.call("deleteTransaction", arguments: ["id": .string(transferID)])
+
     // An ordinary transaction can be split, and a split deleted with its parts.
     try await save(edited.merging(["splits": .array([part(-5_000, food), part(-4_000, fun)])]) { $1 })
     check(try await find(id)?.splits?.count == 2)

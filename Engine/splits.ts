@@ -51,9 +51,8 @@ export async function saveSplit(args: Obj): Promise<void> {
   if (id && !parentBefore) throw new Error("Transaction no longer exists");
   if (parentBefore?.is_child) throw new Error("Open the whole split to edit its parts.");
   const childrenBefore = existing.filter((row) => row.id !== id);
-  // Transfers inside a split link another account's transaction; Actual edits those.
-  if (childrenBefore.some((row) => row.transfer_id) || parentBefore?.transfer_id)
-    throw new Error("This split includes a transfer. Edit it in Actual for now.");
+  // A split's parts can be transfers, but the whole split cannot.
+  if (parentBefore?.transfer_id) throw new Error("This transaction is a transfer. Edit it in Actual for now.");
   const reconciled = Boolean(parentBefore?.reconciled);
   if (reconciled && args.allowReconciled !== true)
     throw new Error("This transaction was reconciled after you opened it. Close it and open it again to review your change.");
@@ -66,8 +65,30 @@ export async function saveSplit(args: Obj): Promise<void> {
   let payee: string | null = text(args.payeeId) || null;
   const name = text(args.payeeName).trim();
   if (!payee && name) payee = await runMutator(() => createPayee(name));
-  if (payee && (await lib.send("api/payees-get")).find((p) => p.id === payee)?.transfer_acct)
-    throw new Error("A split can’t be a transfer. Choose a payee.");
+  const payees = await lib.send("api/payees-get");
+  if (payee && payees.find((p) => p.id === payee)?.transfer_acct)
+    throw new Error("A split can’t be a transfer, but its parts can. Choose a payee.");
+  const accounts = await lib.send("accounts-get");
+  // Each part has its own payee or transfer, as Actual's split rows do, or the transaction's payee.
+  async function partPayee(part: Obj): Promise<string | null> {
+    const transferAccountId = text(part.transferAccountId);
+    if (transferAccountId) {
+      if (transferAccountId === accountId) throw new Error("Choose two different accounts for a transfer.");
+      const transferPayee = payees.find((p) => p.transfer_acct === transferAccountId);
+      if (!transferPayee) throw new Error("The account to transfer with no longer exists. Choose another account.");
+      return transferPayee.id;
+    }
+    const partPayeeId = text(part.payeeId);
+    if (partPayeeId) return partPayeeId;
+    const partName = text(part.payeeName).trim();
+    if (partName) return runMutator(() => createPayee(partName));
+    return payee;
+  }
+  // As for any transfer, one between two on-budget accounts has no category.
+  function budgetTransfer(part: Obj): boolean {
+    const other = accounts.find((a) => a.id === text(part.transferAccountId));
+    return Boolean(other && !other.offbudget && !account!.offbudget);
+  }
 
   const categories = new Set(
     [...(await lib.send("api/categories-get", {})), ...(await lib.send("api/categories-get", { hidden: true }))].map(
@@ -103,19 +124,22 @@ export async function saveSplit(args: Obj): Promise<void> {
     sort_order: parentBefore?.sort_order ?? Date.now(),
   };
   const kept = new Set(childrenBefore.map((row) => row.id));
-  const children = parts.map((part, index) => {
+  const children: Row[] = [];
+  for (const [index, part] of parts.entries()) {
     const childId = text(part.id);
     if (childId && !kept.has(childId)) throw new Error("A part of this split no longer exists. Close it and open it again.");
     if (!childId && part.id !== undefined && part.id !== null) throw new Error("Invalid split part");
-    return makeChild(parent as never, {
-      ...(childId && { id: childId }),
-      amount: integer(part.amount),
-      category: category(part.categoryId),
-      notes: text(part.notes),
-      payee,
-      sort_order: -(index + 1),
-    }) as unknown as Row;
-  });
+    children.push(
+      makeChild(parent as never, {
+        ...(childId && { id: childId }),
+        amount: integer(part.amount),
+        category: budgetTransfer(part) ? null : category(part.categoryId),
+        notes: text(part.notes),
+        payee: await partPayee(part),
+        sort_order: -(index + 1),
+      }) as unknown as Row,
+    );
+  }
   if (parts.length) {
     const checked = recalculateSplit({ ...parent, subtransactions: children } as never) as { error: unknown };
     if (checked.error) throw new Error("The split amounts must add up to the total.");

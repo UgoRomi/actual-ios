@@ -193,10 +193,18 @@ struct TransactionEditor: View {
                 Section {
                     AmountField(label: "Split amount", text: $part.amount)
                     NavigationLink {
+                        PayeePicker(selection: $part.payee, transferAccount: $part.transferAccount,
+                                    payees: model.overview?.payees ?? [], accounts: transferAccounts,
+                                    noneLabel: "Same as transaction")
+                    } label: {
+                        LabeledContent("Payee", value: partPayeeLabel(part))
+                    }
+                    NavigationLink {
                         CategoryPicker(selection: $part.category, groups: model.budget?.visibleGroups ?? [])
                     } label: {
-                        LabeledContent("Category", value: isOffBudget ? "Off budget" : name(ofCategory: part.category))
-                    }.disabled(isOffBudget)
+                        LabeledContent("Category", value: isOffBudget ? "Off budget"
+                                       : partIsBudgetTransfer(part) ? "Transfer" : name(ofCategory: part.category))
+                    }.disabled(isOffBudget || partIsBudgetTransfer(part))
                     TextField("Notes", text: $part.notes, axis: .vertical).lineLimit(1...3)
                     Button("Delete Split", systemImage: "trash", role: .destructive) {
                         splits.removeAll { $0.id == part.id }
@@ -221,6 +229,19 @@ struct TransactionEditor: View {
                 }
             }
         }
+    }
+
+    private func partPayeeLabel(_ part: SplitDraft) -> String {
+        if !part.transferAccount.isEmpty {
+            let other = accounts.first { $0.id == part.transferAccount }?.name ?? "a deleted account"
+            return "Transfer \(isOutflow ? "to" : "from") \(other)"
+        }
+        return part.payee.isEmpty ? "Same as transaction" : part.payee
+    }
+
+    /// As for any transfer, a part moving money to another on-budget account has no category.
+    private func partIsBudgetTransfer(_ part: SplitDraft) -> Bool {
+        accounts.first { $0.id == part.transferAccount }.map { !$0.offbudget } ?? false && !isOffBudget
     }
 
     private func name(ofCategory id: String) -> String {
@@ -279,7 +300,7 @@ struct TransactionEditor: View {
         category = transaction.categoryId ?? ""
         notes = transaction.notes ?? ""
         cleared = transaction.cleared
-        splits = (transaction.splits ?? []).map(SplitDraft.init)
+        splits = (transaction.splits ?? []).map { SplitDraft($0, transactionPayee: transaction.payeeId) }
     }
 
     /// A confirmation covers whatever is reconciled now, as its message describes.
@@ -321,10 +342,18 @@ struct TransactionEditor: View {
                     validation = "Enter each split amount as a positive number, with no more than two decimal places."
                     return
                 }
-                let categoryID = part.category.isEmpty || isOffBudget ? nil : part.category
+                guard part.transferAccount != account else {
+                    validation = "Choose two different accounts for a transfer."
+                    return
+                }
+                let categoryID = part.category.isEmpty || isOffBudget || partIsBudgetTransfer(part) ? nil : part.category
+                let partPayee = part.payee.trimmingCharacters(in: .whitespacesAndNewlines)
                 saved.append(SplitPart(id: part.savedID ?? part.id, amount: isOutflow ? -cents : cents,
                                        categoryId: categoryID, categoryName: categoryID.map(name(ofCategory:)),
-                                       notes: part.notes, isTransfer: false))
+                                       notes: part.notes, isTransfer: !part.transferAccount.isEmpty,
+                                       payeeId: model.overview?.payees.first { $0.name == partPayee }?.id,
+                                       payeeName: partPayee.isEmpty ? nil : partPayee,
+                                       transferAccountId: part.transferAccount.isEmpty ? nil : part.transferAccount))
             }
             let left = parsed - saved.reduce(0) { $0 + abs($1.amount) }
             // As in Actual, a split saves only once its parts add up to the total.
@@ -338,6 +367,10 @@ struct TransactionEditor: View {
                     "amount": .number(part.amount), "notes": .string(part.notes),
                     "categoryId": part.categoryId.map { .string($0) } ?? .null,
                 ]
+                // Without its own payee, a part uses the transaction's.
+                if let transfer = part.transferAccountId { fields["transferAccountId"] = .string(transfer) }
+                else if let payeeID = part.payeeId { fields["payeeId"] = .string(payeeID) }
+                else if let payeeName = part.payeeName { fields["payeeName"] = .string(payeeName) }
                 if let savedID = draft.savedID { fields["id"] = .string(savedID) }
                 return .object(fields)
             })
@@ -384,6 +417,10 @@ struct SplitDraft: Identifiable {
     var amount: String
     var category: String
     var notes: String
+    /// The part's own payee name; empty uses the transaction's payee.
+    var payee = ""
+    /// Another account, for a part that is a transfer.
+    var transferAccount = ""
 
     init(amount: String = "", category: String = "", notes: String = "") {
         id = UUID().uuidString
@@ -393,16 +430,21 @@ struct SplitDraft: Identifiable {
         self.notes = notes
     }
 
-    init(_ part: SplitPart) {
+    /// A saved part. Its payee shows only when it differs from the transaction's.
+    init(_ part: SplitPart, transactionPayee: String?) {
         id = part.id
         savedID = part.id
         amount = Money.editable(abs(part.amount))
         category = part.categoryId ?? ""
         notes = part.notes
+        transferAccount = part.transferAccountId ?? ""
+        payee = part.transferAccountId == nil && part.payeeId != transactionPayee ? part.payeeName ?? "" : ""
     }
 
     /// A part with nothing entered, which saving leaves out.
-    var isEmpty: Bool { (Money.parse(amount) ?? 0) == 0 && category.isEmpty && notes.isEmpty }
+    var isEmpty: Bool {
+        (Money.parse(amount) ?? 0) == 0 && category.isEmpty && notes.isEmpty && payee.isEmpty && transferAccount.isEmpty
+    }
 }
 
 /// Search existing payees, add a new one by name, or choose another account for a transfer.
@@ -412,6 +454,8 @@ struct PayeePicker: View {
     let payees: [Payee]
     /// Accounts to transfer with.
     let accounts: [Account]
+    /// The choice for no payee of its own.
+    var noneLabel = "No payee"
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
     @FocusState private var searchFocused: Bool
@@ -435,7 +479,7 @@ struct PayeePicker: View {
                     Button { choose(query) } label: { Label("Add “\(query)”", systemImage: "plus.circle") }
                 }
             }
-            if query.isEmpty { Section { choice("No payee", value: "") } }
+            if query.isEmpty { Section { choice(noneLabel, value: "") } }
             // Before payees: the account list is short, and payees can number in the hundreds.
             if !matchingAccounts.isEmpty {
                 Section("Transfer to/from") {
