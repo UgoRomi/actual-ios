@@ -571,11 +571,16 @@ struct TransactionSection: Identifiable {
     let transactions: [Transaction]
     var id: String { date }
 
+    /// How many transactions a register shows at first and adds as it scrolls, as Actual pages its queries.
+    /// Listing years of transactions at once stalls the register as it opens.
+    static let pageSize = 200
+
     /// Filter once, then group once. Section rendering must never rescan the full register.
-    static func grouped(_ transactions: [Transaction], accountID: String? = nil,
-                        search: String = "", currency: String = "", locale: Locale = Money.locale) -> [Self] {
+    /// `limit` keeps only the first matching transactions of the newest-first register, and stops filtering once it has them.
+    static func grouped(_ transactions: [Transaction], accountID: String? = nil, search: String = "",
+                        currency: String = "", locale: Locale = Money.locale, limit: Int = .max) -> [Self] {
         let formatter = search.isEmpty ? nil : Money.formatter(currency: currency, locale: locale)
-        let matching = transactions.filter { transaction in
+        let matching = transactions.lazy.filter { transaction in
             guard !transaction.isChild, accountID == nil || transaction.accountId == accountID else { return false }
             guard let formatter else { return true }
             return transaction.title.localizedCaseInsensitiveContains(search)
@@ -589,7 +594,7 @@ struct TransactionSection: Identifiable {
                 }
                 || Money.formatted(transaction.amount, formatter: formatter).localizedCaseInsensitiveContains(search)
         }
-        let grouped = Dictionary(grouping: matching, by: \.date)
+        let grouped = Dictionary(grouping: matching.prefix(limit), by: \.date)
         // Preserve the engine's ordering within each day, including its ID tie-breaker.
         return grouped.keys.sorted(by: >).map { Self(date: $0, transactions: grouped[$0] ?? []) }
     }

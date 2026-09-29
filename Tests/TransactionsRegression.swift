@@ -32,6 +32,11 @@ import SQLite3
         precondition(TransactionSection.grouped(rows, accountID: "b", search: "HOLIDAY").isEmpty)
         precondition(TransactionSection.grouped(rows, search: "missing").isEmpty)
         precondition(TransactionSection.grouped([]).isEmpty)
+        // A page keeps the first matches of the newest-first register, skipping split parts and other accounts.
+        let newestFirst = Array(rows.dropFirst()) + [rows[0]]
+        precondition(ids(TransactionSection.grouped(newestFirst, limit: 2)) == ["parent", "transfer"])
+        precondition(ids(TransactionSection.grouped(newestFirst, search: "MARKET", limit: 3)) == ["parent", "transfer", "older"])
+        precondition(ids(TransactionSection.grouped(newestFirst, accountID: "a", limit: 2)) == ["parent", "notes"])
         for locale in [Locale(identifier: "en_US"), Locale(identifier: "it_IT")] {
             for currency in ["", "EUR"] {
                 let amount = Money.formatted(98765, currency: currency, locale: locale)

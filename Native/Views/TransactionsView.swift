@@ -9,6 +9,7 @@ struct TransactionsView: View {
     var tag: String? = nil
     @Environment(AppModel.self) private var model
     @State private var search = ""
+    @State private var shownCount = TransactionSection.pageSize
     @State private var selectedTransaction: Transaction?
     @State private var isAdding = false
     @State private var showsReconcile = false
@@ -35,8 +36,9 @@ struct TransactionsView: View {
         let listed = tag.map { tag in model.transactions.filter { transaction in
             ([transaction.notes ?? ""] + (transaction.splits ?? []).map(\.notes)).contains { NoteTags.extract($0).contains(tag) }
         } } ?? model.transactions
-        let sections = TransactionSection.grouped(listed, accountID: accountID,
-                                                  search: search, currency: model.currency)
+        let sections = TransactionSection.grouped(listed, accountID: accountID, search: search,
+                                                  currency: model.currency, limit: shownCount)
+        let hasMore = sections.reduce(0) { $0 + $1.transactions.count } == shownCount
         return List {
             if let error = model.errorMessage { Section { ErrorNotice(message: error) { Task { await model.refresh() } } } }
             if let accountID { BankSyncNotice(accountID: accountID) }
@@ -73,8 +75,14 @@ struct TransactionsView: View {
                     else { Text(section.date) }
                 }
             }
+            if hasMore {
+                // Shows the next page once the end of the list scrolls into view.
+                ProgressView().frame(maxWidth: .infinity).listRowBackground(Color.clear)
+                    .onAppear { shownCount += TransactionSection.pageSize }
+            }
             Section { SyncFooter() }.listRowBackground(Color.clear)
         }
+        .onChange(of: search) { shownCount = TransactionSection.pageSize }
         .navigationTitle(accountName ?? "Transactions")
         .searchable(text: $search, prompt: "Payee, category, or amount")
         .toolbar {
