@@ -489,7 +489,7 @@ private struct ScheduleTransactionsView: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            MoneyText(value: item.amount, currency: model.currency, positiveColor: .green)
+            MoneyText.transaction(item.amount, currency: model.currency)
         }
     }
 

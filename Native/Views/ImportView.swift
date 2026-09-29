@@ -130,7 +130,7 @@ struct ImportSheet: View {
                 }.font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            MoneyText(value: row.amount, currency: model.currency, positiveColor: .green)
+            MoneyText.transaction(row.amount, currency: model.currency)
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)

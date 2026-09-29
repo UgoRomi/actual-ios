@@ -1,7 +1,12 @@
 import SwiftUI
 
 enum ActualTheme {
-    static let purple = Color(red: 135 / 255, green: 25 / 255, blue: 224 / 255)
+    /// Actual's purple, lifted in dark appearance as Actual's dark theme does (purple400).
+    static let purple = Color(uiColor: UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 148 / 255, green: 70 / 255, blue: 237 / 255, alpha: 1)
+            : UIColor(red: 135 / 255, green: 25 / 255, blue: 224 / 255, alpha: 1)
+    })
     static let navy = Color(red: 29 / 255, green: 35 / 255, blue: 66 / 255)
     static let background = Color(uiColor: .systemGroupedBackground)
     static let surface = Color(uiColor: .secondarySystemGroupedBackground)
@@ -12,10 +17,19 @@ struct MoneyText: View {
     var currency = ""
     /// Transaction amounts show income in green.
     var positiveColor = Color.primary
+    var negativeColor = Color.red
     var body: some View {
         Text(Money.formatted(value, currency: currency))
             .monospacedDigit()
-            .foregroundStyle(value < 0 ? Color.red : value > 0 ? positiveColor : Color.primary)
+            .foregroundStyle(value < 0 ? negativeColor : value > 0 ? positiveColor : Color.primary)
+    }
+}
+
+extension MoneyText {
+    /// A transaction amount as Actual's registers show it: income in green, spending in the
+    /// text color, so red stays reserved for overspending.
+    static func transaction(_ value: Int, currency: String) -> MoneyText {
+        MoneyText(value: value, currency: currency, positiveColor: .green, negativeColor: .primary)
     }
 }
 

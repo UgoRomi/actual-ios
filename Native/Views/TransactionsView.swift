@@ -185,10 +185,6 @@ struct ScheduledTransactionRow: View {
     let currency: String
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            Image(systemName: "calendar")
-                .font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
-                .frame(width: 36, height: 36)
-                .background(ActualTheme.background, in: Circle())
             VStack(alignment: .leading, spacing: 5) {
                 Text(scheduled.title).font(.body.weight(.medium)).foregroundStyle(.primary)
                 HStack(spacing: 6) {
@@ -198,8 +194,9 @@ struct ScheduledTransactionRow: View {
                 }.font(.caption).foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
-            MoneyText(value: scheduled.amount, currency: currency, positiveColor: .green)
-                .font(.body.weight(.semibold)).opacity(0.7)
+            // Actual's register shows previews in light text.
+            MoneyText(value: scheduled.amount, currency: currency, positiveColor: .green, negativeColor: .secondary)
+                .font(.body.weight(.semibold))
         }.padding(.vertical, 6).contentShape(Rectangle())
             .accessibilityElement(children: .combine)
             .accessibilityHint("Post or skip this scheduled transaction")
@@ -211,19 +208,19 @@ struct TransactionRow: View {
     let currency: String
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            Image(systemName: transaction.isTransfer ? "arrow.left.arrow.right" : transaction.isParent ? "square.split.2x2" : transaction.amount < 0 ? "arrow.up.right" : "arrow.down.left")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(transaction.amount < 0 ? Color.secondary : ActualTheme.purple)
-                .frame(width: 36, height: 36)
-                .background(ActualTheme.background, in: Circle())
             VStack(alignment: .leading, spacing: 5) {
                 Text(transaction.title).font(.body.weight(.medium)).foregroundStyle(.primary)
-                Text(transaction.canEdit ? transaction.detail : "\(transaction.detail) · view only")
-                    .font(.caption).foregroundStyle(.secondary)
+                // As in Actual's mobile register, transfers and splits are marked beside the category.
+                // The title and detail already say so to VoiceOver.
+                HStack(spacing: 4) {
+                    if transaction.isTransfer { Image(systemName: "arrow.left.arrow.right").accessibilityHidden(true) }
+                    else if transaction.isParent { Image(systemName: "square.split.2x2").accessibilityHidden(true) }
+                    Text(transaction.canEdit ? transaction.detail : "\(transaction.detail) · view only")
+                }.font(.caption).foregroundStyle(.secondary)
                 if let notes = transaction.notes, !notes.isEmpty { NotesText(notes: notes).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
             }
             Spacer(minLength: 8)
-            MoneyText(value: transaction.amount, currency: currency, positiveColor: .green).font(.body.weight(.semibold))
+            MoneyText.transaction(transaction.amount, currency: currency).font(.body.weight(.semibold))
         }.padding(.vertical, 6).contentShape(Rectangle())
             .accessibilityElement(children: .combine)
     }

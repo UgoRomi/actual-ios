@@ -65,7 +65,7 @@ struct CategoryTransactionsView: View {
                 }
             }
             Spacer(minLength: 8)
-            MoneyText(value: entry.amount, currency: model.currency, positiveColor: .green).font(.body.weight(.semibold))
+            MoneyText.transaction(entry.amount, currency: model.currency).font(.body.weight(.semibold))
         }.padding(.vertical, 4).contentShape(Rectangle())
             .accessibilityElement(children: .combine)
     }

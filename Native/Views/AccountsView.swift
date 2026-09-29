@@ -12,6 +12,12 @@ struct AccountsView: View {
                     if overview.accounts.isEmpty {
                         ContentUnavailableView("No accounts yet", systemImage: "creditcard", description: Text("Add an account with + to track its balance and transactions."))
                     }
+                    else {
+                        // Actual's mobile accounts page leads with the total of all open accounts.
+                        Section {} header: {
+                            totalHeader("All accounts", accounts: overview.openAccounts).font(.headline).foregroundStyle(.primary)
+                        }
+                    }
                     accountSection("On budget", accounts: overview.accounts.filter { !$0.offbudget && !$0.closed })
                     accountSection("Off budget", accounts: overview.accounts.filter { $0.offbudget && !$0.closed })
                     accountSection("Closed", accounts: overview.accounts.filter(\.closed))
@@ -32,16 +38,12 @@ struct AccountsView: View {
 
     @ViewBuilder private func accountSection(_ title: String, accounts: [Account]) -> some View {
         if !accounts.isEmpty {
-            Section(title) {
+            Section {
                 ForEach(accounts) { account in
                     NavigationLink {
                         TransactionsView(accountID: account.id, accountName: account.name, embedsNavigation: false)
                     } label: {
                         HStack(spacing: 14) {
-                            Image(systemName: account.closed ? "archivebox" : "creditcard")
-                                .font(.title3).foregroundStyle(ActualTheme.purple)
-                                .frame(width: 44, height: 44)
-                                .background(ActualTheme.purple.opacity(0.09), in: RoundedRectangle(cornerRadius: 13))
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(account.name).font(.body.weight(.medium))
                                 if model.syncingAccountIDs.contains(account.id) {
@@ -56,8 +58,6 @@ struct AccountsView: View {
                                     } else {
                                         Text("Bank connected · pull to refresh").font(.caption).foregroundStyle(.secondary)
                                     }
-                                } else {
-                                    Text(account.closed ? "Closed account" : "Current balance").font(.caption).foregroundStyle(.secondary)
                                 }
                             }
                             Spacer(minLength: 8)
@@ -65,7 +65,18 @@ struct AccountsView: View {
                         }.padding(.vertical, 6)
                     }
                 }
+            } header: {
+                totalHeader(title, accounts: accounts)
             }
+        }
+    }
+
+    /// A section title with its accounts' total balance, as Actual's mobile accounts page shows.
+    private func totalHeader(_ title: String, accounts: [Account]) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            MoneyText(value: accounts.reduce(0) { $0 + $1.balance }, currency: model.currency)
         }
     }
 }

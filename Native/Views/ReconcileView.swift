@@ -110,8 +110,9 @@ struct ClearedToggle: View {
             }
         } label: {
             Image(systemName: transaction.isReconciled ? "lock.fill" : transaction.cleared ? "checkmark.circle.fill" : "circle")
-                .font(.title2)
-                .foregroundStyle(transaction.isReconciled || transaction.cleared ? ActualTheme.purple : Color.secondary)
+                .font(.body)
+                // Actual's register marks cleared and reconciled transactions in green.
+                .foregroundStyle(transaction.isReconciled || transaction.cleared ? Color.green : Color.secondary)
                 .frame(width: 44, height: 44).contentShape(Rectangle())
         }
         .buttonStyle(.borderless)

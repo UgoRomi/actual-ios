@@ -331,3 +331,9 @@ The compact budget screen and quick filters from `origin/main` were merged with 
 On a new iPhone 17 Pro / iOS 27.0 simulator, every demo UI test passed, including the new `testDemoTagsAndSpecificDays`, with the navigation test run first on its own. After the tests, the app's App Group container held the widget snapshot, with To Budget and the four categories most in need in the budget's number format. The widget extension builds and is embedded in the app.
 
 Not verified end to end: the widget on a home screen, background refresh as scheduled by iOS, Shortcuts and Siri running the intents, importing through the Files picker, and signing the App Group on a device.
+
+## Design pass: register, accounts, and dark accent (2026-09-29)
+
+Changes from a design review, checked against Actual's `DESIGN.md` and its mobile components at the pinned revision. Registers, category transactions, schedule links, and the import preview show spending in the text color and income in green, as `TransactionListItem.tsx` does; upcoming amounts are secondary. The leading direction badge is gone; transfers and splits keep a small glyph beside the category. The cleared toggle is a body-size glyph, green when cleared, as Actual marks it. Account rows drop the icon tile and the "Current balance" filler, and section headers show totals, with **All accounts** for open accounts, matching `AccountsPage.tsx`. `ActualTheme.purple` and the asset accent use Actual's dark-theme `purple400` (#9446ED) in dark appearance.
+
+The app built for an iPhone 17 Pro / iOS 26.5 simulator, and `testDemoBudgetNavigationAndTransactionEditor` (run first on a fresh install) and `testDemoReconciliation` passed. Screenshots of Accounts and Transactions in light, and Budget in dark, were inspected; the account totals add up to the Net Worth report's total. `docs/screenshots/03-accounts.png` and `04-transactions.png` show the new layout.
