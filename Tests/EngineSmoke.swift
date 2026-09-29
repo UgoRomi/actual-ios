@@ -60,6 +60,7 @@ import Foundation
     try await splits(data: data.appendingPathComponent("budget"), resources: resources)
     try await schedules(data: data.appendingPathComponent("budget"), resources: resources)
     try await rules(data: data.appendingPathComponent("budget"), resources: resources)
+    try await importing(data: data.appendingPathComponent("budget"), resources: resources)
     try await budgetDeletion(data: data.appendingPathComponent("deletion"), resources: resources)
     try await reports(data: data.appendingPathComponent("reports"), resources: resources)
     print(

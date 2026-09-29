@@ -323,7 +323,7 @@ final class AppModel {
         let switchesBudget = ["open", "download", "demo"].contains(method)
         let isEdit = ["saveTransaction", "deleteTransaction", "budget", "setCleared", "unlockTransaction",
                       "createReconciliationTransaction", "finishReconciliation", "saveTargets",
-                      "applyTargets", "budgetAction"].contains(method) || Self.managementMethods.contains(method)
+                      "applyTargets", "budgetAction", "commitImport"].contains(method) || Self.managementMethods.contains(method)
         if method == "sync" {
             guard let task = beginBudgetSync() else {
                 errorMessage = "This budget is local only. Open a synced budget to synchronize."
@@ -529,6 +529,29 @@ final class AppModel {
     /// Every schedule with its status. Reading schedules changes nothing.
     func schedules() async throws -> [Schedule] {
         try await client().call("schedules", as: [Schedule].self)
+    }
+
+    /// Reads a transaction file and previews its import. Nothing is saved yet.
+    func prepareImport(accountID: String, fileName: String, data: Data,
+                       settings: ImportPreview.Settings?) async throws -> ImportPreview {
+        var arguments: [String: JSONValue] = [
+            "accountId": .string(accountID), "fileName": .string(fileName), "data": .string(data.base64EncodedString()),
+        ]
+        if let settings { arguments["settings"] = settings.json }
+        return try await client().call("prepareImport", arguments: arguments, as: ImportPreview.self)
+    }
+
+    /// Imports the chosen rows, matching existing transactions as Actual does. Returns how many were added and updated.
+    func commitImport(accountID: String, fileName: String, transactions: [JSONValue],
+                      settings: ImportPreview.Settings) async -> (added: Int, updated: Int)? {
+        struct Counts: Decodable { let added: Int; let updated: Int }
+        var counts: Counts?
+        let imported = await perform("commitImport", arguments: [
+            "accountId": .string(accountID), "fileName": .string(fileName),
+            "transactions": .array(transactions), "settings": settings.json,
+        ]) { data in counts = try? JSONDecoder().decode(Counts.self, from: data) }
+        guard imported, let counts else { return nil }
+        return (counts.added, counts.updated)
     }
 
     /// A schedule's linked transactions, and unlinked ones its conditions match.

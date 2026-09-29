@@ -40,6 +40,8 @@
 		050D7263F02742B6BF447F6D /* Native/Rules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81255675588A43298DECAEB3 /* Native/Rules.swift */; };
 		6E739054A39D46758AFA85A3 /* Native/Views/RulesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4125543F935A49B49486C33E /* Native/Views/RulesView.swift */; };
 		1EE747E8A7BA4902B438745D /* Native/Views/TagsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F6D4459327E4E6FB05D7E0F /* Native/Views/TagsView.swift */; };
+		5053EA6B4042432DA9A0EB90 /* Native/Views/ImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35E8712517604F4091EB62AC /* Native/Views/ImportView.swift */; };
+		2ACCE8679E7847AFB73B2225 /* Native/Importing.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB9A221DDF49480E9A44C372 /* Native/Importing.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -102,6 +104,8 @@
 		81255675588A43298DECAEB3 /* Native/Rules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Rules.swift; sourceTree = "<group>"; };
 		4125543F935A49B49486C33E /* Native/Views/RulesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/RulesView.swift; sourceTree = "<group>"; };
 		3F6D4459327E4E6FB05D7E0F /* Native/Views/TagsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/TagsView.swift; sourceTree = "<group>"; };
+		35E8712517604F4091EB62AC /* Native/Views/ImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ImportView.swift; sourceTree = "<group>"; };
+		AB9A221DDF49480E9A44C372 /* Native/Importing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Importing.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -149,6 +153,8 @@
 				443F99244216BE707150CE77 /* Native/Views/AccountsView.swift */,
 				9E4B2C7A1F6D3E8B5A0C4F21 /* Native/Views/AmountField.swift */,
 				83416C8B7281940A2D331143 /* Native/Views/BudgetView.swift */,
+				AB9A221DDF49480E9A44C372 /* Native/Importing.swift */,
+				35E8712517604F4091EB62AC /* Native/Views/ImportView.swift */,
 				3F6D4459327E4E6FB05D7E0F /* Native/Views/TagsView.swift */,
 				4125543F935A49B49486C33E /* Native/Views/RulesView.swift */,
 				81255675588A43298DECAEB3 /* Native/Rules.swift */,
@@ -310,6 +316,8 @@
 				AF716BBB3F56F5E55D747809 /* Native/Views/AccountsView.swift in Sources */,
 				5C1A7E0B9D2F4A6E8B3C1D20 /* Native/Views/AmountField.swift in Sources */,
 				AB1BDB58B28CF1FDFFC17C52 /* Native/Views/BudgetView.swift in Sources */,
+				2ACCE8679E7847AFB73B2225 /* Native/Importing.swift in Sources */,
+				5053EA6B4042432DA9A0EB90 /* Native/Views/ImportView.swift in Sources */,
 				1EE747E8A7BA4902B438745D /* Native/Views/TagsView.swift in Sources */,
 				6E739054A39D46758AFA85A3 /* Native/Views/RulesView.swift in Sources */,
 				050D7263F02742B6BF447F6D /* Native/Rules.swift in Sources */,

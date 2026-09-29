@@ -18,6 +18,7 @@ import { canSyncBank, syncBankAccounts } from "./bank-sync";
 import { budgetAction, envelopeSummary } from "./budget-actions";
 import { manage, managementMethods } from "./management";
 import { ruleCommand, rulesList, ruleWrites } from "./rules";
+import { commitImport, prepareImport } from "./importing";
 import { saveSplit } from "./splits";
 import { scheduleCommand, schedulePreviews, schedules, scheduleWrites } from "./schedules";
 import {
@@ -417,7 +418,7 @@ async function perform(method: string, args: Obj): Promise<unknown> {
     [
       "saveTransaction", "deleteTransaction", "budget", "sync", "syncAccounts", "setCleared",
       "unlockTransaction", "createReconciliationTransaction", "finishReconciliation", "saveTargets",
-      "applyTargets", "budgetAction", "saveSplit", ...managementMethods, ...scheduleWrites, ...ruleWrites,
+      "applyTargets", "budgetAction", "saveSplit", "commitImport", ...managementMethods, ...scheduleWrites, ...ruleWrites,
     ].includes(method)
   ) {
     const warning = syncWarning();
@@ -746,6 +747,10 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       if (method === "schedules") return runMutator(schedules);
       if (method === "schedulePreviews") return runMutator(schedulePreviews);
       if (method === "rules") return runMutator(rulesList);
+      if (method === "prepareImport" || method === "commitImport") {
+        if (!getPrefs()?.id) throw new Error("Open a budget first.");
+        return method === "prepareImport" ? prepareImport(args) : commitImport(args);
+      }
       if ([...ruleWrites, "ruleMatches"].includes(method)) {
         if (!getPrefs()?.id) throw new Error("Open a budget first.");
         return ruleCommand(method, args);

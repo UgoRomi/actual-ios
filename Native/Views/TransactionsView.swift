@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct TransactionsView: View {
     var accountID: String? = nil
@@ -14,6 +15,9 @@ struct TransactionsView: View {
     @State private var renaming = false
     @State private var editingNotes = false
     @State private var closing = false
+    @State private var choosingFile = false
+    @State private var importing: ImportFile?
+    @State private var fileError: String?
     @State private var selectedScheduled: ScheduledTransaction?
     @Environment(\.dismiss) private var dismiss
 
@@ -115,6 +119,23 @@ struct TransactionsView: View {
                 Text("Scheduled for \(date.formatted(.dateTime.month(.wide).day().year()))")
             }
         }
+        // As Actual's import dialog: OFX/QFX, QIF, CSV/TSV, or CAMT XML from Files.
+        .fileImporter(isPresented: $choosingFile, allowedContentTypes: UTType.importable) { result in
+            switch result {
+            case .success(let url):
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                do { importing = ImportFile(name: url.lastPathComponent, data: try Data(contentsOf: url)) }
+                catch { fileError = "The file could not be opened. \(error.localizedDescription)" }
+            case .failure(let error): fileError = error.localizedDescription
+            }
+        }
+        .sheet(item: $importing) { file in
+            if let accountID { ImportSheet(accountID: accountID, fileName: file.name, data: file.data) }
+        }
+        .alert("Import", isPresented: Binding(get: { fileError != nil }, set: { if !$0 { fileError = nil } })) {
+            Button("OK") {}
+        } message: { Text(fileError ?? "") }
         .sheet(isPresented: $renaming) {
             if let account {
                 NameSheet(title: "Rename Account", initial: account.name) { name in
@@ -136,6 +157,9 @@ struct TransactionsView: View {
         Menu("Account options", systemImage: "ellipsis.circle") {
             Button("Rename Account", systemImage: "pencil") { renaming = true }
             Button("Account Notes", systemImage: "note.text") { editingNotes = true }
+            if account?.closed != true {
+                Button("Import Transactions", systemImage: "square.and.arrow.down") { choosingFile = true }
+            }
             if account?.closed == true {
                 Button("Reopen Account", systemImage: "arrow.uturn.backward") {
                     if let accountID { Task { await model.manage("reopenAccount", ["id": .string(accountID)]) } }
@@ -196,4 +220,11 @@ struct TransactionRow: View {
         }.padding(.vertical, 6).contentShape(Rectangle())
             .accessibilityElement(children: .combine)
     }
+}
+
+/// A file chosen for import.
+struct ImportFile: Identifiable {
+    let id = UUID()
+    let name: String
+    let data: Data
 }
