@@ -1,12 +1,7 @@
 // Transaction rules, as Actual's rules pages list, edit, and apply them.
 import { lib } from "@actual/core";
 import { getFieldError } from "@actual/source/shared/rules.ts";
-
-type Obj = Record<string, unknown>;
-
-function text(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
+import { text, type Obj } from "./args";
 
 async function all() {
   return (await lib.send("rules-get")) as unknown as Obj[];

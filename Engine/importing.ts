@@ -10,16 +10,12 @@ import { getPrefs, savePrefs } from "@actual/prefs";
 import { amountToInteger, looselyParseAmount } from "@actual/source/shared/util.ts";
 
 import { removeFile, writeFile } from "./adapters/fs";
+import { text, type Obj } from "./args";
 
-type Obj = Record<string, unknown>;
 type Mapping = { date: string | null; payee: string | null; notes: string | null; amount: string | null;
   inflow: string | null; outflow: string | null; category: string | null };
 
 const dateFormats = ["yyyy mm dd", "yy mm dd", "mm dd yyyy", "mm dd yy", "dd mm yyyy", "dd mm yy"];
-
-function text(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
 
 // desktop-client's parseDate: month names become numbers, then the parts are ordered.
 function parseDate(value: unknown, order: string): string | null {

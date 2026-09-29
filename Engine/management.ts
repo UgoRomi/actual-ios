@@ -3,12 +3,9 @@
 // save mutations do, so upstream validation sees every required field.
 import { lib } from "@actual/core";
 import { integerToAmount } from "@actual/source/shared/util.ts";
+import type { PayeeEntity } from "@actual/source/types/models/payee.ts";
+import { text, type Obj } from "./args";
 
-type Obj = Record<string, unknown>;
-
-function text(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
 function name(value: unknown, what: string): string {
   const trimmed = text(value).trim();
   if (!trimmed) throw new Error(`Enter a name for the ${what}.`);
@@ -306,17 +303,19 @@ async function findTag(id: unknown) {
 }
 
 // Transfer payees stand for accounts, which Actual never renames, merges, or deletes as payees.
-async function ordinaryPayee(id: unknown) {
-  const payee = (await lib.send("payees-get")).find((p) => p.id === id);
+function ordinary(payees: PayeeEntity[], id: unknown): PayeeEntity {
+  const payee = payees.find((p) => p.id === id);
   if (!payee) throw new Error("This payee no longer exists.");
   if (payee.transfer_acct) throw new Error("Transfer payees belong to accounts and can’t be changed here.");
   return payee;
 }
+async function ordinaryPayee(id: unknown) {
+  return ordinary(await lib.send("payees-get"), id);
+}
 async function payeeIds(value: unknown): Promise<string[]> {
   if (!Array.isArray(value) || !value.length) throw new Error("Choose at least one payee.");
-  const ids: string[] = [];
-  for (const id of value) ids.push((await ordinaryPayee(id)).id);
-  return ids;
+  const payees = await lib.send("payees-get");
+  return value.map((id) => ordinary(payees, id).id);
 }
 
 export const managementMethods = [

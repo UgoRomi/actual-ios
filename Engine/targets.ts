@@ -12,8 +12,8 @@ import { getDecimalPlaces } from "@actual/source/shared/currencies.ts";
 import * as months from "@actual/source/shared/months.ts";
 import { amountToInteger, integerToAmount } from "@actual/source/shared/util.ts";
 import type { Template } from "@actual/source/types/models/templates.ts";
+import { day, month as checkMonth, type Obj } from "./args";
 
-type Obj = Record<string, unknown>;
 // Active, named schedules that are not completed: the ones targets can cover.
 type Schedule = { id: string; name: string };
 const specialSources = ["all income", "available funds"];
@@ -43,10 +43,6 @@ function whole(value: unknown, name: string): number {
 function money(value: unknown, places: number): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value)) throw new Error("Invalid monetary amount");
   return integerToAmount(value, places);
-}
-function day(value: unknown): string {
-  if (typeof value !== "string" || !months.isValidYearMonthDay(value)) throw new Error("Choose a valid date.");
-  return value;
 }
 // Validation reports a missing or invalid month.
 function yearMonth(value: unknown): string {
@@ -339,10 +335,6 @@ async function expenseCategory(categoryId: string) {
   // shows expense categories only.
   if (category.is_income) throw new Error("Set targets for income categories in Actual.");
   return category;
-}
-
-function checkMonth(month: string) {
-  if (!months.isValidYearMonth(month)) throw new Error("Invalid budget month");
 }
 
 async function preview(month: string, categoryId: string, templates: Template[], ctx: Context) {

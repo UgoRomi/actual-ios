@@ -6,18 +6,9 @@ import { lib } from "@actual/core";
 import { createPayee } from "@actual/source/server/accounts/payees.ts";
 import { runMutator } from "@actual/source/server/mutators.ts";
 import { makeChild, recalculateSplit } from "@actual/source/shared/transactions.ts";
+import { integer, text, uuid, type Obj } from "./args";
 
-type Obj = Record<string, unknown>;
 type Row = Obj & { id: string };
-
-function text(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-function integer(value: unknown): number {
-  if (typeof value !== "number" || !Number.isSafeInteger(value)) throw new Error("Invalid monetary amount");
-  return value;
-}
-const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 async function rows(id: string): Promise<Row[]> {
   const { data } = await lib.send(

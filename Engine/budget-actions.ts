@@ -5,13 +5,8 @@ import { lib } from "@actual/core";
 import { getBudgetType } from "@actual/source/server/budget/base.ts";
 import * as sheet from "@actual/source/server/sheet.ts";
 import { sheetForMonth } from "@actual/source/shared/months.ts";
+import { month, type Obj } from "./args";
 
-type Obj = Record<string, unknown>;
-
-function month(value: unknown): string {
-  if (typeof value !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(value)) throw new Error("Invalid budget month");
-  return value;
-}
 function positive(value: unknown): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0)
     throw new Error("Enter an amount greater than zero.");

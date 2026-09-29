@@ -5,8 +5,8 @@ import { lib } from "@actual/core";
 import { getBudgetType } from "@actual/source/server/budget/base.ts";
 import * as months from "@actual/source/shared/months.ts";
 import type { Query } from "@actual/source/shared/query.ts";
+import type { Obj } from "./args";
 
-type Obj = Record<string, unknown>;
 type Mode =
   | "sliding-window"
   | "static"
@@ -641,14 +641,20 @@ async function spending(meta: Obj) {
   const cumulative = new Map(monthList.map((m) => [m, 0]));
   let budget = 0;
   const today = months.currentDay();
+  // Each month's dates, bucketed by day of month.
+  const buckets = new Map(monthList.map((month) => {
+    const byDay: string[][] = Array.from({ length: 28 }, () => []);
+    for (const date of months.dayRangeInclusive(month + "-01", months.getMonthEnd(month + "-01")))
+      byDay[Math.min(Number(date.slice(8, 10)), 28) - 1].push(date);
+    return [month, byDay] as const;
+  }));
   const days = [];
   for (let day = 1; day <= 28; day++) {
     let averageSum = 0, averageCount = 0;
     const values = new Map<string, number | null>();
     for (const month of monthList) {
       let value: number | null = null;
-      const monthDays = months.dayRangeInclusive(month + "-01", months.getMonthEnd(month + "-01"));
-      for (const date of monthDays.filter((date) => Math.min(Number(date.slice(8, 10)), 28) === day)) {
+      for (const date of buckets.get(month)![day - 1]) {
         const spent = (cumulative.get(month) ?? 0) + (byDate.get(date) ?? 0);
         cumulative.set(month, spent);
         if (month === compare) budget -= dailyBudget;

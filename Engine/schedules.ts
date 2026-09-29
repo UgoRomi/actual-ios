@@ -11,20 +11,9 @@ import {
   getStatus,
   scheduleIsRecurring,
 } from "@actual/source/shared/schedules.ts";
+import { day, integer, text, type Obj } from "./args";
 
-type Obj = Record<string, unknown>;
-
-function text(value: unknown): string {
-  return typeof value === "string" ? value : "";
-}
-function integer(value: unknown): number {
-  if (typeof value !== "number" || !Number.isSafeInteger(value)) throw new Error("A valid amount is required");
-  return value;
-}
-function day(value: unknown, what: string): string {
-  if (typeof value !== "string" || !months.isValidYearMonthDay(value)) throw new Error(`Choose a valid ${what}.`);
-  return value;
-}
+const invalidAmount = "A valid amount is required";
 
 async function all(): Promise<Obj[]> {
   return (await lib.send("query", lib.q("schedules").select("*").serialize())).data as Obj[];
@@ -168,8 +157,8 @@ async function save(args: Obj) {
   let amount: number | { num1: number; num2: number };
   if (op === "isbetween") {
     const range = (args.amount ?? {}) as Obj;
-    amount = { num1: integer(range.num1), num2: integer(range.num2) };
-  } else amount = integer(args.amount);
+    amount = { num1: integer(range.num1, invalidAmount), num2: integer(range.num2, invalidAmount) };
+  } else amount = integer(args.amount, invalidAmount);
 
   const rawDate = args.date;
   if (rawDate == null) throw new Error("Date is required");
@@ -252,7 +241,7 @@ export async function scheduleCommand(method: string, args: Obj): Promise<unknow
     }
     case "linkScheduleTransactions": {
       const schedule = await find(args.id);
-      const ids = Array.isArray(args.transactionIds) ? args.transactionIds.map(text).filter(Boolean) : [];
+      const ids = Array.isArray(args.transactionIds) ? args.transactionIds.map((id) => text(id)).filter(Boolean) : [];
       if (!ids.length) throw new Error("Choose transactions to link.");
       const link = args.link !== false;
       await lib.send("transactions-batch-update", {

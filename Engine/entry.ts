@@ -30,22 +30,9 @@ import {
 } from "./reconcile";
 import { dashboard, report, reportTransactions } from "./reports";
 import { applyTargets, categoryTargets, previewTargets, saveTargets } from "./targets";
+import { integer, month as checkMonth, object, text, uuid, type Obj } from "./args";
 
 declare function _reply(id: string, ok: boolean, payload: string): void;
-type Obj = Record<string, unknown>;
-function object(value: unknown): Obj {
-  if (value && typeof value === "object" && !Array.isArray(value))
-    return Object.fromEntries(Object.entries(value));
-  throw new Error("Expected an object");
-}
-function text(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
-}
-function integer(value: unknown): number {
-  if (typeof value !== "number" || !Number.isSafeInteger(value))
-    throw new Error("Invalid monetary amount");
-  return value;
-}
 // Some upstream failures, such as FileUploadError, are thrown as plain objects.
 function describe(error: unknown): string {
   if (error instanceof Error) return error.message;
@@ -152,6 +139,9 @@ function syncWarning(): SyncWarning | null {
 function droppedSyncKey() {
   return "native-dropped-sync:" + getPrefs()?.id;
 }
+function requireBudget() {
+  if (!getPrefs()?.id) throw new Error("Open a budget first.");
+}
 async function start() {
   if (ready) return;
   const saved = native<Obj>("settings.read");
@@ -187,9 +177,6 @@ async function budgets() {
     name: file.name || file.id,
     cloudFileId: file.cloudFileId ?? null,
   }));
-}
-function checkMonth(month: string) {
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error("Invalid budget month");
 }
 // Budget metadata, accounts with balances, and payees.
 async function overview() {
@@ -413,7 +400,6 @@ async function editable(id: string, allowReconciled: boolean, allowReconciledTra
   return row;
 }
 async function perform(method: string, args: Obj): Promise<unknown> {
-  await start();
   if (
     [
       "saveTransaction", "deleteTransaction", "budget", "sync", "syncAccounts", "setCleared",
@@ -464,7 +450,7 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       // Actual only warns when another device's changes are discarded; this
       // device may then show different values for them. Once the user accepts
       // that, continue as Actual does. Newer-version changes stay blocked.
-      if (!getPrefs()?.id) throw new Error("Open a budget first.");
+      requireBudget();
       if (syncWarning()?.kind !== "dropped") throw new Error("There is no warning to dismiss.");
       await storage.removeItem(droppedSyncKey());
       return {};
@@ -659,7 +645,7 @@ async function perform(method: string, args: Obj): Promise<unknown> {
         // The batch handler saves without running rules again.
         // The app may choose the ID, so it can show the transaction before it is saved.
         const newId = text(args.newId);
-        if (newId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(newId))
+        if (newId && !uuid.test(newId))
           throw new Error("Invalid transaction ID");
         const draft = {
           id: newId || crypto.randomUUID(),
@@ -741,22 +727,22 @@ async function perform(method: string, args: Obj): Promise<unknown> {
     }
     default:
       if ([...managementMethods, "categoryNeedsTransfer", "payees", "tags"].includes(method)) {
-        if (!getPrefs()?.id) throw new Error("Open a budget first.");
+        requireBudget();
         return manage(method, args);
       }
       if (method === "schedules") return runMutator(schedules);
       if (method === "schedulePreviews") return runMutator(schedulePreviews);
       if (method === "rules") return runMutator(rulesList);
       if (method === "prepareImport" || method === "commitImport") {
-        if (!getPrefs()?.id) throw new Error("Open a budget first.");
+        requireBudget();
         return method === "prepareImport" ? prepareImport(args) : commitImport(args);
       }
       if ([...ruleWrites, "ruleMatches"].includes(method)) {
-        if (!getPrefs()?.id) throw new Error("Open a budget first.");
+        requireBudget();
         return ruleCommand(method, args);
       }
       if ([...scheduleWrites, "upcomingDates", "scheduleTransactions"].includes(method)) {
-        if (!getPrefs()?.id) throw new Error("Open a budget first.");
+        requireBudget();
         return scheduleCommand(method, args);
       }
       throw new Error("Unknown operation: " + method);
