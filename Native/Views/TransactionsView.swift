@@ -157,9 +157,7 @@ struct ScheduledTransactionRow: View {
                 Text(scheduled.title).font(.body.weight(.medium)).foregroundStyle(.primary)
                 HStack(spacing: 6) {
                     ScheduleStatusBadge(status: scheduled.shownStatus)
-                    if let date = BudgetDate.date(scheduled.date) {
-                        Text(date, format: .dateTime.month(.abbreviated).day())
-                    }
+                    Text(BudgetDate.display(scheduled.date))
                     if let category = scheduled.categoryName { Text("· \(category)") }
                 }.font(.caption).foregroundStyle(.secondary)
             }

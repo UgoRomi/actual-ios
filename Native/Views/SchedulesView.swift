@@ -122,8 +122,8 @@ struct SchedulesView: View {
                     .font(.caption).foregroundStyle(.secondary)
                 HStack(spacing: 6) {
                     ScheduleStatusBadge(status: schedule.status)
-                    if let next = schedule.nextDate.flatMap(BudgetDate.date) {
-                        Text(next, format: .dateTime.month(.abbreviated).day().year()).font(.caption).foregroundStyle(.secondary)
+                    if let next = schedule.nextDate {
+                        Text(BudgetDate.display(next)).font(.caption).foregroundStyle(.secondary)
                     }
                     if case .recurring = schedule.date {
                         Image(systemName: "repeat").font(.caption2).foregroundStyle(.secondary).accessibilityLabel("Repeats")

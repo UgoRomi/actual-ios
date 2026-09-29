@@ -128,7 +128,11 @@ final class AppModel {
         let overviewResult = loadedOverview.flatMap { current(.overview) ? $0 : nil }
         let registerResult = loadedTransactions.flatMap { current(.register) ? $0 : nil }
         guard overviewResult != nil || registerResult != nil else { return }
-        if let overviewResult { self.loadedOverview = overviewResult }
+        if let overviewResult {
+            self.loadedOverview = overviewResult
+            Money.configure(overviewResult.format)
+            BudgetDate.configure(overviewResult.format)
+        }
         if let registerResult { self.loadedTransactions = registerResult }
         if registerResult != nil, let loadedUpcoming { upcoming = loadedUpcoming }
         showPendingEdits()
@@ -153,6 +157,8 @@ final class AppModel {
         budget = nil
         transactions = []
         upcoming = []
+        Money.configure(nil)
+        BudgetDate.configure(nil)
     }
 
     func enteredBackground() {
@@ -497,7 +503,7 @@ final class AppModel {
     static let managementMethods: Set<String> = [
         "createCategoryGroup", "updateCategoryGroup", "deleteCategoryGroup", "createCategory", "updateCategory",
         "deleteCategory", "moveCategory", "moveCategoryGroup", "saveNotes", "createAccount", "updateAccount",
-        "closeAccount", "reopenAccount", "renamePayee", "deletePayees", "mergePayees",
+        "closeAccount", "reopenAccount", "renamePayee", "deletePayees", "mergePayees", "savePreference",
         "saveRule", "deleteRule", "applyRule",
         // Schedules: posting adds a transaction, and saving can add a payee.
         "saveSchedule", "deleteSchedule", "skipSchedule", "postSchedule", "completeSchedule",

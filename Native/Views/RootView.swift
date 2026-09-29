@@ -16,6 +16,8 @@ struct RootView: View {
                 }
             } else { WelcomeView() }
         }
+        // Date pickers start the week on the budget's first day, as Actual's do.
+        .environment(\.calendar, model.overview.map { _ in BudgetDate.calendar } ?? .autoupdatingCurrent)
         .disabled(model.isOpeningBudget)
         .overlay {
             if !model.hasStarted || model.isOpeningBudget { openingBudget }

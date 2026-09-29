@@ -197,6 +197,20 @@ export async function manage(method: string, args: Obj): Promise<unknown> {
       await lib.send("account-reopen", { id: account.id });
       return {};
     }
+    case "savePreference": {
+      // The formatting settings from Actual's settings page, with its choices.
+      const choices: Record<string, string[]> = {
+        numberFormat: ["comma-dot", "dot-comma", "space-comma", "apostrophe-dot", "comma-dot-in"],
+        hideFraction: ["true", "false"],
+        dateFormat: ["MM/dd/yyyy", "dd/MM/yyyy", "yyyy-MM-dd", "MM.dd.yyyy", "dd.MM.yyyy", "dd-MM-yyyy"],
+        firstDayOfWeekIdx: ["0", "1", "2", "3", "4", "5", "6"],
+      };
+      const id = text(args.id);
+      const value = text(args.value);
+      if (!choices[id]?.includes(value)) throw new Error("Choose one of the offered settings.");
+      await lib.send("preferences/save", { id, value } as never);
+      return {};
+    }
     case "payees": {
       // As Actual's payees page: ordinary payees, how many rules use each, and which are unused.
       const payees = (await lib.send("payees-get")).filter((p) => !p.transfer_acct);
@@ -251,5 +265,5 @@ async function payeeIds(value: unknown): Promise<string[]> {
 export const managementMethods = [
   "createCategoryGroup", "updateCategoryGroup", "deleteCategoryGroup", "createCategory", "updateCategory",
   "deleteCategory", "moveCategory", "moveCategoryGroup", "saveNotes", "createAccount", "updateAccount",
-  "closeAccount", "reopenAccount", "renamePayee", "deletePayees", "mergePayees",
+  "closeAccount", "reopenAccount", "renamePayee", "deletePayees", "mergePayees", "savePreference",
 ];

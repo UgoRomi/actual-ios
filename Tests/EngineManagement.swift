@@ -173,6 +173,17 @@ extension EngineSmoke {
     let transferPayee = try await engine.call("overview", as: BudgetOverview.self).accounts.first!.id
     try await expectFailure("mergePayees", ["targetId": .string(cafe.id), "mergeIds": .array([.string(transferPayee)])],
                             "no longer exists")
-    print("PASS: management of categories, groups, notes, accounts, and payees")
+    // Formatting settings sync with the budget, limited to Actual's choices.
+    try await call("savePreference", ["id": .string("numberFormat"), "value": .string("dot-comma")])
+    try await call("savePreference", ["id": .string("hideFraction"), "value": .string("true")])
+    try await call("savePreference", ["id": .string("dateFormat"), "value": .string("dd.MM.yyyy")])
+    try await call("savePreference", ["id": .string("firstDayOfWeekIdx"), "value": .string("1")])
+    let format = try await engine.call("overview", as: BudgetOverview.self).format
+    check(format == BudgetFormat(numberFormat: "dot-comma", hideFraction: true, dateFormat: "dd.MM.yyyy", firstDayOfWeekIdx: 1),
+          "\(String(describing: format))")
+    try await expectFailure("savePreference", ["id": .string("numberFormat"), "value": .string("weird")], "offered settings")
+    try await expectFailure("savePreference", ["id": .string("budgetType"), "value": .string("tracking")], "offered settings")
+    try await call("savePreference", ["id": .string("hideFraction"), "value": .string("false")])
+    print("PASS: management of categories, groups, notes, accounts, payees, and formatting")
   }
 }

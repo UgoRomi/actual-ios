@@ -75,6 +75,8 @@ struct BudgetOverview: Decodable, Sendable {
     let cloudFileId: String?
     let currencyCode: String
     let syncWarning: SyncWarning?
+    /// Actual's formatting settings for this budget.
+    var format: BudgetFormat? = nil
     var accounts: [Account]
     let payees: [Payee]
 
@@ -479,7 +481,7 @@ struct TransactionSection: Identifiable {
 
     /// Filter once, then group once. Section rendering must never rescan the full register.
     static func grouped(_ transactions: [Transaction], accountID: String? = nil,
-                        search: String = "", currency: String = "", locale: Locale = .current) -> [Self] {
+                        search: String = "", currency: String = "", locale: Locale = Money.locale) -> [Self] {
         let formatter = search.isEmpty ? nil : Money.formatter(currency: currency, locale: locale)
         let matching = transactions.filter { transaction in
             guard !transaction.isChild, accountID == nil || transaction.accountId == accountID else { return false }
@@ -501,19 +503,59 @@ struct TransactionSection: Identifiable {
     }
 }
 
+/// Actual's formatting settings, which sync between devices. Unset ones follow the device.
+struct BudgetFormat: Decodable, Sendable, Equatable {
+    /// comma-dot, dot-comma, space-comma, apostrophe-dot, or comma-dot-in.
+    var numberFormat: String?
+    var hideFraction: Bool
+    /// Such as MM/dd/yyyy.
+    var dateFormat: String?
+    /// 0 is Sunday.
+    var firstDayOfWeekIdx: Int?
+
+    static let numberFormats: [(value: String, label: String)] = [
+        ("comma-dot", "1,000.33"), ("dot-comma", "1.000,33"), ("space-comma", "1\u{202F}000,33"),
+        ("apostrophe-dot", "1’000.33"), ("comma-dot-in", "1,00,000.33"),
+    ]
+    static let dateFormats = ["MM/dd/yyyy", "dd/MM/yyyy", "yyyy-MM-dd", "MM.dd.yyyy", "dd.MM.yyyy", "dd-MM-yyyy"]
+
+    /// The locale Actual formats numbers with for this setting (shared/util.ts getNumberFormat).
+    var locale: Locale? {
+        switch numberFormat {
+        case "comma-dot": Locale(identifier: "en_US")
+        case "dot-comma": Locale(identifier: "de_DE")
+        case "space-comma": Locale(identifier: "fr_FR")
+        case "apostrophe-dot": Locale(identifier: "de_CH")
+        case "comma-dot-in": Locale(identifier: "en_IN")
+        default: nil
+        }
+    }
+}
+
 enum Money {
-    static func formatted(_ minorUnits: Int, currency: String = "", locale: Locale = .current) -> String {
+    private static let preference = Mutex<(locale: Locale?, hideFraction: Bool)>((nil, false))
+
+    /// Formats amounts as the budget's settings ask, as Actual does on every device.
+    static func configure(_ format: BudgetFormat?) {
+        preference.withLock { $0 = (format?.locale, format?.hideFraction ?? false) }
+    }
+    /// The budget's number format, or the device's.
+    static var locale: Locale { preference.withLock { $0.locale } ?? .current }
+    static var hidesFraction: Bool { preference.withLock { $0.hideFraction } }
+
+    static func formatted(_ minorUnits: Int, currency: String = "", locale: Locale = Money.locale) -> String {
         formatted(minorUnits, formatter: formatter(currency: currency, locale: locale))
     }
 
     fileprivate static func formatter(currency: String, locale: Locale) -> NumberFormatter {
-        FormatterCache.shared.formatter("display", currency, locale) {
+        let digits = hidesFraction ? 0 : 2
+        return FormatterCache.shared.formatter("display-\(digits)", currency, locale) {
             let formatter = NumberFormatter()
             formatter.locale = locale
             formatter.numberStyle = currency.isEmpty ? .decimal : .currency
             if !currency.isEmpty { formatter.currencyCode = currency }
-            formatter.minimumFractionDigits = 2
-            formatter.maximumFractionDigits = 2
+            formatter.minimumFractionDigits = digits
+            formatter.maximumFractionDigits = digits
             return formatter
         }
     }
@@ -522,7 +564,7 @@ enum Money {
         return formatter.string(from: NSDecimalNumber(decimal: Decimal(minorUnits) / 100)) ?? "—"
     }
 
-    static func editable(_ minorUnits: Int, locale: Locale = .current) -> String {
+    static func editable(_ minorUnits: Int, locale: Locale = Money.locale) -> String {
         let formatter = FormatterCache.shared.formatter("editable", "", locale) {
             let formatter = NumberFormatter()
             formatter.locale = locale
@@ -538,7 +580,7 @@ enum Money {
     /// Parse the whole localized input: a number, or a calculation with + − × ÷ and parentheses,
     /// as Actual's amount fields accept. Arithmetic is exact, without floating-point rounding.
     /// As in Actual, a calculation's result is rounded to the cent; a lone number may not have fractional cents.
-    static func parse(_ text: String, locale: Locale = .current) -> Int? {
+    static func parse(_ text: String, locale: Locale = Money.locale) -> Int? {
         let formatter = FormatterCache.shared.formatter("parse", "", locale) {
             let formatter = NumberFormatter()
             formatter.locale = locale
@@ -665,6 +707,35 @@ enum BudgetDate {
         formatter.dateFormat = format
         return formatter
     }
+    private static let preference = Mutex<(dateFormat: String?, firstWeekday: Int?)>((nil, nil))
+
+    /// Shows dates and weeks as the budget's settings ask.
+    static func configure(_ format: BudgetFormat?) {
+        preference.withLock {
+            $0 = (format?.dateFormat, format?.firstDayOfWeekIdx.map { $0 + 1 })
+        }
+    }
+
+    /// The device's calendar, starting the week on the budget's first day.
+    static var calendar: Calendar {
+        var calendar = Calendar.autoupdatingCurrent
+        if let weekday = preference.withLock({ $0.firstWeekday }) { calendar.firstWeekday = weekday }
+        return calendar
+    }
+
+    /// A day as the budget's date format writes it, or in the device's medium style.
+    static func display(_ day: String) -> String {
+        guard let date = Self.date(day) else { return day }
+        guard let pattern = preference.withLock({ $0.dateFormat }) else {
+            return date.formatted(date: .abbreviated, time: .omitted)
+        }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.dateFormat = pattern
+        return formatter.string(from: date)
+    }
+
     static func month(_ date: Date) -> String { monthFormatter.string(from: date) }
     static func day(_ date: Date) -> String { dayFormatter.string(from: date) }
     static func date(_ string: String) -> Date? { dayFormatter.date(from: string) }

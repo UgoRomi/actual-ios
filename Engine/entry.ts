@@ -223,6 +223,13 @@ async function overview() {
       ? preferences.defaultCurrencyCode
       : "",
     syncWarning: syncWarning(),
+    // Actual's formatting settings, which sync between devices. Unset ones follow the device.
+    format: {
+      numberFormat: preferences.numberFormat || null,
+      hideFraction: String(preferences.hideFraction) === "true",
+      dateFormat: preferences.dateFormat || null,
+      firstDayOfWeekIdx: preferences.firstDayOfWeekIdx ? Number(preferences.firstDayOfWeekIdx) : null,
+    },
     accounts,
     payees: payees.filter((p) => !p.transfer_acct).map((p) => ({ id: p.id, name: p.name })),
   };

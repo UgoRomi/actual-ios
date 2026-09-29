@@ -140,6 +140,8 @@ final class CalculatorKeypad: UIInputView, UIInputViewAudioFeedback {
         super.init(frame: CGRect(x: 0, y: 0, width: 0, height: keys + 14), inputViewStyle: .keyboard)
         accessibilityIdentifier = "calculator-keypad"
         let formatter = NumberFormatter()
+        // The budget's number format decides the decimal key, as it decides how amounts read.
+        formatter.locale = Money.locale
         let digit = { (value: Int) in self.insertKey(formatter.string(from: value as NSNumber) ?? String(value)) }
         let rows = [
             [key("AC", label: "Clear", style: .function) { $0.replace(with: "") },

@@ -34,6 +34,7 @@ struct SettingsView: View {
                         NavigationLink { PayeesView() } label: { Label("Payees", systemImage: "person.2") }
                         NavigationLink { RulesView() } label: { Label("Rules", systemImage: "wand.and.rays") }
                     }
+                    formatting
                 }
                 Section {
                     Button("Choose another budget") {
@@ -46,10 +47,47 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .disabled(model.isBusy)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.disabled(model.isBusy) } }
             .sheet(isPresented: $showConnection) { ConnectionView() }
             .interactiveDismissDisabled(model.isBusy)
         }
+    }
+}
+
+extension SettingsView {
+    /// Actual's formatting settings. They belong to the budget, so every device shows them alike.
+    @ViewBuilder var formatting: some View {
+        let format = model.overview?.format
+        Section {
+            Picker("Numbers", selection: preference("numberFormat", format?.numberFormat ?? "")) {
+                if format?.numberFormat == nil { Text("This device’s").tag("") }
+                ForEach(BudgetFormat.numberFormats, id: \.value) { Text($0.label).tag($0.value) }
+            }
+            Toggle("Hide decimal places", isOn: Binding(
+                get: { format?.hideFraction ?? false },
+                set: { save("hideFraction", $0 ? "true" : "false") }))
+            Picker("Dates", selection: preference("dateFormat", format?.dateFormat ?? "")) {
+                if format?.dateFormat == nil { Text("This device’s").tag("") }
+                ForEach(BudgetFormat.dateFormats, id: \.self) { Text($0.uppercased()).tag($0) }
+            }
+            Picker("First day of the week", selection: preference(
+                "firstDayOfWeekIdx", format?.firstDayOfWeekIdx.map(String.init) ?? "")) {
+                if format?.firstDayOfWeekIdx == nil { Text("This device’s").tag("") }
+                ForEach(0..<7, id: \.self) { Text(Calendar(identifier: .gregorian).weekdaySymbols[$0]).tag(String($0)) }
+            }
+        } header: { Text("Formatting") } footer: {
+            Text("These settings belong to the budget, so Actual web and desktop use them too.")
+        }
+    }
+
+    private func preference(_ id: String, _ current: String) -> Binding<String> {
+        Binding(get: { current }, set: { save(id, $0) })
+    }
+
+    private func save(_ id: String, _ value: String) {
+        guard !value.isEmpty else { return }
+        Task { await model.manage("savePreference", ["id": .string(id), "value": .string(value)]) }
     }
 }
 

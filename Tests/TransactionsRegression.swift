@@ -64,6 +64,21 @@ import SQLite3
         precondition(uncategorized.map(\.id) == ["none", "part-none", "off-transfer"], "\(uncategorized.map(\.id))")
         print("PASS: category and uncategorized lists include split parts and skip on-budget transfers and off-budget accounts")
 
+        // The budget's number and date formats, as Actual's settings choose them.
+        Money.configure(BudgetFormat(numberFormat: "dot-comma", hideFraction: false))
+        precondition(Money.formatted(123_456) == "1.234,56", Money.formatted(123_456))
+        precondition(Money.parse("1.234,56") == 123_456 && Money.editable(123_456) == "1234,56")
+        Money.configure(BudgetFormat(numberFormat: "comma-dot", hideFraction: true))
+        precondition(Money.formatted(123_456) == "1,235" && Money.parse("12.5") == 1250)
+        Money.configure(BudgetFormat(numberFormat: "comma-dot-in", hideFraction: false))
+        precondition(Money.formatted(10_000_000) == "1,00,000.00", Money.formatted(10_000_000))
+        Money.configure(nil)
+        precondition(Money.locale == .current && !Money.hidesFraction)
+        BudgetDate.configure(BudgetFormat(hideFraction: false, dateFormat: "dd.MM.yyyy", firstDayOfWeekIdx: 1))
+        precondition(BudgetDate.display("2026-09-24") == "24.09.2026" && BudgetDate.calendar.firstWeekday == 2)
+        BudgetDate.configure(nil)
+        print("PASS: number formats, hidden decimals, date formats, and the first day of the week")
+
         // As in Actual's mobile register, a transfer names the other account and its direction.
         var sent = transaction("sent", payee: "Ally Savings", category: "Uncategorized", amount: -5000,
                                transfer: true, transferAccount: "savings")
