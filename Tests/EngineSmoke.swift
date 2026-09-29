@@ -242,6 +242,15 @@ import Foundation
       as? [[String: Any]]
     precondition(rows?.first?["text"] as? String == "O'Brien €")
     precondition(rows?.first?["amount"] as? Int64 == 9_007_199_254_740_991)
+    // The engine's rows keep SQLite's column order: upstream reads AQL calculations from the first column.
+    for _ in 0..<20 {
+      let ordered = try host.perform(
+        "sql.query", ["id": id, "sql": "SELECT 1 AS z, 'b' AS a, NULL AS m, amount FROM t", "fetchAll": true, "ordered": true])
+        as? [String: Any]
+      precondition(ordered?["columns"] as? [String] == ["z", "a", "m", "amount"])
+      let values = (ordered?["rows"] as? [[Any]])?.first
+      precondition(values?[0] as? Int64 == 1 && values?[1] as? String == "b" && values?[2] is NSNull)
+    }
     _ = try host.perform("sql.exec", ["id": id, "sql": "ROLLBACK"])
     let empty =
       try host.perform("sql.query", ["id": id, "sql": "SELECT * FROM t", "fetchAll": true])

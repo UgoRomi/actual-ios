@@ -27,12 +27,21 @@ export function runQuery<T>(
   params: unknown[] = [],
   fetchAll = false,
 ): T {
-  return native<T>("sql.query", {
-    id: db.id,
-    sql: typeof sql === "string" ? sql : sql.sql,
-    params,
-    fetchAll,
+  const query = { id: db.id, sql: typeof sql === "string" ? sql : sql.sql, params, fetchAll };
+  if (!fetchAll) return native<T>("sql.query", query);
+  // Rows arrive as values in SQLite's column order, as better-sqlite3 returns them:
+  // upstream reads some results, such as an AQL calculation, from the first column.
+  const { columns, rows } = native<{ columns: string[]; rows: unknown[][] }>("sql.query", {
+    ...query,
+    ordered: true,
   });
+  return rows.map((values) => {
+    const row: Record<string, unknown> = {};
+    columns.forEach((column, index) => {
+      row[column] = values[index];
+    });
+    return row;
+  }) as T;
 }
 export function execQuery(db: Database, sql: string) {
   native("sql.exec", { id: db.id, sql });

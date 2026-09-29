@@ -141,31 +141,33 @@ final class SQLiteHost {
         }
         guard result == SQLITE_OK else { throw failure(db) }
       }
-      var rows: [[String: Any]] = []
+      let count = sqlite3_column_count(statement)
+      let columns = (0..<count).map { String(cString: sqlite3_column_name(statement, $0)) }
+      var rows: [[Any]] = []
       var status = sqlite3_step(statement)
       while status == SQLITE_ROW {
-        var row: [String: Any] = [:]
-        for column in 0..<sqlite3_column_count(statement) {
-          let name = String(cString: sqlite3_column_name(statement, column))
+        rows.append((0..<count).map { column -> Any in
           switch sqlite3_column_type(statement, column) {
-          case SQLITE_NULL: row[name] = NSNull()
-          case SQLITE_INTEGER: row[name] = sqlite3_column_int64(statement, column)
-          case SQLITE_FLOAT: row[name] = sqlite3_column_double(statement, column)
+          case SQLITE_NULL: return NSNull()
+          case SQLITE_INTEGER: return sqlite3_column_int64(statement, column)
+          case SQLITE_FLOAT: return sqlite3_column_double(statement, column)
           case SQLITE_BLOB:
-            if let bytes = sqlite3_column_blob(statement, column) {
-              row[name] = Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, column)))
-                .base64EncodedString()
-            } else {
-              row[name] = ""
-            }
-          default: row[name] = String(cString: sqlite3_column_text(statement, column))
+            guard let bytes = sqlite3_column_blob(statement, column) else { return "" }
+            return Data(bytes: bytes, count: Int(sqlite3_column_bytes(statement, column))).base64EncodedString()
+          default: return String(cString: sqlite3_column_text(statement, column))
           }
-        }
-        rows.append(row)
+        })
         status = sqlite3_step(statement)
       }
       guard status == SQLITE_DONE else { throw failure(db) }
-      if args["fetchAll"] as? Bool == true { return rows }
+      if args["fetchAll"] as? Bool == true {
+        // Upstream reads some results by column position, such as an AQL calculation's
+        // value, so rows keep SQLite's column order. Dictionaries lose it on the way to JS.
+        if args["ordered"] as? Bool == true { return ["columns": columns, "rows": rows] }
+        return rows.map { values in
+          Dictionary(zip(columns, values), uniquingKeysWith: { _, last in last })
+        }
+      }
       return ["changes": Int(sqlite3_changes(db)), "insertId": sqlite3_last_insert_rowid(db)]
     case "sql.export":
       let target = try resolve("/documents/.export-\(UUID().uuidString).sqlite", true)
