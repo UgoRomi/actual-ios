@@ -2,6 +2,7 @@ import SwiftUI
 
 struct BudgetView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var selectedCategory: BudgetCategory?
     @State private var confirmOverwrite = false
     @State private var pendingMonthAction: BudgetAction?
@@ -13,14 +14,16 @@ struct BudgetView: View {
     @State private var editingMonthNotes = false
     /// Like Actual's "Show hidden categories", remembered on this device.
     @AppStorage("budget.showHiddenCategories") private var showsHidden = false
+    @State private var filter = BudgetFilter.all
+    /// Fits most amounts; longer ones shrink to fit.
+    @ScaledMetric(relativeTo: .subheadline) private var amountWidth: CGFloat = 80
+    /// Room around a balance for its colored background.
+    private static let balanceInset: CGFloat = 6
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    Text(model.overview?.budgetName ?? "Actual")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 16) {
                     monthControl
                     if let error = model.errorMessage { ErrorNotice(message: error) { Task { await model.refresh() } } }
                     if let budget = model.budget {
@@ -30,7 +33,6 @@ struct BudgetView: View {
                                 .accessibilityHint("Show how To Budget adds up, and move money")
                         } else { summary(budget) }
                         BudgetBanners(budget: budget) { route = $0 }
-                        let shown = budget.groups(showingHidden: showsHidden)
                         if budget.groups.isEmpty {
                             ContentUnavailableView {
                                 Label("No categories yet", systemImage: "tray")
@@ -39,30 +41,15 @@ struct BudgetView: View {
                             } actions: {
                                 Button("Add Category Group") { addingGroup = true }.buttonStyle(.glass)
                             }
-                        }
-                        ForEach(shown.filter { !$0.isIncome }) { group in
-                            groupSection(group) { category in
-                                Button { selectedCategory = category } label: { categoryRow(category) }
-                                    .buttonStyle(.plain).disabled(model.isBusy)
-                                    .contextMenu {
-                                        Button("Edit Category", systemImage: "pencil") { managedCategory = category.id }
-                                    }
-                            }
-                        }
-                        // Income, as Actual's mobile budget lists it after expenses.
-                        ForEach(shown.filter(\.isIncome)) { group in
-                            groupSection(group) { category in
-                                Button {
-                                    // Envelope budgets do not budget income.
-                                    if budget.budgetType == .tracking { selectedCategory = category }
-                                    else { managedCategory = category.id }
-                                } label: { incomeRow(category) }
-                                    .buttonStyle(.plain).disabled(model.isBusy)
-                            }
+                        } else {
+                            filterBar(budget)
+                            categoryList(budget.expenseGroups(filter, showingHidden: showsHidden))
+                            // Income, as Actual's mobile budget lists it after expenses.
+                            if filter == .all { incomeList(budget) }
                         }
                         SyncFooter()
                     }
-                }.padding(20).frame(maxWidth: 760).frame(maxWidth: .infinity)
+                }.padding(.horizontal, 16).padding(.vertical, 12).frame(maxWidth: 760).frame(maxWidth: .infinity)
             }
             .background(ActualTheme.background)
             .navigationTitle("Budget")
@@ -172,116 +159,269 @@ struct BudgetView: View {
     }
 
     private var monthControl: some View {
-        HStack {
-            Button("Previous month", systemImage: "chevron.left") { Task { await model.moveMonth(-1) } }
-                .labelStyle(.iconOnly).buttonStyle(.glass).controlSize(.large)
-            Spacer()
-            Text(model.selectedMonth, format: .dateTime.month(.wide).year()).font(.headline)
-                .accessibilityAddTraits(.isHeader)
-            Spacer()
-            Button("Next month", systemImage: "chevron.right") { Task { await model.moveMonth(1) } }
-                .labelStyle(.iconOnly).buttonStyle(.glass).controlSize(.large)
-        }.disabled(model.isBusy)
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(model.selectedMonth, format: .dateTime.month(.wide).year()).font(.title3.bold())
+                    .accessibilityAddTraits(.isHeader)
+                Text(model.overview?.budgetName ?? "Actual")
+                    .font(.subheadline).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 8)
+            HStack(spacing: 8) {
+                Button("Previous month", systemImage: "chevron.left") { Task { await model.moveMonth(-1) } }
+                Button("Next month", systemImage: "chevron.right") { Task { await model.moveMonth(1) } }
+            }.labelStyle(.iconOnly).buttonStyle(.glass).disabled(model.isBusy)
+        }
     }
 
     private func summary(_ budget: BudgetMonth) -> some View {
-        VStack(alignment: .leading, spacing: 22) {
-            let headline = SummaryHeadline(budget)
-            VStack(alignment: .leading, spacing: 8) {
-                Label(headline.title, systemImage: headline.systemImage)
-                    .font(.subheadline.weight(.medium)).foregroundStyle(.white.opacity(0.8))
-                Text(Money.formatted(headline.amount, currency: model.currency))
-                    .font(.system(.largeTitle, design: .rounded, weight: .bold)).monospacedDigit()
-                    .foregroundStyle(.white).fixedSize(horizontal: false, vertical: true)
-                Text(headline.message)
-                    .font(.subheadline).foregroundStyle(.white.opacity(0.8))
-            }
-            Divider().overlay(.white.opacity(0.2))
+        let headline = SummaryHeadline(budget)
+        let title = Label(headline.title, systemImage: headline.systemImage)
+            .font(.subheadline.weight(.medium)).foregroundStyle(.white.opacity(0.8))
+        let amount = Text(Money.formatted(headline.amount, currency: model.currency))
+            .font(.system(.title, design: .rounded, weight: .bold)).monospacedDigit()
+            .foregroundStyle(.white)
+        return VStack(alignment: .leading, spacing: 10) {
             ViewThatFits(in: .horizontal) {
-                HStack(alignment: .top) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) { title; Spacer(minLength: 0); amount }
+                VStack(alignment: .leading, spacing: 2) { title; amount.fixedSize(horizontal: false, vertical: true) }
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 16) {
                     summaryValue("Budgeted", budget.totalBudgeted)
-                    Spacer(minLength: 24)
+                    Spacer(minLength: 0)
                     summaryValue("Spent", budget.totalSpent)
                 }
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
                     summaryValue("Budgeted", budget.totalBudgeted)
                     summaryValue("Spent", budget.totalSpent)
                 }
             }
         }
-        .padding(24).frame(maxWidth: .infinity, alignment: .leading)
-        .background(ActualTheme.navy.gradient, in: RoundedRectangle(cornerRadius: 28))
+        .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+        .background(ActualTheme.navy.gradient, in: RoundedRectangle(cornerRadius: 22))
     }
 
     private func summaryValue(_ label: String, _ value: Int) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(label).font(.caption).foregroundStyle(.white.opacity(0.7))
-            Text(Money.formatted(value, currency: model.currency)).font(.headline).monospacedDigit().foregroundStyle(.white)
+        HStack(spacing: 6) {
+            Text(label).foregroundStyle(.white.opacity(0.7))
+            Text(Money.formatted(value, currency: model.currency)).fontWeight(.semibold).monospacedDigit().foregroundStyle(.white)
+        }.font(.subheadline).accessibilityElement(children: .combine)
+    }
+
+    /// Quick filters, with how many categories each shows. Underfunded appears once targets set goals.
+    private func filterBar(_ budget: BudgetMonth) -> some View {
+        let hasGoals = budget.categories.contains { !$0.isIncome && $0.goal != nil }
+        return ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+                ForEach(BudgetFilter.allCases.filter { $0 != .underfunded || hasGoals || filter == $0 }) { option in
+                    filterChip(option, count: budget.count(option, showingHidden: showsHidden))
+                }
+            }
+        }
+        .scrollIndicators(.hidden).scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+        // Scrolls to the screen edges while lining up with the content.
+        .contentMargins(.horizontal, 16, for: .scrollContent).padding(.horizontal, -16)
+    }
+
+    private func filterChip(_ option: BudgetFilter, count: Int) -> some View {
+        let selected = filter == option
+        let tint: Color = option == .overspent ? .red : .orange
+        return Button {
+            withAnimation(.snappy) { filter = option }
+        } label: {
+            HStack(spacing: 6) {
+                Text(option.title)
+                if option != .all {
+                    Text(count, format: .number)
+                        .font(.caption.bold()).monospacedDigit()
+                        .foregroundStyle(selected ? Color.white : count > 0 ? tint : Color.secondary)
+                        .padding(.horizontal, 6).padding(.vertical, 1)
+                        .background(selected ? Color.white.opacity(0.22) : count > 0 ? tint.opacity(0.14) : Color.secondary.opacity(0.12), in: Capsule())
+                }
+            }
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(selected ? Color.white : Color.primary)
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(selected ? ActualTheme.purple : ActualTheme.surface, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(option.title)
+        .accessibilityValue(option == .all ? Text("") : Text("^[\(count) category](inflect: true)"))
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    @ViewBuilder
+    private func categoryList(_ groups: [CategoryGroup]) -> some View {
+        if groups.isEmpty, filter != .all {
+            ContentUnavailableView {
+                Label(filter == .overspent ? "No overspent categories" : "No underfunded categories", systemImage: "checkmark.circle")
+            } description: {
+                Text(filter == .overspent ? "Every category has money left this month." : "Every category has what its targets ask for this month.")
+            } actions: {
+                Button("Show All Categories") { withAnimation(.snappy) { filter = .all } }
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                if !dynamicTypeSize.isAccessibilitySize {
+                    columns { Spacer(minLength: 0) } budgeted: { Text("Budgeted") } balance: {
+                        Text("Balance").padding(.horizontal, Self.balanceInset)
+                    }
+                    .font(.caption).foregroundStyle(.secondary).padding(.horizontal, 16)
+                    .accessibilityHidden(true)
+                }
+                ForEach(groups) { group in
+                    VStack(alignment: .leading, spacing: 6) {
+                        groupHeader(group)
+                        VStack(spacing: 0) {
+                            ForEach(group.categories) { category in
+                                if category.id != group.categories.first?.id { Divider().padding(.leading, 16) }
+                                categoryButton(category)
+                            }
+                        }.background(ActualTheme.surface, in: RoundedRectangle(cornerRadius: 20))
+                    }.padding(.bottom, 12)
+                }
+            }
         }
     }
 
-    /// A group's heading, with its menu, above its categories. Hidden groups and categories are dimmed.
-    private func groupSection(_ group: CategoryGroup, row: @escaping (BudgetCategory) -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(group.name).font(.title3.bold())
-                if group.hidden { Image(systemName: "eye.slash").foregroundStyle(.secondary).accessibilityLabel("Hidden") }
-                Spacer()
-                Button("\(group.name) group options", systemImage: "ellipsis") { managedGroup = group.id }
-                    .labelStyle(.iconOnly).buttonStyle(.glass).disabled(model.isBusy)
-            }.padding(.horizontal, 4)
-            if !group.categories.isEmpty {
+    /// Income groups, received this month, and in tracking budgets what was budgeted.
+    @ViewBuilder
+    private func incomeList(_ budget: BudgetMonth) -> some View {
+        ForEach(budget.groups(showingHidden: showsHidden).filter(\.isIncome)) { group in
+            VStack(alignment: .leading, spacing: 6) {
+                groupHeader(group)
                 VStack(spacing: 0) {
                     ForEach(group.categories) { category in
-                        row(category).opacity(category.hidden ? 0.5 : 1)
-                        if category.id != group.categories.last?.id { Divider().padding(.leading, 18) }
+                        if category.id != group.categories.first?.id { Divider().padding(.leading, 16) }
+                        Button {
+                            // Envelope budgets do not budget income.
+                            if budget.budgetType == .tracking { selectedCategory = category }
+                            else { managedCategory = category.id }
+                        } label: { incomeRow(category) }
+                            .buttonStyle(.plain).disabled(model.isBusy)
+                            .opacity(category.hidden ? 0.5 : 1)
                     }
-                }.background(ActualTheme.surface, in: RoundedRectangle(cornerRadius: 22))
-            }
-        }.opacity(group.hidden ? 0.6 : 1)
+                }.background(ActualTheme.surface, in: RoundedRectangle(cornerRadius: 20))
+            }.padding(.bottom, 12)
+        }
     }
 
-    /// Income received this month, and in tracking budgets what was budgeted.
     private func incomeRow(_ category: BudgetCategory) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(category.name).font(.body.weight(.medium))
-                Spacer(minLength: 12)
-                Text(Money.formatted(category.spent, currency: model.currency))
-                    .monospacedDigit().font(.headline).foregroundStyle(.green)
+        columns {
+            Text(category.name).lineLimit(2)
+        } budgeted: {
+            if model.budget?.budgetType == .tracking {
+                amount(category.budgeted).font(.subheadline).foregroundStyle(.secondary)
             }
-            HStack {
-                if model.budget?.budgetType == .tracking {
-                    Text("Budgeted \(Money.formatted(category.budgeted, currency: model.currency))")
-                }
-                Spacer(minLength: 8)
-                Text("Received")
-            }.font(.caption).foregroundStyle(.secondary)
-        }.padding(18).contentShape(Rectangle())
-            .accessibilityElement(children: .combine)
+        } balance: {
+            amount(category.spent).font(.subheadline.weight(.semibold)).foregroundStyle(.green)
+                .padding(.horizontal, Self.balanceInset)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(category.name), received \(Money.formatted(category.spent, currency: model.currency))")
     }
 
-    private func categoryRow(_ category: BudgetCategory) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(category.name).font(.body.weight(.medium))
-                if category.hasTargets {
-                    Image(systemName: "target").font(.caption).foregroundStyle(.secondary)
-                        .accessibilityLabel("Has targets")
+    /// A name, then budgeted and balance amounts in columns that line up across group headers and rows.
+    private func columns<Name: View, Budgeted: View, Balance: View>(
+        @ViewBuilder name: () -> Name, @ViewBuilder budgeted: () -> Budgeted, @ViewBuilder balance: () -> Balance
+    ) -> some View {
+        HStack(spacing: 8) {
+            name().frame(maxWidth: .infinity, alignment: .leading)
+            budgeted().frame(width: amountWidth, alignment: .trailing)
+            balance().frame(width: amountWidth + 2 * Self.balanceInset, alignment: .trailing)
+        }
+    }
+
+    private func amount(_ value: Int) -> some View {
+        Text(Money.formatted(value, currency: model.currency))
+            .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+    }
+
+    /// Actual's totals for the whole group, whatever the filter shows.
+    /// As in Actual's mobile budget, tapping the group opens its menu.
+    private func groupHeader(_ group: CategoryGroup) -> some View {
+        let budgeted = Money.formatted(group.budgeted, currency: model.currency)
+        let balance = Money.formatted(group.balance, currency: model.currency)
+        let name = HStack(spacing: 4) {
+            Text(group.name).lineLimit(2)
+            if group.hidden { Image(systemName: "eye.slash").font(.caption).foregroundStyle(.secondary) }
+            Image(systemName: "chevron.down").font(.caption2.bold()).foregroundStyle(.secondary)
+        }
+        return Button { managedGroup = group.id } label: { Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 2) {
+                    name.font(.headline)
+                    Text("Budgeted \(budgeted) · Balance \(balance)").font(.subheadline).foregroundStyle(.secondary)
                 }
-                Spacer(minLength: 12)
-                Text(Money.formatted(category.balance, currency: model.currency))
-                    .monospacedDigit().font(.headline).foregroundStyle(TargetStatus(category).balanceColor)
+            } else {
+                columns { name.font(.headline) } budgeted: { amount(group.budgeted) } balance: {
+                    amount(group.balance).padding(.horizontal, Self.balanceInset)
+                }
+                .font(.subheadline.weight(.semibold))
             }
-            HStack {
-                Text("Budgeted \(Money.formatted(category.budgeted, currency: model.currency))")
-                Spacer(minLength: 8)
-                let status = TargetStatus(category)
-                Text(status.label(currency: model.currency)).foregroundStyle(status.labelColor)
-            }.font(.caption).foregroundStyle(.secondary)
-        }.padding(18).contentShape(Rectangle())
-            .accessibilityElement(children: .combine)
-            .accessibilityHint("Edit budgeted amount")
+        }.contentShape(Rectangle()) }
+        .buttonStyle(.plain).disabled(model.isBusy)
+        .padding(.horizontal, 16)
+        .opacity(group.hidden ? 0.6 : 1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(group.name)\(group.hidden ? ", hidden" : ""), Budgeted \(budgeted), Balance \(balance)")
+        .accessibilityHint("Group options")
+        .accessibilityIdentifier("group-header")
+        .accessibilityAddTraits([.isHeader, .isButton])
+    }
+
+    private func categoryButton(_ category: BudgetCategory) -> some View {
+        let status = TargetStatus(category)
+        let label: [String?] = [
+            category.name, category.hidden ? "hidden" : nil, category.hasTargets ? "Has targets" : nil,
+            "Budgeted \(Money.formatted(category.budgeted, currency: model.currency))",
+            "Balance \(Money.formatted(category.balance, currency: model.currency))",
+            status.label(currency: model.currency),
+        ]
+        return Button { selectedCategory = category } label: {
+            categoryRow(category, status: status)
+        }
+        .buttonStyle(.plain).disabled(model.isBusy)
+        .opacity(category.hidden ? 0.5 : 1)
+        .contextMenu {
+            Button("Edit Category", systemImage: "pencil") { managedCategory = category.id }
+        }
+        .accessibilityLabel(label.compactMap(\.self).joined(separator: ", "))
+        .accessibilityHint("Edit budgeted amount")
+    }
+
+    private func categoryRow(_ category: BudgetCategory, status: TargetStatus) -> some View {
+        let name = HStack(spacing: 4) {
+            Text(category.name).lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 2)
+            if category.hasTargets { Image(systemName: "target").font(.caption).foregroundStyle(.secondary) }
+        }
+        let balance = amount(category.balance)
+            .font(.subheadline.weight(.semibold)).foregroundStyle(status.balanceColor)
+            .padding(.horizontal, Self.balanceInset).padding(.vertical, 3)
+            .background(status.balanceColor.opacity(status.highlightsBalance ? 0.14 : 0), in: Capsule())
+        return Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 6) {
+                    name
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("Budgeted \(Money.formatted(category.budgeted, currency: model.currency))").foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        balance
+                    }.font(.subheadline)
+                }
+            } else {
+                columns { name } budgeted: { amount(category.budgeted).font(.subheadline).foregroundStyle(.secondary) } balance: { balance }
+            }
+        }
+        .padding(.horizontal, 16).padding(.vertical, 10)
+        .frame(minHeight: 44)
+        .contentShape(Rectangle())
     }
 }
 
@@ -297,6 +437,8 @@ struct TargetStatus {
         guard category.goal != nil else { return .primary }
         return isUnderfunded ? .orange : .green
     }
+    /// Whether the balance has a status color, which rows set on a tinted background.
+    var highlightsBalance: Bool { category.balance < 0 || category.goal != nil }
     var labelColor: Color { category.balance >= 0 && isUnderfunded ? .orange : .secondary }
 
     func label(currency: String) -> String {
@@ -313,7 +455,6 @@ private struct SummaryHeadline {
     let title: String
     let systemImage: String
     let amount: Int
-    let message: String
 
     init(_ budget: BudgetMonth) {
         switch budget.budgetType {
@@ -321,16 +462,13 @@ private struct SummaryHeadline {
             amount = budget.toBudget ?? 0
             title = amount < 0 ? "Over budget" : "Available to budget"
             systemImage = amount < 0 ? "exclamationmark.circle" : "circle.dotted"
-            message = amount == 0 ? "Every bit has a purpose." : amount < 0 ? "Adjust your plan to bring it back into balance." : "Give your money a purpose, one category at a time."
         case .tracking:
             amount = budget.saved ?? 0
             systemImage = amount < 0 ? "exclamationmark.circle" : "banknote"
             if budget.savedIsProjected {
                 title = "Projected savings"
-                message = amount < 0 ? "Budgeted expenses exceed budgeted income." : "Budgeted income left after budgeted expenses."
             } else {
                 title = amount < 0 ? "Overspent" : "Saved"
-                message = amount < 0 ? "Spending exceeded income this month." : "Income left after spending this month."
             }
         }
     }

@@ -108,7 +108,28 @@ import Foundation
       ])
     let edited = try await snapshot(engine)
     precondition(edited.transactions.first(where: { $0.id == transaction.id })?.amount == -2345)
+    try groupTotalsAndFilters(edited)
     return (transaction.id, account.id, account.balance - 2345, category.id)
+  }
+  /// Group headers show Actual's group totals, which here sum their visible categories, since the
+  /// demo hides none. The Budget screen's filters keep those totals for the groups they show.
+  static func groupTotalsAndFilters(_ snapshot: BudgetSnapshot) throws {
+    let expenseGroups = snapshot.groups.filter { $0.categories.contains { !$0.isIncome } }
+    guard !expenseGroups.isEmpty else { throw EngineFailure("Demo fixture has no expense groups") }
+    for group in expenseGroups {
+      precondition(group.budgeted == group.categories.reduce(0) { $0 + $1.budgeted }, "\(group.name) budgeted")
+      precondition(group.spent == group.categories.reduce(0) { $0 + $1.spent }, "\(group.name) spent")
+      precondition(group.balance == group.categories.reduce(0) { $0 + $1.balance }, "\(group.name) balance")
+    }
+    let expenses = snapshot.categories.filter { !$0.isIncome }
+    precondition(snapshot.budget.expenseGroups(.all).map(\.id) == expenseGroups.map(\.id))
+    precondition(snapshot.budget.count(.all) == expenses.count)
+    let overspent = snapshot.budget.expenseGroups(.overspent)
+    precondition(overspent.flatMap(\.categories).map(\.id) == expenses.filter { $0.balance < 0 }.map(\.id))
+    precondition(snapshot.budget.count(.overspent) == overspent.flatMap(\.categories).count)
+    for group in overspent {
+      precondition(group.budgeted == snapshot.groups.first { $0.id == group.id }?.budgeted)
+    }
   }
   static func newTransactions(data: URL, resources: URL) async throws {
     let engine = try EngineClient(
@@ -178,6 +199,7 @@ import Foundation
     let incomeBudgeted = projected.categories.filter(\.isIncome).reduce(0) { $0 + $1.budgeted }
     precondition(projected.totalBudgeted == expenseBudgeted(projected))
     precondition(projected.saved == incomeBudgeted - projected.totalBudgeted)
+    try groupTotalsAndFilters(projected)
     let lastMonth = Calendar(identifier: .gregorian).date(byAdding: .month, value: -1, to: Date())!
     let past = try await snapshot(engine, month: BudgetDate.month(lastMonth))
     precondition(past.budgetType == .tracking && !past.savedIsProjected && past.saved != nil)

@@ -167,6 +167,18 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Available to budget"].exists, "The native budget summary should load")
         capture("02-budget")
 
+        // The Overspent quick filter shows only overspent rows, or says there are none.
+        // Group headers are buttons too, which open the group's menu.
+        let rows = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Budgeted' AND label CONTAINS 'Balance' AND identifier != 'group-header'"))
+        XCTAssertTrue(rows.firstMatch.exists, "Category rows should show budgeted and balance amounts")
+        app.buttons["Overspent"].tap()
+        XCTAssertTrue(app.buttons["Overspent"].isSelected)
+        let none = app.staticTexts["No overspent categories"]
+        XCTAssertTrue(none.waitForExistence(timeout: 2) || rows.firstMatch.exists)
+        for index in 0..<rows.count { XCTAssertTrue(rows.element(boundBy: index).label.hasSuffix("Overspent")) }
+        capture("budget-overspent")
+        app.buttons["All"].tap()
+
         // Budget a calculation with the keypad, which opens with the editor.
         let foodBudget = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Food'")).firstMatch
         foodBudget.tap()
@@ -364,7 +376,8 @@ final class ActualNativeUITests: XCTestCase {
         app.buttons["Add Category Group"].tap()
         name(group)
         app.buttons["Add"].tap()
-        let options = app.buttons["\(group) group options"]
+        // As in Actual's mobile budget, tapping a group opens its menu.
+        let options = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "\(group), ")).firstMatch
         XCTAssertTrue(options.waitForExistence(timeout: 10), "The new group should show")
         scroll(app, to: options)
         options.tap()
@@ -379,9 +392,10 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(row.waitForExistence(timeout: 10), "The new category should show")
         scroll(app, to: row)
         row.tap()
+        // Edit Category is at the end of the budget editor, below the fold.
         let edit = app.buttons["Edit Category"]
-        XCTAssertTrue(edit.waitForExistence(timeout: 10))
-        app.swipeUp()
+        XCTAssertTrue(app.buttons["Copy Last Month’s Budget"].waitForExistence(timeout: 10))
+        scroll(app, to: edit)
         edit.tap()
         let hidden = app.switches["Hidden"]
         XCTAssertTrue(hidden.waitForExistence(timeout: 10))
@@ -466,6 +480,9 @@ final class ActualNativeUITests: XCTestCase {
 
         let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@",
                                                    payee, "Split · 2 parts")).firstMatch
+        // Upcoming scheduled transactions come first, so the split may be below the fold.
+        XCTAssertTrue(app.navigationBars["Transactions"].waitForExistence(timeout: 10))
+        scroll(app, to: row)
         XCTAssertTrue(row.waitForExistence(timeout: 10), "The register should show the split")
         row.tap()
         let secondPart = app.staticTexts["Split 2"]
@@ -537,7 +554,10 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Post Transaction Today"].waitForExistence(timeout: 5), "The scheduled menu offers posting")
         capture("register-upcoming-menu")
         // On iOS 27 the menu is a popover without Cancel; tap outside it.
-        app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap()
+        let dismissRegion = app.otherElements["PopoverDismissRegion"]
+        if dismissRegion.exists { dismissRegion.tap() }
+        else { app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.08)).tap() }
+        XCTAssertTrue(wait(forAbsence: app.buttons["Post Transaction Today"]), "The scheduled menu should close")
 
         app.tabBars.buttons["Budget"].tap()
         let food = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Food")).firstMatch

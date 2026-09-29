@@ -127,6 +127,50 @@ struct BudgetMonth: Decodable, Sendable {
     var categories: [BudgetCategory] { groups.flatMap(\.categories) }
     var expenseCategories: [BudgetCategory] { categories.filter { !$0.isIncome } }
     var overspent: [BudgetCategory] { expenseCategories.filter { $0.balance < 0 } }
+
+    /// Expense groups with the categories the filter shows, leaving out groups with none.
+    /// Hidden groups and categories show only on request, as in Actual.
+    func expenseGroups(_ filter: BudgetFilter, showingHidden: Bool = false) -> [CategoryGroup] {
+        groups(showingHidden: showingHidden).compactMap { group in
+            let categories = group.categories.filter { !$0.isIncome && filter.includes($0) }
+            // Without a filter, an empty expense group still shows, so categories can be added to it.
+            guard !categories.isEmpty || (filter == .all && !group.isIncome) else { return nil }
+            var filtered = group
+            filtered.categories = categories
+            return filtered
+        }
+    }
+
+    func count(_ filter: BudgetFilter, showingHidden: Bool = false) -> Int {
+        groups(showingHidden: showingHidden).flatMap(\.categories).count { !$0.isIncome && filter.includes($0) }
+    }
+}
+
+/// The Budget screen's quick filters for expense categories.
+enum BudgetFilter: CaseIterable, Identifiable, Sendable {
+    case all
+    /// A negative balance, which the category's row shows in red.
+    case overspent
+    /// Budgeted, or for a long-term goal saved, less than the targets ask for.
+    case underfunded
+
+    var id: Self { self }
+
+    var title: String {
+        switch self {
+        case .all: "All"
+        case .overspent: "Overspent"
+        case .underfunded: "Underfunded"
+        }
+    }
+
+    func includes(_ category: BudgetCategory) -> Bool {
+        switch self {
+        case .all: true
+        case .overspent: category.balance < 0
+        case .underfunded: (category.goalDifference ?? 0) < 0
+        }
+    }
 }
 
 /// Actual's envelope budget summary. To Budget is available funds, less last
@@ -260,6 +304,10 @@ struct CategoryGroup: Decodable, Identifiable, Sendable {
     var hidden = false
     var isIncome = false
     var notes: String? = nil
+    /// Actual's group totals, which include the group's hidden categories.
+    var budgeted = 0
+    var spent = 0
+    var balance = 0
 }
 
 struct BudgetCategory: Decodable, Identifiable, Sendable {

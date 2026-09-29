@@ -281,6 +281,10 @@ async function budgetMonth(month: string) {
       hidden: Boolean(group.hidden),
       isIncome: Boolean(group.is_income),
       notes: notes.get(text(group.id)) ?? null,
+      // Actual's group totals, as its mobile budget's group headers show them.
+      budgeted: group.budgeted || 0,
+      spent: group.spent ?? group.received ?? 0,
+      balance: group.balance || 0,
       categories: (group.categories ?? [])
         .map((category) => ({
           id: category.id,
