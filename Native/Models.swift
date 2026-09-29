@@ -103,12 +103,97 @@ struct BudgetMonth: Decodable, Sendable {
     let savedIsProjected: Bool
     let totalBudgeted: Int
     let totalSpent: Int
+    /// Envelope budgets only: how To Budget adds up.
+    let envelope: EnvelopeSummary?
     let groups: [CategoryGroup]
 
     var categories: [BudgetCategory] { groups.flatMap(\.categories) }
+    var expenseCategories: [BudgetCategory] { categories.filter { !$0.isIncome } }
+    var overspent: [BudgetCategory] { expenseCategories.filter { $0.balance < 0 } }
+}
+
+/// Actual's envelope budget summary. To Budget is available funds, less last
+/// month's overspending, what is budgeted, and what is held for next month.
+struct EnvelopeSummary: Decodable, Sendable, Equatable {
+    let income: Int
+    let fromLastMonth: Int
+    let availableFunds: Int
+    /// Zero or negative.
+    let lastMonthOverspent: Int
+    /// Negative: budgeted amounts reduce To Budget.
+    let budgeted: Int
+    /// Held for next month, by hand or automatically.
+    let forNextMonth: Int
+    let manualHold: Int
+    /// Income that rolls over automatically, as Actual's income carryover does.
+    let autoHold: Int
 }
 
 enum BudgetType: String, Decodable, Sendable { case envelope, tracking }
+
+/// Where money moves from or to: a category, or the envelope budget's To Budget.
+enum BudgetSource: Hashable, Sendable {
+    case toBudget
+    case category(String)
+    var id: String { if case .category(let id) = self { id } else { "to-budget" } }
+}
+
+/// Actual's budget menu actions, as desktop-client's useBudgetActions names them.
+enum BudgetAction: Sendable, Equatable {
+    case copyLastMonth, setZero
+    /// Every category's budget set to its average over 3, 6, or 12 months.
+    case setAverage(months: Int)
+    case copyLastMonthFor(category: String)
+    case setAverageFor(category: String, months: Int)
+    /// Overspending rolls over into next month instead of reducing To Budget.
+    case rollover(category: String, enabled: Bool)
+    /// Moves part of a category's balance to another category or To Budget.
+    case transfer(from: String, to: BudgetSource, amount: Int)
+    /// Covers a category's overspending from another category or To Budget.
+    case coverOverspending(category: String, from: BudgetSource, amount: Int)
+    /// Budgets money left in To Budget to a category.
+    case transferAvailable(to: String, amount: Int)
+    /// Takes money from a category's balance to cover a negative To Budget.
+    case coverOverbudgeted(from: String, amount: Int)
+    case hold(amount: Int)
+    case resetHold
+    /// Stops income from rolling over automatically into next month.
+    case disableAutoHold
+
+    var name: String {
+        switch self {
+        case .copyLastMonth: "copy-last"
+        case .setZero: "set-zero"
+        case .setAverage(let months): "set-\(months)-avg"
+        case .copyLastMonthFor: "copy-single-last"
+        case .setAverageFor: "set-single-avg"
+        case .rollover: "carryover"
+        case .transfer: "transfer-category"
+        case .coverOverspending: "cover-overspending"
+        case .transferAvailable: "transfer-available"
+        case .coverOverbudgeted: "cover-overbudgeted"
+        case .hold: "hold"
+        case .resetHold: "reset-hold"
+        case .disableAutoHold: "disable-auto-hold"
+        }
+    }
+
+    var arguments: [String: JSONValue] {
+        switch self {
+        case .copyLastMonth, .setZero, .setAverage, .resetHold, .disableAutoHold: [:]
+        case .copyLastMonthFor(let category): ["category": .string(category)]
+        case .setAverageFor(let category, let months): ["category": .string(category), "months": .number(months)]
+        case .rollover(let category, let enabled): ["category": .string(category), "flag": .bool(enabled)]
+        case .transfer(let from, let to, let amount):
+            ["from": .string(from), "to": .string(to.id), "amount": .number(amount)]
+        case .coverOverspending(let category, let from, let amount):
+            ["to": .string(category), "from": .string(from.id), "amount": .number(amount)]
+        case .transferAvailable(let to, let amount): ["category": .string(to), "amount": .number(amount)]
+        case .coverOverbudgeted(let from, let amount): ["category": .string(from), "amount": .number(amount)]
+        case .hold(let amount): ["amount": .number(amount)]
+        }
+    }
+}
 
 struct Account: Decodable, Identifiable, Sendable {
     let id: String
@@ -169,6 +254,8 @@ struct BudgetCategory: Decodable, Identifiable, Sendable {
     let goal: Int?
     /// A long-term goal, which Actual compares with the balance instead of the budgeted amount.
     let longGoal: Bool
+    /// Overspending rolls over to next month instead of reducing To Budget.
+    let carryover: Bool
 
     /// How far the category is from its goal, as Actual's balance tooltip shows it.
     var goalDifference: Int? {

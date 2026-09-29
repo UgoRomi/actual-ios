@@ -288,6 +288,59 @@ final class ActualNativeUITests: XCTestCase {
         capture("targets-budget")
     }
 
+    /// Runs a month action, moves money from the budget summary, and opens a category's budget and balance actions.
+    @MainActor
+    func testDemoBudgetActions() {
+        let app = XCUIApplication()
+        app.launch()
+        let demoButton = app.buttons["Explore a demo budget"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        XCTAssertTrue(app.tabBars.buttons["Budget"].waitForExistence(timeout: 60), "The demo budget should open")
+        app.tabBars.buttons["Budget"].tap()
+        capture("budget-actions-banners")
+
+        let menu = app.buttons["Month actions"]
+        XCTAssertTrue(menu.waitForExistence(timeout: 10))
+        menu.tap()
+        XCTAssertTrue(app.buttons["Copy Last Month’s Budget"].waitForExistence(timeout: 5))
+        capture("budget-actions-month-menu")
+        app.buttons["Set Budgets to Zero"].tap()
+        let confirm = app.buttons.matching(NSPredicate(format: "label == %@", "Set Budgets to Zero")).firstMatch
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5), "Month actions should ask for confirmation")
+        confirm.tap()
+        let zero = app.buttons.matching(NSPredicate(
+            format: "label BEGINSWITH %@ AND label CONTAINS %@", "Food", "Budgeted 0")).firstMatch
+        XCTAssertTrue(zero.waitForExistence(timeout: 10), "Every category should be set to zero")
+
+        // With nothing budgeted, To Budget has money to move.
+        let summary = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Available to budget")).firstMatch
+        XCTAssertTrue(summary.waitForExistence(timeout: 10))
+        summary.tap()
+        XCTAssertTrue(app.navigationBars["Budget Summary"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Available funds"].exists)
+        capture("budget-actions-summary")
+        app.buttons["Move to a Category"].tap()
+        XCTAssertTrue(app.navigationBars["Move to a Category"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.textFields["Transfer this amount"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Clear"].waitForExistence(timeout: 5), "The amount should open the keypad")
+        app.buttons["Clear"].tap()
+        tapKeys(app, "25=")
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Food")).firstMatch.tap()
+        capture("budget-actions-move")
+        app.navigationBars["Move to a Category"].buttons["Transfer"].tap()
+        XCTAssertTrue(app.navigationBars["Budget Summary"].waitForExistence(timeout: 10))
+        app.buttons["Done"].tap()
+        let moved = app.buttons.matching(NSPredicate(
+            format: "label BEGINSWITH %@ AND label CONTAINS %@", "Food", "Budgeted 25\(decimalSeparator)00")).firstMatch
+        XCTAssertTrue(moved.waitForExistence(timeout: 10), "The category should receive the money")
+
+        moved.tap()
+        XCTAssertTrue(app.buttons["Copy Last Month’s Budget"].waitForExistence(timeout: 10))
+        app.swipeUp()
+        XCTAssertTrue(app.switches["Rollover Overspending"].waitForExistence(timeout: 5))
+        capture("budget-actions-category")
+    }
+
     /// Opens the demo's default dashboard and each kind of report on it.
     @MainActor
     func testDemoReports() {

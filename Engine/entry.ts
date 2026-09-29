@@ -15,6 +15,7 @@ import { setSyncingMode, fullSync, clearFullSyncTimeout } from "@actual/sync";
 import { native } from "./native";
 import { uploadSnapshotIfDue } from "./adapters/cloud-storage";
 import { canSyncBank, syncBankAccounts } from "./bank-sync";
+import { budgetAction, envelopeSummary } from "./budget-actions";
 import {
   clearedBalance,
   createReconciliationTransaction,
@@ -270,6 +271,8 @@ async function budgetMonth(month: string) {
           goal: cell("goal-" + category.id),
           // A long-term goal compares the balance with the goal, not the budgeted amount.
           longGoal: cell("long-goal-" + category.id) === 1,
+          // Overspending rolls over into next month instead of reducing To Budget.
+          carryover: Boolean(sheet.getCellValue(sheetForMonth(month), "carryover-" + category.id)),
         })),
     }));
   return {
@@ -281,6 +284,7 @@ async function budgetMonth(month: string) {
     // Envelope budgets negate their budgeted total; tracking budgets do not.
     totalBudgeted: budgetType === "envelope" ? -budget.totalBudgeted : budget.totalBudgeted,
     totalSpent: budget.totalSpent,
+    envelope: budgetType === "envelope" ? envelopeSummary(month) : null,
     groups,
   };
 }
@@ -359,7 +363,7 @@ async function perform(method: string, args: Obj): Promise<unknown> {
     [
       "saveTransaction", "deleteTransaction", "budget", "sync", "syncAccounts", "setCleared",
       "unlockTransaction", "createReconciliationTransaction", "finishReconciliation", "saveTargets",
-      "applyTargets",
+      "applyTargets", "budgetAction",
     ].includes(method)
   ) {
     const warning = syncWarning();
@@ -530,6 +534,9 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       });
       return {};
     }
+    case "budgetAction":
+      await budgetAction(args.month, text(args.action), object(args.args ?? {}));
+      return {};
     case "categoryTargets":
       return runMutator(() => categoryTargets(text(args.categoryId), text(args.month)));
     case "previewTargets":

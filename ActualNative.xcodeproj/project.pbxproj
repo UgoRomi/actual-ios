@@ -31,6 +31,7 @@
 		C7C805D8E081A4AD7DCDAEC9 /* Native/AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33E8BE36FC801D3CF8C5A001 /* Native/AppModel.swift */; };
 		CA222D1BB6E2CDD8B11B84EC /* Native/Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D1C8D9F0C3BC17165ACEE19 /* Native/Theme.swift */; };
 		D8E0347376C8932445254001 /* Native/Core/NativeHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A35017A7DDD556AA595E322 /* Native/Core/NativeHost.swift */; };
+		451352A34D5C414DB91A638B /* Native/Views/BudgetActionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8ECE5380F8A47469DB342D8 /* Native/Views/BudgetActionsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -84,6 +85,7 @@
 		E3D9589739A3279854188C92 /* Native/ActualNativeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/ActualNativeApp.swift; sourceTree = "<group>"; };
 		F19188F7225770AF6FD525C0 /* Native/Views/TransactionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/TransactionsView.swift; sourceTree = "<group>"; };
 		B8F4D2EA6C305F9172D5E3B2 /* Native/Views/ReconcileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ReconcileView.swift; sourceTree = "<group>"; };
+		D8ECE5380F8A47469DB342D8 /* Native/Views/BudgetActionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/BudgetActionsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -131,6 +133,7 @@
 				443F99244216BE707150CE77 /* Native/Views/AccountsView.swift */,
 				9E4B2C7A1F6D3E8B5A0C4F21 /* Native/Views/AmountField.swift */,
 				83416C8B7281940A2D331143 /* Native/Views/BudgetView.swift */,
+				D8ECE5380F8A47469DB342D8 /* Native/Views/BudgetActionsView.swift */,
 				B8F4D2EA6C305F9172D5E3B2 /* Native/Views/ReconcileView.swift */,
 				22F448B416504426D44ADE65 /* Native/Views/RootView.swift */,
 				D33B550F88C0FAFC47CAA9B5 /* Native/Views/SettingsView.swift */,
@@ -283,6 +286,7 @@
 				AF716BBB3F56F5E55D747809 /* Native/Views/AccountsView.swift in Sources */,
 				5C1A7E0B9D2F4A6E8B3C1D20 /* Native/Views/AmountField.swift in Sources */,
 				AB1BDB58B28CF1FDFFC17C52 /* Native/Views/BudgetView.swift in Sources */,
+				451352A34D5C414DB91A638B /* Native/Views/BudgetActionsView.swift in Sources */,
 				C08A978F6160C98BB61BF18C /* Native/Views/RootView.swift in Sources */,
 				A7E3C1D95B2F4E8061C4D2A1 /* Native/Views/ReconcileView.swift in Sources */,
 				014B35C0E59A05E50245606A /* Native/Views/SettingsView.swift in Sources */,

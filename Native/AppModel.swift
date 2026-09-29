@@ -309,7 +309,7 @@ final class AppModel {
         let switchesBudget = ["open", "download", "demo"].contains(method)
         let isEdit = ["saveTransaction", "deleteTransaction", "budget", "setCleared", "unlockTransaction",
                       "createReconciliationTransaction", "finishReconciliation", "saveTargets",
-                      "applyTargets"].contains(method)
+                      "applyTargets", "budgetAction"].contains(method)
         if method == "sync" {
             guard let task = beginBudgetSync() else {
                 errorMessage = "This budget is local only. Open a synced budget to synchronize."
@@ -332,9 +332,9 @@ final class AppModel {
             // Allocations and targets change only the month. Cleared and reconciled
             // states change only balances and the register. Other transaction
             // changes also affect the month and payees.
-            if ["budget", "saveTargets", "applyTargets"].contains(method) { budgetChanged = true }
+            if ["budget", "saveTargets", "applyTargets", "budgetAction"].contains(method) { budgetChanged = true }
             let parts: Set<BudgetPart> = switch method {
-            case "budget", "saveTargets", "applyTargets": [.month]
+            case "budget", "saveTargets", "applyTargets", "budgetAction": [.month]
             case "setCleared", "unlockTransaction", "finishReconciliation": [.overview, .register]
             default: BudgetPart.all
             }
@@ -473,6 +473,15 @@ final class AppModel {
         }
         if applied, categoryID == nil { targetsMessage = message }
         return applied
+    }
+
+    /// One of Actual's budget menu actions for a month, such as copying last
+    /// month's budget or moving money between categories.
+    @discardableResult
+    func budgetAction(_ action: BudgetAction, month: String) async -> Bool {
+        await perform("budgetAction", arguments: [
+            "month": .string(month), "action": .string(action.name), "args": .object(action.arguments),
+        ])
     }
 
     func startReconciliation(accountID: String, targetBalance: Int) {

@@ -4,6 +4,9 @@ struct BudgetView: View {
     @Environment(AppModel.self) private var model
     @State private var selectedCategory: BudgetCategory?
     @State private var confirmOverwrite = false
+    @State private var pendingMonthAction: BudgetAction?
+    @State private var showsSummary = false
+    @State private var route: BudgetRoute?
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -14,7 +17,12 @@ struct BudgetView: View {
                     monthControl
                     if let error = model.errorMessage { ErrorNotice(message: error) { Task { await model.refresh() } } }
                     if let budget = model.budget {
-                        summary(budget)
+                        if budget.budgetType == .envelope {
+                            Button { showsSummary = true } label: { summary(budget) }
+                                .buttonStyle(.plain).disabled(model.isBusy)
+                                .accessibilityHint("Show how To Budget adds up, and move money")
+                        } else { summary(budget) }
+                        BudgetBanners(budget: budget) { route = $0 }
                         if budget.groups.isEmpty {
                             ContentUnavailableView("No categories yet", systemImage: "tray", description: Text("Set up categories in Actual to start planning your money."))
                         }
@@ -38,11 +46,22 @@ struct BudgetView: View {
             .background(ActualTheme.background)
             .navigationTitle("Budget")
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) { targetsMenu }
+                ToolbarItem(placement: .topBarTrailing) { monthMenu }
                 ToolbarItem(placement: .topBarTrailing) { SettingsButton() }
             }
             .refreshable { await model.refresh() }
             .sheet(item: $selectedCategory) { category in BudgetEditor(category: category, month: model.month) }
+            .sheet(isPresented: $showsSummary) { EnvelopeSummarySheet(month: model.month, monthDate: model.selectedMonth) }
+            .sheet(item: $route) { route in BudgetRouteSheet(route: route, month: model.month) }
+            .confirmationDialog(pendingMonthAction.map(Self.confirmationTitle) ?? "", isPresented: Binding(
+                get: { pendingMonthAction != nil }, set: { if !$0 { pendingMonthAction = nil } }
+            ), titleVisibility: .visible, presenting: pendingMonthAction) { action in
+                Button(Self.actionTitle(action), role: .destructive) {
+                    Task { await model.budgetAction(action, month: model.month) }
+                }
+            } message: { _ in
+                Text("This replaces what every category has budgeted for \(model.selectedMonth.formatted(.dateTime.month(.wide).year())).")
+            }
             .confirmationDialog("Overwrite this month’s budget with targets?", isPresented: $confirmOverwrite, titleVisibility: .visible) {
                 Button("Overwrite with Targets", role: .destructive) { Task { await model.applyTargets(month: model.month, overwrite: true) } }
             } message: {
@@ -56,9 +75,48 @@ struct BudgetView: View {
         }
     }
 
+    /// Actual's budget month menu: set every category's budget, then targets.
+    private var monthMenu: some View {
+        Menu("Month actions", systemImage: "ellipsis.circle") {
+            Section {
+                ForEach([BudgetAction.copyLastMonth, .setZero, .setAverage(months: 3), .setAverage(months: 6),
+                         .setAverage(months: 12)], id: \.name) { action in
+                    Button(Self.actionTitle(action), systemImage: Self.actionImage(action)) { pendingMonthAction = action }
+                }
+            }
+            Section("Targets") { targetsItems }
+        }
+        .disabled(model.isBusy || model.budget == nil)
+    }
+
+    static func actionTitle(_ action: BudgetAction) -> String {
+        switch action {
+        case .copyLastMonth: "Copy Last Month’s Budget"
+        case .setZero: "Set Budgets to Zero"
+        case .setAverage(12): "Set Budgets to Yearly Average"
+        case .setAverage(let months): "Set Budgets to \(months)-Month Average"
+        default: action.name
+        }
+    }
+
+    private static func actionImage(_ action: BudgetAction) -> String {
+        switch action {
+        case .copyLastMonth: "doc.on.doc"
+        case .setZero: "0.circle"
+        default: "chart.line.flattrend.xyaxis"
+        }
+    }
+
+    private static func confirmationTitle(_ action: BudgetAction) -> String {
+        switch action {
+        case .copyLastMonth: "Copy last month’s budget?"
+        case .setZero: "Set every budget to zero?"
+        default: "\(actionTitle(action))?"
+        }
+    }
+
     /// Actual's budget month menu actions for targets.
-    private var targetsMenu: some View {
-        Menu("Targets", systemImage: "target") {
+    @ViewBuilder private var targetsItems: some View {
             Button {
                 Task { await model.applyTargets(month: model.month) }
             } label: {
@@ -69,8 +127,6 @@ struct BudgetView: View {
                 Label("Overwrite with Targets", systemImage: "arrow.clockwise")
                 Text("Replace what every category with targets has budgeted")
             }
-        }
-        .disabled(model.isBusy || model.budget == nil)
     }
 
     private var monthControl: some View {
@@ -208,6 +264,11 @@ struct BudgetEditor: View {
     @State private var detent = PresentationDetent.medium
     @State private var didAppear = false
 
+    /// Applies a budget menu action and closes, as Actual's category menu does.
+    private func run(_ action: BudgetAction) {
+        Task { if await model.budgetAction(action, month: month) { dismiss() } }
+    }
+
     /// The category as last loaded, so saved targets show here.
     private var current: BudgetCategory { model.budget?.categories.first { $0.id == category.id } ?? category }
 
@@ -244,6 +305,40 @@ struct BudgetEditor: View {
                 } footer: {
                     if current.hasTargets { Text("Applying replaces the budgeted amount with what the targets ask for this month.") }
                 }
+                Section("Budget actions") {
+                    Button("Copy Last Month’s Budget", systemImage: "doc.on.doc") {
+                        run(.copyLastMonthFor(category: category.id))
+                    }
+                    Menu {
+                        ForEach([3, 6, 12], id: \.self) { months in
+                            Button(months == 12 ? "Yearly Average" : "\(months)-Month Average") {
+                                run(.setAverageFor(category: category.id, months: months))
+                            }
+                        }
+                    } label: { Label("Set to Average", systemImage: "chart.line.flattrend.xyaxis") }
+                }.disabled(model.isBusy)
+                Section {
+                    // As in Actual's balance menu, a positive balance can move, and overspending can be covered.
+                    if model.budget?.budgetType == .envelope {
+                        if current.balance > 0 {
+                            NavigationLink(value: BudgetRoute.move(.transfer(from: category.id))) {
+                                Label("Transfer to Another Category", systemImage: "arrow.right.circle")
+                            }
+                        }
+                        if current.balance < 0 {
+                            NavigationLink(value: BudgetRoute.move(.cover(category: category.id))) {
+                                Label("Cover Overspending", systemImage: "arrow.uturn.left.circle")
+                            }
+                        }
+                    }
+                    Toggle("Rollover Overspending", isOn: Binding(
+                        get: { current.carryover },
+                        set: { enabled in
+                            Task { await model.budgetAction(.rollover(category: category.id, enabled: enabled), month: month) }
+                        }))
+                } header: { Text("Balance") } footer: {
+                    Text("With rollover, overspending carries into next month’s balance instead of reducing To Budget. It applies from this month onward.")
+                }.disabled(model.isBusy)
                 if let validation { Section { Text(validation).foregroundStyle(.red) } }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
             }
@@ -262,6 +357,9 @@ struct BudgetEditor: View {
             }
             .navigationDestination(for: TargetsRoute.self) { _ in
                 TargetsEditor(category: current, month: month, path: $path)
+            }
+            .navigationDestination(for: BudgetRoute.self) { route in
+                BudgetRouteView(route: route, month: month) { dismiss() }
             }
             .onAppear {
                 // Also runs when returning from targets; keep what was typed.
