@@ -139,6 +139,40 @@ extension EngineSmoke {
     let register = try await engine.call("register", as: [Transaction].self)
     check(!register.contains { $0.accountId == loan })
     check(try await !overview().accounts.contains { $0.id == loan })
-    print("PASS: management of categories, groups, notes, and accounts")
+
+    // Payees: rename, merge (moving transactions), and delete unused ones.
+    struct Listed: Decodable { let id: String; let name: String; let ruleCount: Int; let unused: Bool }
+    func payees() async throws -> [Listed] { try await engine.call("payees", as: [Listed].self) }
+    let keep = try await created("createAccount", ["name": .string("Native Payee Account")])
+    for (index, payee) in ["Native Cafe", "native café", "Native Unused"].enumerated() {
+      _ = try await engine.call("saveTransaction", arguments: [
+        "accountId": .string(keep), "date": .string("2026-09-20"), "amount": .number(-100 - index),
+        "payeeName": .string(payee), "notes": .string(""), "cleared": .bool(false),
+      ])
+    }
+    var listed = try await payees()
+    guard let cafe = listed.first(where: { $0.name == "Native Cafe" }),
+          let accented = listed.first(where: { $0.name == "native café" }),
+          let spare = listed.first(where: { $0.name == "Native Unused" })
+    else { throw EngineFailure("Payees missing: \(listed.map(\.name))") }
+    check(!listed.contains { $0.name.isEmpty }, "Transfer payees are not listed")
+    try await expectFailure("renamePayee", ["id": .string(cafe.id), "name": .string(" ")], "Enter a name")
+    try await call("renamePayee", ["id": .string(cafe.id), "name": .string("Native Coffee")])
+    try await call("mergePayees", ["targetId": .string(cafe.id), "mergeIds": .array([.string(accented.id)])])
+    listed = try await payees()
+    check(listed.contains { $0.id == cafe.id && $0.name == "Native Coffee" } && !listed.contains { $0.id == accented.id })
+    let moved = try await engine.call("register", as: [Transaction].self).filter { $0.accountId == keep }
+    check(moved.filter { $0.payeeId == cafe.id }.count == 2, "Merged transactions move to the kept payee")
+    // A payee whose transactions are deleted becomes unused, and can be deleted.
+    for transaction in moved where transaction.payeeId == spare.id {
+      try await call("deleteTransaction", ["id": .string(transaction.id)])
+    }
+    check(try await payees().first { $0.id == spare.id }?.unused == true)
+    try await call("deletePayees", ["ids": .array([.string(spare.id)])])
+    check(try await !payees().contains { $0.id == spare.id })
+    let transferPayee = try await engine.call("overview", as: BudgetOverview.self).accounts.first!.id
+    try await expectFailure("mergePayees", ["targetId": .string(cafe.id), "mergeIds": .array([.string(transferPayee)])],
+                            "no longer exists")
+    print("PASS: management of categories, groups, notes, accounts, and payees")
   }
 }

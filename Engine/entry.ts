@@ -715,7 +715,7 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       return { budgets: await budgets() };
     }
     default:
-      if ([...managementMethods, "categoryNeedsTransfer"].includes(method)) {
+      if ([...managementMethods, "categoryNeedsTransfer", "payees"].includes(method)) {
         if (!getPrefs()?.id) throw new Error("Open a budget first.");
         return manage(method, args);
       }

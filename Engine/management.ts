@@ -197,13 +197,59 @@ export async function manage(method: string, args: Obj): Promise<unknown> {
       await lib.send("account-reopen", { id: account.id });
       return {};
     }
+    case "payees": {
+      // As Actual's payees page: ordinary payees, how many rules use each, and which are unused.
+      const payees = (await lib.send("payees-get")).filter((p) => !p.transfer_acct);
+      const counts = await lib.send("payees-get-rule-counts");
+      const unused = new Set((await lib.send("payees-get-orphaned")).map((p) => p.id));
+      return payees
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          ruleCount: (counts as Record<string, number>)[p.id] ?? 0,
+          unused: unused.has(p.id),
+        }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    }
+    case "renamePayee": {
+      const payee = await ordinaryPayee(args.id);
+      await lib.send("payees-batch-change", { updated: [{ id: payee.id, name: name(args.name, "payee") }] });
+      return {};
+    }
+    case "deletePayees": {
+      const ids = await payeeIds(args.ids);
+      await lib.send("payees-batch-change", { deleted: ids.map((id) => ({ id })) });
+      return {};
+    }
+    case "mergePayees": {
+      // The merged payees' transactions and rules move to the target, as in Actual.
+      const target = await ordinaryPayee(args.targetId);
+      const ids = (await payeeIds(args.mergeIds)).filter((id) => id !== target.id);
+      if (!ids.length) throw new Error("Choose payees to merge into another.");
+      await lib.send("payees-merge", { targetId: target.id, mergeIds: ids });
+      return {};
+    }
     default:
       throw new Error("Unknown operation: " + method);
   }
 }
 
+// Transfer payees stand for accounts, which Actual never renames, merges, or deletes as payees.
+async function ordinaryPayee(id: unknown) {
+  const payee = (await lib.send("payees-get")).find((p) => p.id === id);
+  if (!payee) throw new Error("This payee no longer exists.");
+  if (payee.transfer_acct) throw new Error("Transfer payees belong to accounts and can’t be changed here.");
+  return payee;
+}
+async function payeeIds(value: unknown): Promise<string[]> {
+  if (!Array.isArray(value) || !value.length) throw new Error("Choose at least one payee.");
+  const ids: string[] = [];
+  for (const id of value) ids.push((await ordinaryPayee(id)).id);
+  return ids;
+}
+
 export const managementMethods = [
   "createCategoryGroup", "updateCategoryGroup", "deleteCategoryGroup", "createCategory", "updateCategory",
   "deleteCategory", "moveCategory", "moveCategoryGroup", "saveNotes", "createAccount", "updateAccount",
-  "closeAccount", "reopenAccount",
+  "closeAccount", "reopenAccount", "renamePayee", "deletePayees", "mergePayees",
 ];

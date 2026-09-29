@@ -29,6 +29,11 @@ struct SettingsView: View {
                 }
                 if let error = model.syncErrorMessage { Section { ErrorNotice(message: error) } }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
+                if model.isBudgetOpen {
+                    Section("Manage") {
+                        NavigationLink { PayeesView() } label: { Label("Payees", systemImage: "person.2") }
+                    }
+                }
                 Section {
                     Button("Choose another budget") {
                         Task { if await model.closeBudget() { dismiss() } }

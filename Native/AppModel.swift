@@ -497,10 +497,15 @@ final class AppModel {
     static let managementMethods: Set<String> = [
         "createCategoryGroup", "updateCategoryGroup", "deleteCategoryGroup", "createCategory", "updateCategory",
         "deleteCategory", "moveCategory", "moveCategoryGroup", "saveNotes", "createAccount", "updateAccount",
-        "closeAccount", "reopenAccount",
+        "closeAccount", "reopenAccount", "renamePayee", "deletePayees", "mergePayees",
         // Schedules: posting adds a transaction, and saving can add a payee.
         "saveSchedule", "deleteSchedule", "skipSchedule", "postSchedule", "completeSchedule",
     ]
+
+    /// Payees with their rule counts, as Actual's payees page lists them.
+    func managedPayees() async throws -> [ManagedPayee] {
+        try await client().call("payees", as: [ManagedPayee].self)
+    }
 
     /// Every schedule with its status. Reading schedules changes nothing.
     func schedules() async throws -> [Schedule] {

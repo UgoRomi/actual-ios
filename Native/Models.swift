@@ -416,6 +416,14 @@ enum TransactionChange: Sendable {
 
 struct Payee: Decodable, Identifiable, Sendable { let id: String; let name: String }
 
+/// A payee on Actual's payees page: how many rules use it, and whether any transaction does.
+struct ManagedPayee: Decodable, Identifiable, Sendable, Hashable {
+    let id: String
+    let name: String
+    let ruleCount: Int
+    let unused: Bool
+}
+
 /// An account being compared with a balance from the bank. As in Actual, it is not saved.
 struct Reconciliation: Equatable, Sendable {
     let accountID: String

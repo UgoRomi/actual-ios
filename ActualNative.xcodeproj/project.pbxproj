@@ -36,6 +36,7 @@
 		2ABE5A407256424C95B96350 /* Native/Schedules.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7166B33BC754AD2B0247743 /* Native/Schedules.swift */; };
 		F03ED1EC53B849B9A3EEFE78 /* Native/Views/SchedulesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50EE63C13CD64073B3C0A282 /* Native/Views/SchedulesView.swift */; };
 		ACE6F83425944BF1A3750FDA /* Native/Views/CategoryTransactionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A70C3736FC9438A8E9E43FF /* Native/Views/CategoryTransactionsView.swift */; };
+		0D29242560594EF4BA07BFC1 /* Native/Views/PayeesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 729C3F507D21493BA3BB885A /* Native/Views/PayeesView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -94,6 +95,7 @@
 		B7166B33BC754AD2B0247743 /* Native/Schedules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Schedules.swift; sourceTree = "<group>"; };
 		50EE63C13CD64073B3C0A282 /* Native/Views/SchedulesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/SchedulesView.swift; sourceTree = "<group>"; };
 		9A70C3736FC9438A8E9E43FF /* Native/Views/CategoryTransactionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/CategoryTransactionsView.swift; sourceTree = "<group>"; };
+		729C3F507D21493BA3BB885A /* Native/Views/PayeesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/PayeesView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -141,6 +143,7 @@
 				443F99244216BE707150CE77 /* Native/Views/AccountsView.swift */,
 				9E4B2C7A1F6D3E8B5A0C4F21 /* Native/Views/AmountField.swift */,
 				83416C8B7281940A2D331143 /* Native/Views/BudgetView.swift */,
+				729C3F507D21493BA3BB885A /* Native/Views/PayeesView.swift */,
 				9A70C3736FC9438A8E9E43FF /* Native/Views/CategoryTransactionsView.swift */,
 				50EE63C13CD64073B3C0A282 /* Native/Views/SchedulesView.swift */,
 				B7166B33BC754AD2B0247743 /* Native/Schedules.swift */,
@@ -298,6 +301,7 @@
 				AF716BBB3F56F5E55D747809 /* Native/Views/AccountsView.swift in Sources */,
 				5C1A7E0B9D2F4A6E8B3C1D20 /* Native/Views/AmountField.swift in Sources */,
 				AB1BDB58B28CF1FDFFC17C52 /* Native/Views/BudgetView.swift in Sources */,
+				0D29242560594EF4BA07BFC1 /* Native/Views/PayeesView.swift in Sources */,
 				ACE6F83425944BF1A3750FDA /* Native/Views/CategoryTransactionsView.swift in Sources */,
 				F03ED1EC53B849B9A3EEFE78 /* Native/Views/SchedulesView.swift in Sources */,
 				2ABE5A407256424C95B96350 /* Native/Schedules.swift in Sources */,
