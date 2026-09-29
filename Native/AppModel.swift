@@ -14,6 +14,8 @@ final class AppModel {
     var overview: BudgetOverview?
     var budget: BudgetMonth?
     var transactions: [Transaction] = []
+    /// Upcoming scheduled transactions, as Actual's registers show them before saved ones.
+    var upcoming: [ScheduledTransaction] = []
     var localBudgets: [BudgetFile] = []
     var serverBudgets: [BudgetFile] = []
     var selectedMonth = Date()
@@ -111,7 +113,11 @@ final class AppModel {
             ? engine.call("budgetMonth", arguments: ["month": .string(requestedMonth)], as: BudgetMonth.self) : nil
         async let newTransactions = parts.contains(.register)
             ? engine.call("register", as: [Transaction].self) : nil
+        // Upcoming scheduled transactions depend on the register, which marks them paid.
+        async let newUpcoming = parts.contains(.register)
+            ? engine.call("schedulePreviews", as: [ScheduledTransaction].self) : nil
         let (loadedOverview, loadedBudget, loadedTransactions) = try await (newOverview, newBudget, newTransactions)
+        let loadedUpcoming = try await newUpcoming
         guard generation == budgetGeneration else { return }
         func current(_ part: BudgetPart) -> Bool { tickets[part] == loadRequests[part] }
         if let loadedBudget, current(.month), requestedMonth == month { budget = loadedBudget }
@@ -124,6 +130,7 @@ final class AppModel {
         guard overviewResult != nil || registerResult != nil else { return }
         if let overviewResult { self.loadedOverview = overviewResult }
         if let registerResult { self.loadedTransactions = registerResult }
+        if registerResult != nil, let loadedUpcoming { upcoming = loadedUpcoming }
         showPendingEdits()
     }
 
@@ -145,6 +152,7 @@ final class AppModel {
         overview = nil
         budget = nil
         transactions = []
+        upcoming = []
     }
 
     func enteredBackground() {

@@ -42,6 +42,28 @@ import SQLite3
         }
         print("PASS: dates, stable same-day order, accounts, splits/transfers, text and localized amount searches")
 
+        // A category's month and the uncategorized list, with split parts, as Actual's queries select them.
+        var split = transaction("split", parent: true)
+        split.splits = [
+            SplitPart(id: "part-food", amount: -1000, categoryId: "food", categoryName: "Food", notes: "", isTransfer: false),
+            SplitPart(id: "part-none", amount: -234, categoryId: nil, categoryName: nil, notes: "", isTransfer: false),
+            SplitPart(id: "part-transfer", amount: 0, categoryId: nil, categoryName: nil, notes: "", isTransfer: true),
+        ]
+        let listed = [
+            transaction("food", categoryID: "food"), transaction("none"), split,
+            transaction("budget-transfer", transferAccount: "b"), transaction("off-transfer", transferAccount: "off"),
+            transaction("off-account", account: "off"), transaction("last-month", date: "2026-08-10", categoryID: "food"),
+        ]
+        let accounts = [Account(id: "a", name: "A", balance: 0, offbudget: false, closed: false),
+                        Account(id: "b", name: "B", balance: 0, offbudget: false, closed: false),
+                        Account(id: "off", name: "Off", balance: 0, offbudget: true, closed: false)]
+        let food = CategoryEntry.entries(listed, filter: .category(id: "food", month: "2026-09"), accounts: accounts)
+        precondition(food.map(\.id) == ["food", "part-food"] && food.map(\.amount) == [-1234, -1000])
+        precondition(food[1].transaction.id == "split", "A part opens its whole split")
+        let uncategorized = CategoryEntry.entries(listed, filter: .uncategorized, accounts: accounts)
+        precondition(uncategorized.map(\.id) == ["none", "part-none", "off-transfer"], "\(uncategorized.map(\.id))")
+        print("PASS: category and uncategorized lists include split parts and skip on-budget transfers and off-budget accounts")
+
         // As in Actual's mobile register, a transfer names the other account and its direction.
         var sent = transaction("sent", payee: "Ally Savings", category: "Uncategorized", amount: -5000,
                                transfer: true, transferAccount: "savings")

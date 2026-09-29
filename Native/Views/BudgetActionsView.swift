@@ -181,6 +181,8 @@ enum BudgetRoute: Hashable, Identifiable {
     case hold
     /// Overspent categories to choose one to cover.
     case overspent
+    /// Transactions in a category for a month, or every uncategorized transaction.
+    case transactions(CategoryEntry.Filter, title: String)
     var id: Self { self }
 }
 
@@ -278,6 +280,7 @@ struct BudgetRouteView: View {
         case .move(let kind): MoveMoneyForm(kind: kind, month: month, onDone: onDone)
         case .hold: HoldForm(month: month, onDone: onDone)
         case .overspent: OverspentList()
+        case .transactions(let filter, let title): CategoryTransactionsView(filter: filter, title: title)
         }
     }
 }
@@ -344,6 +347,15 @@ struct BudgetBanners: View {
                     action: budget.budgetType == .envelope ? "Cover" : nil
                 ) { onOpen(.overspent) }
             }
+            let uncategorized = CategoryEntry.entries(model.transactions, filter: .uncategorized,
+                                                      accounts: model.overview?.accounts ?? [])
+            if !uncategorized.isEmpty {
+                let total = uncategorized.reduce(0) { $0 + $1.amount }
+                banner(
+                    "\(uncategorized.count) uncategorized \(uncategorized.count == 1 ? "transaction" : "transactions") (\(Money.formatted(total, currency: model.currency)))",
+                    systemImage: "tag", action: "Categorize", tint: .orange
+                ) { onOpen(.transactions(.uncategorized, title: "Uncategorized")) }
+            }
             if budget.budgetType == .envelope, let toBudget = budget.toBudget, toBudget < 0 {
                 banner("You have budgeted more than your available funds", systemImage: "arrow.down.circle.fill",
                        action: "Cover") { onOpen(.move(.coverOverbudgeted)) }
@@ -351,7 +363,8 @@ struct BudgetBanners: View {
         }
     }
 
-    private func banner(_ text: String, systemImage: String, action: String?, perform: @escaping () -> Void) -> some View {
+    private func banner(_ text: String, systemImage: String, action: String?, tint: Color = .red,
+                        perform: @escaping () -> Void) -> some View {
         HStack(spacing: 12) {
             Label(text, systemImage: systemImage).font(.subheadline.weight(.medium))
                 .symbolRenderingMode(.multicolor)
@@ -361,6 +374,6 @@ struct BudgetBanners: View {
             }
         }
         .padding(14).frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.red.opacity(0.12), in: RoundedRectangle(cornerRadius: 18))
+        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 18))
     }
 }

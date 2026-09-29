@@ -19,6 +19,27 @@ struct Schedule: Decodable, Identifiable, Sendable {
     let status: Status
 }
 
+/// An upcoming transaction from a schedule, shown before the saved ones as Actual's registers do.
+struct ScheduledTransaction: Decodable, Identifiable, Sendable {
+    let id: String
+    let scheduleId: String
+    let scheduleName: String?
+    let accountId: String?
+    let date: String
+    let amount: Int
+    let payeeName: String?
+    let categoryName: String?
+    let isTransfer: Bool
+    let status: Schedule.Status
+    /// A date after the schedule's next one, which is upcoming whatever the schedule's status.
+    let forceUpcoming: Bool
+    /// Repeating schedules can skip a date; one-time schedules can be completed instead.
+    let recurring: Bool
+
+    var shownStatus: Schedule.Status { forceUpcoming ? .upcoming : status }
+    var title: String { payeeName.flatMap { $0.isEmpty ? nil : $0 } ?? scheduleName ?? "Scheduled transaction" }
+}
+
 enum ScheduleAmount: Decodable, Sendable, Equatable {
     case exact(Int)
     case range(Int, Int)

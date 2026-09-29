@@ -423,6 +423,9 @@ struct BudgetEditor: View {
                     Text("With rollover, overspending carries into next month’s balance instead of reducing To Budget. It applies from this month onward.")
                 }.disabled(model.isBusy)
                 Section {
+                    NavigationLink(value: BudgetRoute.transactions(.category(id: category.id, month: month), title: category.name)) {
+                        Label("Transactions", systemImage: "list.bullet.rectangle")
+                    }
                     NavigationLink(value: ManageCategoryRoute()) {
                         Label("Edit Category", systemImage: "pencil")
                     }

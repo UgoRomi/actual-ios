@@ -422,6 +422,48 @@ struct Reconciliation: Equatable, Sendable {
     let targetBalance: Int
 }
 
+/// A transaction, or one part of a split, as Actual's category and uncategorized lists show them.
+struct CategoryEntry: Identifiable, Sendable {
+    enum Filter: Hashable, Sendable {
+        /// A category's transactions in a month (`yyyy-MM`).
+        case category(id: String, month: String)
+        /// On-budget transactions without a category, other than transfers between on-budget accounts.
+        case uncategorized
+    }
+
+    /// The whole transaction, which opens in the editor.
+    let transaction: Transaction
+    let part: SplitPart?
+    var id: String { part?.id ?? transaction.id }
+    var amount: Int { part?.amount ?? transaction.amount }
+    var notes: String? { part.map(\.notes) ?? transaction.notes }
+
+    /// Newest first, as the register orders them, with a split's parts in its order.
+    static func entries(_ transactions: [Transaction], filter: Filter, accounts: [Account]) -> [CategoryEntry] {
+        let offBudget = Set(accounts.filter(\.offbudget).map(\.id))
+        func matches(category: String?, transferAccount: String?) -> Bool {
+            switch filter {
+            case .category(let id, _): return category == id
+            case .uncategorized:
+                // Actual's uncategorizedTransactions: a transfer counts only when it leaves the budget.
+                return category == nil && (transferAccount == nil || offBudget.contains(transferAccount!))
+            }
+        }
+        return transactions.flatMap { transaction -> [CategoryEntry] in
+            guard !transaction.isChild else { return [] }
+            if case .category(_, let month) = filter, !transaction.date.hasPrefix(month) { return [] }
+            if case .uncategorized = filter, offBudget.contains(transaction.accountId) { return [] }
+            if transaction.isParent {
+                // Transfers inside a split are left to Actual, which links them to another account.
+                return (transaction.splits ?? []).filter { !$0.isTransfer && matches(category: $0.categoryId, transferAccount: nil) }
+                    .map { CategoryEntry(transaction: transaction, part: $0) }
+            }
+            return matches(category: transaction.categoryId, transferAccount: transaction.transferAccountId)
+                ? [CategoryEntry(transaction: transaction, part: nil)] : []
+        }
+    }
+}
+
 struct TransactionSection: Identifiable {
     let date: String
     let transactions: [Transaction]

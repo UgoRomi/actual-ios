@@ -12,6 +12,7 @@ struct TransactionsView: View {
     @State private var renaming = false
     @State private var editingNotes = false
     @State private var closing = false
+    @State private var selectedScheduled: ScheduledTransaction?
     @Environment(\.dismiss) private var dismiss
 
     private var account: Account? { accountID.flatMap { id in model.overview?.accounts.first { $0.id == id } } }
@@ -31,7 +32,21 @@ struct TransactionsView: View {
             if let error = model.errorMessage { Section { ErrorNotice(message: error) { Task { await model.refresh() } } } }
             if let accountID { BankSyncNotice(accountID: accountID) }
             if let account, let reconciliation { ReconcilingBanner(account: account, reconciliation: reconciliation) }
-            if sections.isEmpty {
+            let upcoming = model.upcoming.filter { scheduled in
+                (accountID == nil || scheduled.accountId == accountID)
+                    && (search.isEmpty || scheduled.title.localizedCaseInsensitiveContains(search)
+                        || (scheduled.categoryName ?? "").localizedCaseInsensitiveContains(search))
+            }
+            if !upcoming.isEmpty {
+                Section("Upcoming") {
+                    ForEach(upcoming) { scheduled in
+                        Button { selectedScheduled = scheduled } label: {
+                            ScheduledTransactionRow(scheduled: scheduled, currency: model.currency)
+                        }.buttonStyle(.plain).disabled(model.isBusy)
+                    }
+                }
+            }
+            if sections.isEmpty && upcoming.isEmpty {
                 ContentUnavailableView(search.isEmpty ? "A fresh start" : "No matching transactions", systemImage: search.isEmpty ? "list.bullet.rectangle" : "magnifyingglass", description: Text(search.isEmpty ? "Your transactions will appear here. Add one to keep your budget up to date." : "Try a different payee, category, or amount."))
             }
             ForEach(sections) { section in
@@ -73,6 +88,28 @@ struct TransactionsView: View {
         .sheet(isPresented: $isAdding) { TransactionEditor(accountID: accountID) }
         .sheet(isPresented: $showsReconcile) { if let accountID { ReconcileSheet(accountID: accountID) } }
         .sheet(item: $selectedTransaction) { transaction in TransactionEditor(transaction: transaction, accountID: transaction.accountId) }
+        // Actual's scheduled transaction menu.
+        .confirmationDialog(selectedScheduled?.title ?? "", isPresented: Binding(
+            get: { selectedScheduled != nil }, set: { if !$0 { selectedScheduled = nil } }),
+                            titleVisibility: .visible, presenting: selectedScheduled) { scheduled in
+            let id: [String: JSONValue] = ["id": .string(scheduled.scheduleId)]
+            Button("Post Transaction") { Task { await model.manage("postSchedule", id) } }
+            Button("Post Transaction Today") {
+                Task { await model.manage("postSchedule", id.merging(["today": .bool(true)]) { $1 }) }
+            }
+            if scheduled.recurring {
+                Button("Skip Next Scheduled Date") { Task { await model.manage("skipSchedule", id) } }
+            } else {
+                Button("Mark as Completed") {
+                    Task { await model.manage("completeSchedule", id.merging(["completed": .bool(true)]) { $1 }) }
+                }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: { scheduled in
+            if let date = BudgetDate.date(scheduled.date) {
+                Text("Scheduled for \(date.formatted(.dateTime.month(.wide).day().year()))")
+            }
+        }
         .sheet(isPresented: $renaming) {
             if let account {
                 NameSheet(title: "Rename Account", initial: account.name) { name in
@@ -103,6 +140,35 @@ struct TransactionsView: View {
             }
         }
         .disabled(model.isBusy || account == nil)
+    }
+}
+
+/// An upcoming scheduled transaction, with its date and status, as Actual's register shows it.
+struct ScheduledTransactionRow: View {
+    let scheduled: ScheduledTransaction
+    let currency: String
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            Image(systemName: "calendar")
+                .font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
+                .frame(width: 36, height: 36)
+                .background(ActualTheme.background, in: Circle())
+            VStack(alignment: .leading, spacing: 5) {
+                Text(scheduled.title).font(.body.weight(.medium)).foregroundStyle(.primary)
+                HStack(spacing: 6) {
+                    ScheduleStatusBadge(status: scheduled.shownStatus)
+                    if let date = BudgetDate.date(scheduled.date) {
+                        Text(date, format: .dateTime.month(.abbreviated).day())
+                    }
+                    if let category = scheduled.categoryName { Text("· \(category)") }
+                }.font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 8)
+            MoneyText(value: scheduled.amount, currency: currency, positiveColor: .green)
+                .font(.body.weight(.semibold)).opacity(0.7)
+        }.padding(.vertical, 6).contentShape(Rectangle())
+            .accessibilityElement(children: .combine)
+            .accessibilityHint("Post or skip this scheduled transaction")
     }
 }
 

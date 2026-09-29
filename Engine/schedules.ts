@@ -4,7 +4,13 @@ import { lib } from "@actual/core";
 import { createPayee } from "@actual/source/server/accounts/payees.ts";
 import { runMutator } from "@actual/source/server/mutators.ts";
 import * as months from "@actual/source/shared/months.ts";
-import { extractScheduleConds, getHasTransactionsQuery, getStatus } from "@actual/source/shared/schedules.ts";
+import {
+  computeSchedulePreviewTransactions,
+  extractScheduleConds,
+  getHasTransactionsQuery,
+  getStatus,
+  scheduleIsRecurring,
+} from "@actual/source/shared/schedules.ts";
 
 type Obj = Record<string, unknown>;
 
@@ -29,12 +35,61 @@ async function find(id: unknown): Promise<Obj> {
   return schedule;
 }
 
+async function statuses(list: Obj[]) {
+  const { data } = await lib.send("query", getHasTransactionsQuery(list as never).serialize());
+  const paid = new Set((data as Obj[]).filter(Boolean).map((row) => row.schedule));
+  const upcoming = String((await lib.send("preferences/get")).upcomingScheduledTransactionLength || "7");
+  const status = new Map(
+    list.map((s) => [
+      text(s.id),
+      getStatus(text(s.next_date), Boolean(s.completed), paid.has(s.id), text(s.custom_upcoming_length) || upcoming),
+    ]),
+  );
+  return { status, upcoming };
+}
+
+// Upcoming scheduled transactions, as Actual's registers list them before the
+// saved ones: each date within the upcoming period, with rules applied, as
+// desktop-client's usePreviewTransactions does.
+export async function schedulePreviews() {
+  const list = await all();
+  const { status, upcoming } = await statuses(list);
+  const previews = computeSchedulePreviewTransactions(list as never, status as never, upcoming);
+  const payees = new Map((await lib.send("api/payees-get")).map((p) => [p.id, p]));
+  const categories = new Map(
+    [...(await lib.send("api/categories-get", {})), ...(await lib.send("api/categories-get", { hidden: true }))].map(
+      (c) => [c.id, c.name],
+    ),
+  );
+  const byId = new Map(list.map((s) => [text(s.id), s]));
+  const result = [];
+  for (const preview of previews as Obj[]) {
+    const ruled = (await lib.send("rules-run", { transaction: preview } as never)) as Obj;
+    const schedule = byId.get(text(preview.schedule));
+    const payee = payees.get(text(ruled.payee));
+    result.push({
+      id: text(preview.id),
+      scheduleId: text(preview.schedule),
+      scheduleName: text(schedule?.name) || null,
+      accountId: text(ruled.account) || null,
+      date: text(ruled.date),
+      amount: typeof ruled.amount === "number" ? ruled.amount : 0,
+      payeeName: payee?.name ?? null,
+      categoryName: ruled.category ? categories.get(text(ruled.category)) ?? null : null,
+      isTransfer: Boolean(payee?.transfer_acct),
+      status: status.get(text(preview.schedule)),
+      // A later date than the next one is always upcoming.
+      forceUpcoming: Boolean(preview.forceUpcoming),
+      recurring: scheduleIsRecurring(extractScheduleConds(schedule?._conditions as never).date as never),
+    });
+  }
+  return result;
+}
+
 // Every schedule with its status, as useSchedules computes it.
 export async function schedules() {
   const list = await all();
-  const { data } = await lib.send("query", getHasTransactionsQuery(list as never).serialize());
-  const paid = new Set((data as Obj[]).filter(Boolean).map((row) => row.schedule));
-  const upcoming = (await lib.send("preferences/get")).upcomingScheduledTransactionLength || "7";
+  const { status } = await statuses(list);
   return list.map((s) => ({
     id: s.id,
     name: s.name || null,
@@ -46,12 +101,7 @@ export async function schedules() {
     nextDate: s.next_date ?? null,
     completed: Boolean(s.completed),
     postsTransaction: Boolean(s.posts_transaction),
-    status: getStatus(
-      text(s.next_date),
-      Boolean(s.completed),
-      paid.has(s.id),
-      text(s.custom_upcoming_length) || String(upcoming),
-    ),
+    status: status.get(text(s.id)),
   }));
 }
 

@@ -64,8 +64,17 @@ extension EngineSmoke {
     rent = try await named("Native Rent 2")
     check(rent.amount == .range(-130_000, -110_000) && rent.postsTransaction)
 
+    // The register lists its upcoming date, at the range's midpoint.
+    func previews() async throws -> [ScheduledTransaction] {
+      try await engine.call("schedulePreviews", as: [ScheduledTransaction].self).filter { $0.scheduleId == rent.id }
+    }
+    let upcoming = try await previews()
+    check(upcoming.count == 1 && upcoming[0].date == today && upcoming[0].amount == -120_000, "\(upcoming)")
+    check(upcoming[0].status == .due && upcoming[0].recurring && upcoming[0].title == "Native Landlord")
+
     // Posting today adds a linked transaction, which marks the schedule paid.
     try await call("postSchedule", ["id": .string(rent.id), "today": .bool(true)])
+    check(try await !previews().contains { $0.date == today }, "A paid date leaves the upcoming list")
     let register = try await engine.call("register", as: [Transaction].self)
     check(register.contains { $0.accountId == account.id && $0.date == today && $0.amount == -120_000 },
           "The posted transaction should use the range's midpoint")

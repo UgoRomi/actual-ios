@@ -18,7 +18,7 @@ import { canSyncBank, syncBankAccounts } from "./bank-sync";
 import { budgetAction, envelopeSummary } from "./budget-actions";
 import { manage, managementMethods } from "./management";
 import { saveSplit } from "./splits";
-import { scheduleCommand, schedules, scheduleWrites } from "./schedules";
+import { scheduleCommand, schedulePreviews, schedules, scheduleWrites } from "./schedules";
 import {
   clearedBalance,
   createReconciliationTransaction,
@@ -720,6 +720,7 @@ async function perform(method: string, args: Obj): Promise<unknown> {
         return manage(method, args);
       }
       if (method === "schedules") return runMutator(schedules);
+      if (method === "schedulePreviews") return runMutator(schedulePreviews);
       if ([...scheduleWrites, "upcomingDates"].includes(method)) {
         if (!getPrefs()?.id) throw new Error("Open a budget first.");
         return scheduleCommand(method, args);
