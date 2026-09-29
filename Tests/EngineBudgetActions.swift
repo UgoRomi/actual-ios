@@ -61,6 +61,24 @@ extension EngineSmoke {
     try await act(.setAverageFor(category: b, months: 6))
     try await expectFailure(.setAverageFor(category: b, months: 4), "3, 6, or 12")
 
+    // The category sheet's 12-month average is what Yearly Average budgets.
+    struct Average: Decodable { let amount: Int }
+    func average(_ id: String) async throws -> Int {
+      try await engine.call("categoryAverage", arguments: ["categoryId": .string(id), "month": .string(month)],
+                            as: Average.self).amount
+    }
+    var spending: (id: String, amount: Int)?
+    for category in expenses where spending == nil {
+      let amount = try await average(category.id)
+      if amount < 0 { spending = (category.id, amount) }
+    }
+    guard let spending else { throw EngineFailure("Demo fixture needs spending in earlier months") }
+    try await act(.setAverageFor(category: spending.id, months: 12))
+    check(try await category(spending.id).budgeted == -spending.amount)
+    var missing = false
+    do { _ = try await average("missing") } catch { missing = error.localizedDescription.contains("no longer exists") }
+    check(missing, "An unknown category should fail")
+
     // Start from nothing budgeted, so To Budget holds this month's funds.
     try await act(.setZero)
     let funded = try await state()

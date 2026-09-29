@@ -15,7 +15,7 @@ import { setSyncingMode, fullSync, clearFullSyncTimeout } from "@actual/sync";
 import { native } from "./native";
 import { uploadSnapshotIfDue } from "./adapters/cloud-storage";
 import { canSyncBank, syncBankAccounts } from "./bank-sync";
-import { budgetAction, envelopeSummary } from "./budget-actions";
+import { budgetAction, categoryAverage, envelopeSummary } from "./budget-actions";
 import { manage, managementMethods } from "./management";
 import { ruleCommand, rulesList, ruleWrites } from "./rules";
 import { commitImport, prepareImport } from "./importing";
@@ -578,6 +578,8 @@ async function perform(method: string, args: Obj): Promise<unknown> {
     case "budgetAction":
       await budgetAction(args.month, text(args.action), object(args.args ?? {}));
       return {};
+    case "categoryAverage":
+      return runMutator(() => categoryAverage(args.month, args.categoryId));
     case "categoryTargets":
       return runMutator(() => categoryTargets(text(args.categoryId), text(args.month)));
     case "previewTargets":

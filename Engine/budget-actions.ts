@@ -2,6 +2,7 @@
 // copy and averages, and moving money between categories, To Budget, and next
 // month. Each runs the handler desktop-client's useBudgetActions sends.
 import { lib } from "@actual/core";
+import { getCategoryAverage } from "@actual/source/server/budget/actions.ts";
 import { getBudgetType } from "@actual/source/server/budget/base.ts";
 import * as sheet from "@actual/source/server/sheet.ts";
 import { sheetForMonth } from "@actual/source/shared/months.ts";
@@ -133,6 +134,20 @@ export async function budgetAction(rawMonth: unknown, action: string, args: Obj)
     default:
       throw new Error("Unknown budget action: " + action);
   }
+}
+
+// A category's average monthly activity over up to 12 months, as Actual's
+// Yearly Average budgets it: the months before this one (never later than last
+// month), back to the category's first activity. Spending is negative.
+export async function categoryAverage(rawMonth: unknown, value: unknown) {
+  const m = month(rawMonth);
+  const id = typeof value === "string" ? value : "";
+  const categories = [
+    ...(await lib.send("api/categories-get", { hidden: true })),
+    ...(await lib.send("api/categories-get", {})),
+  ];
+  if (!categories.some((c) => c.id === id)) throw new Error("This category no longer exists.");
+  return { amount: await getCategoryAverage({ month: m, maxMonths: 12, categoryId: id }) };
 }
 
 // The envelope To Budget breakdown, as Actual's budget summary shows it.
