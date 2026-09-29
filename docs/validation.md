@@ -323,3 +323,11 @@ Not verified end to end: iPad width, VoiceOver, and budgets with hidden categori
 ## Merging the compact budget screen (2026-09-29)
 
 The compact budget screen and quick filters from `origin/main` were merged with this batch. Group headers keep Actual's totals and now open the group's menu, as Actual's mobile budget does; hidden categories respect the quick filters and the Show Hidden Categories choice; income is listed below expenses when no filter is chosen. The engine, transaction, and typecheck suites passed, and on a newly erased iPhone 17 Pro / iOS 27.0 simulator every demo UI test passed, with the navigation test run first on its own because it starts from the welcome screen. Test fixes: category rows are told apart from group headers by the headers' `group-header` identifier, controls below the fold are scrolled to, and the scheduled menu's popover is closed through its dismiss region.
+
+## Tags, schedule days and links, file import, widget, background refresh, and Shortcuts (2026-09-29)
+
+`./scripts/test-engine.sh`, `node Engine/typecheck.mjs`, and `./scripts/test-transactions.sh` passed with new checks: tags discovered from notes (with `##` escapes), created, recolored, renamed in every note, hidden, and deleted; monthly schedules on the last Friday and the 15th, with invalid patterns refused and patterns dropped for other frequencies; a matching transaction linked to and unlinked from a schedule; the upcoming window saved; and imports of OFX (a second import matches instead of duplicating; payees title-cased as Actual imports them), CSV with guessed columns and with separate debit and credit columns and day-first dates, and QIF, with other files refused.
+
+On a new iPhone 17 Pro / iOS 27.0 simulator, every demo UI test passed, including the new `testDemoTagsAndSpecificDays`, with the navigation test run first on its own. After the tests, the app's App Group container held the widget snapshot, with To Budget and the four categories most in need in the budget's number format. The widget extension builds and is embedded in the app.
+
+Not verified end to end: the widget on a home screen, background refresh as scheduled by iOS, Shortcuts and Siri running the intents, importing through the Files picker, and signing the App Group on a device.

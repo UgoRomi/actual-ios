@@ -60,6 +60,17 @@ final class AppModel {
 
     init(engine: EngineClient? = nil) { self.engine = engine }
 
+    /// The app's model, for Shortcuts that run without the app's window.
+    static weak var current: AppModel?
+
+    /// Opens the last budget if needed and syncs it, as opening the app does. For background refresh.
+    func backgroundRefresh() async {
+        guard !isBusy else { return }
+        if !hasStarted { await start(); return }
+        guard canSyncBudget, let task = beginBudgetSync() else { return }
+        _ = await task.value
+    }
+
     var month: String { BudgetDate.month(selectedMonth) }
     var currency: String { overview?.currencyCode ?? "" }
     var canSyncBudget: Bool { overview?.cloudFileId != nil }

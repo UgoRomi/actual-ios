@@ -614,6 +614,47 @@ final class ActualNativeUITests: XCTestCase {
         capture("budget-dot-comma")
     }
 
+    /// Adds a tag from Settings, and gives a monthly schedule a specific day.
+    @MainActor
+    func testDemoTagsAndSpecificDays() {
+        let app = XCUIApplication()
+        app.launch()
+        let demoButton = app.buttons["Explore a demo budget"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        XCTAssertTrue(app.tabBars.buttons["Budget"].waitForExistence(timeout: 60), "The demo budget should open")
+        app.tabBars.buttons["Budget"].tap()
+        app.buttons["Settings"].firstMatch.tap()
+        app.buttons["Tags"].tap()
+        XCTAssertTrue(app.navigationBars["Tags"].waitForExistence(timeout: 10))
+        let tag = "uitag\(Int(Date().timeIntervalSince1970) % 100_000)"
+        app.buttons["Add tag"].tap()
+        let field = app.textFields["Name"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.typeText(tag)
+        app.buttons["Add"].tap()
+        // Tags are listed alphabetically, among the demo's; search for the new one.
+        let search = app.searchFields.firstMatch
+        if !search.isHittable { app.swipeDown() }
+        search.tap()
+        search.typeText(tag)
+        XCTAssertTrue(app.staticTexts["#\(tag)"].waitForExistence(timeout: 10), "The new tag should be listed")
+        capture("tags")
+        // Searching replaces the navigation bar on iOS 27; start the schedule part afresh.
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.tabBars.buttons["Schedules"].waitForExistence(timeout: 60))
+
+        app.tabBars.buttons["Schedules"].tap()
+        app.buttons["Add schedule"].tap()
+        XCTAssertTrue(app.navigationBars["New Schedule"].waitForExistence(timeout: 10))
+        let add = app.buttons["Add Specific Day"]
+        scroll(app, to: add)
+        add.tap()
+        XCTAssertTrue(app.staticTexts["Swipe to remove a day."].waitForExistence(timeout: 5), "A specific day should be added")
+        capture("schedule-specific-day")
+        app.buttons["Cancel"].tap()
+    }
+
     /// Opens the demo's default dashboard and each kind of report on it.
     @MainActor
     func testDemoReports() {
