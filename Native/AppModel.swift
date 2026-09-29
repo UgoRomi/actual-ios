@@ -318,6 +318,12 @@ final class AppModel {
     }
 
     /// Bank refresh results and reconciliation belong to the open budget.
+    private func resetOpenBudget() {
+        clearBudget()
+        clearAccountState()
+        resetBudgetSyncState()
+    }
+
     private func clearAccountState() {
         bankSyncResult = nil
         bankSyncErrorMessage = nil
@@ -357,12 +363,12 @@ final class AppModel {
             // Allocations and targets change only the month. Cleared and reconciled
             // states change only balances and the register. Other transaction
             // changes also affect the month and payees.
-            if ["budget", "saveTargets", "applyTargets", "budgetAction"].contains(method) { budgetChanged = true }
             let parts: Set<BudgetPart> = switch method {
             case "budget", "saveTargets", "applyTargets", "budgetAction": [.month]
             case "setCleared", "unlockTransaction", "finishReconciliation": [.overview, .register]
             default: BudgetPart.all
             }
+            if parts == [.month] { budgetChanged = true }
             do { try await load(parts) }
             catch {
                 if switchesBudget { clearBudget() }
@@ -380,7 +386,7 @@ final class AppModel {
                 // the sheet and its draft alive while reloading that budget.
                 // isBusy prevents writes until the engine state is confirmed.
                 do { try await load() }
-                catch { clearBudget(); resetBudgetSyncState(); clearAccountState() }
+                catch { resetOpenBudget() }
             }
             errorMessage = operationError
             return false
@@ -693,9 +699,7 @@ final class AppModel {
         do {
             _ = try await client().call("close")
             // The engine is closed even if the subsequent budget listing fails.
-            clearBudget()
-            clearAccountState()
-            resetBudgetSyncState()
+            resetOpenBudget()
             do {
                 localBudgets = try await client().call("bootstrap", as: Bootstrap.self).budgets
                 errorMessage = nil
@@ -717,9 +721,7 @@ final class AppModel {
         do {
             let listing = try await client().call("deleteBudget", arguments: ["id": .string(id)], as: BudgetListing.self)
             // The engine closes a budget that is open without a loaded view.
-            clearBudget()
-            clearAccountState()
-            resetBudgetSyncState()
+            resetOpenBudget()
             localBudgets = listing.budgets
             errorMessage = nil
             return true

@@ -161,24 +161,6 @@ enum ScheduleDate: Decodable, Sendable, Equatable {
             if let endDate { fields["endDate"] = .string(endDate) }
             return .object(fields)
         }
-
-        /// A short description, such as "Every 2 weeks" or "Monthly, 3 times".
-        var summary: String {
-            let unit: String = switch frequency {
-            case .daily: "day"
-            case .weekly: "week"
-            case .monthly: "month"
-            case .yearly: "year"
-            }
-            var text = interval == 1 ? frequency.rawValue.capitalized : "Every \(interval) \(unit)s"
-            switch endMode {
-            case .never: break
-            case .afterOccurrences: text += endOccurrences == 1 ? ", once" : ", \(endOccurrences) times"
-            case .onDate: if let endDate { text += ", until \(endDate)" }
-            }
-            if !specificDays.isEmpty { text += ", on specific days" }
-            return text
-        }
     }
 
     init(from decoder: Decoder) throws {

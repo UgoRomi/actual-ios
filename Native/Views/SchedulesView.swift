@@ -61,8 +61,7 @@ struct SchedulesView: View {
             .refreshable { await model.refresh(); await load() }
             .task(id: model.dataRevision) { await load() }
             .sheet(item: $editing) { route in ScheduleEditor(schedule: route.schedule) }
-            .confirmationDialog("Delete this schedule?", isPresented: Binding(
-                get: { deleting != nil }, set: { if !$0 { deleting = nil } }), titleVisibility: .visible,
+            .confirmationDialog("Delete this schedule?", isPresented: $deleting.isPresent, titleVisibility: .visible,
                                 presenting: deleting) { schedule in
                 Button("Delete Schedule", role: .destructive) { run("deleteSchedule", schedule) }
             } message: { _ in Text("Transactions it already added stay in your accounts.") }
@@ -113,7 +112,7 @@ struct SchedulesView: View {
     private func run(_ method: String, _ schedule: Schedule, _ extra: [String: JSONValue] = [:]) {
         var arguments = extra
         arguments["id"] = .string(schedule.id)
-        Task { if await model.manage(method, arguments) { await load() } }
+        Task { await model.manage(method, arguments) }
     }
 
     private func payeeName(_ schedule: Schedule) -> String? {
@@ -501,13 +500,10 @@ private struct ScheduleTransactionsView: View {
 
     private func link(_ item: ScheduleTransactions.Item, _ link: Bool) {
         Task {
-            if await model.manage("linkScheduleTransactions", [
+            await model.manage("linkScheduleTransactions", [
                 "id": .string(schedule.id), "transactionIds": .array([.string(item.id)]), "link": .bool(link),
-            ]) { await load() }
+            ])
         }
     }
 }
 
-private extension Array {
-    subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
-}

@@ -113,6 +113,14 @@ struct BudgetMonth: Decodable, Sendable {
     /// Every group, including hidden groups and categories.
     let groups: [CategoryGroup]
 
+    /// What the month leads with: To Budget for envelope budgets, savings for tracking budgets.
+    var headlineAmount: Int {
+        switch budgetType {
+        case .envelope: toBudget ?? 0
+        case .tracking: saved ?? 0
+        }
+    }
+
     /// Groups and categories that are not hidden, as Actual lists them by default.
     var visibleGroups: [CategoryGroup] { groups(showingHidden: false) }
 
@@ -793,12 +801,19 @@ enum BudgetDate {
         formatter.dateFormat = format
         return formatter
     }
-    private static let preference = Mutex<(dateFormat: String?, firstWeekday: Int?)>((nil, nil))
+    private static let preference = Mutex<(dateFormatter: DateFormatter?, firstWeekday: Int?)>((nil, nil))
 
     /// Shows dates and weeks as the budget's settings ask.
     static func configure(_ format: BudgetFormat?) {
+        let dateFormatter = format?.dateFormat.map { pattern in
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.calendar = Calendar(identifier: .gregorian)
+            formatter.dateFormat = pattern
+            return formatter
+        }
         preference.withLock {
-            $0 = (format?.dateFormat, format?.firstDayOfWeekIdx.map { $0 + 1 })
+            $0 = (dateFormatter, format?.firstDayOfWeekIdx.map { $0 + 1 })
         }
     }
 
@@ -812,13 +827,9 @@ enum BudgetDate {
     /// A day as the budget's date format writes it, or in the device's medium style.
     static func display(_ day: String) -> String {
         guard let date = Self.date(day) else { return day }
-        guard let pattern = preference.withLock({ $0.dateFormat }) else {
+        guard let formatter = preference.withLock({ $0.dateFormatter }) else {
             return date.formatted(date: .abbreviated, time: .omitted)
         }
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.calendar = Calendar(identifier: .gregorian)
-        formatter.dateFormat = pattern
         return formatter.string(from: date)
     }
 

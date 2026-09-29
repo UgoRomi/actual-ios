@@ -61,10 +61,10 @@ struct BudgetView: View {
             .sheet(item: $selectedCategory) { category in BudgetEditor(category: category, month: model.month) }
             .sheet(isPresented: $showsSummary) { EnvelopeSummarySheet(month: model.month, monthDate: model.selectedMonth) }
             .sheet(item: $route) { route in BudgetRouteSheet(route: route, month: model.month) }
-            .sheet(isPresented: Binding(get: { managedGroup != nil }, set: { if !$0 { managedGroup = nil } })) {
+            .sheet(isPresented: $managedGroup.isPresent) {
                 if let managedGroup { GroupManageSheet(groupID: managedGroup) }
             }
-            .sheet(isPresented: Binding(get: { managedCategory != nil }, set: { if !$0 { managedCategory = nil } })) {
+            .sheet(isPresented: $managedCategory.isPresent) {
                 if let managedCategory { CategoryManageSheet(categoryID: managedCategory) }
             }
             .sheet(isPresented: $addingGroup) {
@@ -77,9 +77,7 @@ struct BudgetView: View {
                            title: model.selectedMonth.formatted(.dateTime.month(.wide).year()),
                            initial: model.budget?.notes ?? "")
             }
-            .confirmationDialog(pendingMonthAction.map(Self.confirmationTitle) ?? "", isPresented: Binding(
-                get: { pendingMonthAction != nil }, set: { if !$0 { pendingMonthAction = nil } }
-            ), titleVisibility: .visible, presenting: pendingMonthAction) { action in
+            .confirmationDialog(pendingMonthAction.map(Self.confirmationTitle) ?? "", isPresented: $pendingMonthAction.isPresent, titleVisibility: .visible, presenting: pendingMonthAction) { action in
                 Button(Self.actionTitle(action), role: .destructive) {
                     Task { await model.budgetAction(action, month: model.month) }
                 }
@@ -457,13 +455,12 @@ private struct SummaryHeadline {
     let amount: Int
 
     init(_ budget: BudgetMonth) {
+        amount = budget.headlineAmount
         switch budget.budgetType {
         case .envelope:
-            amount = budget.toBudget ?? 0
             title = amount < 0 ? "Over budget" : "Available to budget"
             systemImage = amount < 0 ? "exclamationmark.circle" : "circle.dotted"
         case .tracking:
-            amount = budget.saved ?? 0
             systemImage = amount < 0 ? "exclamationmark.circle" : "banknote"
             if budget.savedIsProjected {
                 title = "Projected savings"

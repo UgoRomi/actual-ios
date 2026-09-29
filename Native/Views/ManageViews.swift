@@ -87,11 +87,7 @@ struct DeleteTransferForm: View {
                 Section(group.name) {
                     ForEach(group.categories) { category in
                         Button { selection = category.id } label: {
-                            HStack {
-                                Text(category.name).foregroundStyle(Color.primary)
-                                Spacer()
-                                if selection == category.id { Image(systemName: "checkmark").foregroundStyle(ActualTheme.purple) }
-                            }
+                            CheckRow(title: category.name, selected: selection == category.id)
                         }
                     }
                 }
@@ -118,7 +114,6 @@ struct CategoryManageForm: View {
     @Environment(AppModel.self) private var model
     @State private var renaming = false
     @State private var editingNotes = false
-    @State private var transferRequired: Bool?
     @State private var confirmsDelete = false
     @State private var choosesTransfer = false
 

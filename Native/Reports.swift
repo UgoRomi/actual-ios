@@ -283,12 +283,14 @@ struct ReportTransaction: Decodable, Sendable, Identifiable {
 
 /// Report dates, formatted for display.
 enum ReportDate {
+    private static let calendar = Calendar(identifier: .gregorian)
+
     /// An ISO day, month, or year, at the start of that period in the current time zone.
     static func date(_ value: String) -> Date? {
         let parts = value.split(separator: "-", omittingEmptySubsequences: false).map { Int($0) }
         guard (1...3).contains(parts.count), parts.allSatisfy({ $0 != nil }) else { return nil }
         let numbers = parts.compactMap { $0 }
-        return Calendar(identifier: .gregorian).date(from: DateComponents(
+        return calendar.date(from: DateComponents(
             year: numbers[0], month: numbers.count > 1 ? numbers[1] : 1, day: numbers.count > 2 ? numbers[2] : 1))
     }
 

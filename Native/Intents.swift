@@ -102,14 +102,10 @@ struct BudgetLeftIntent: AppIntent {
     func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> {
         let model = try await IntentSupport.openBudget()
         guard let budget = model.budget else { throw IntentError.noBudget }
-        let amount: Int, label: String
-        switch budget.budgetType {
-        case .envelope:
-            amount = budget.toBudget ?? 0
-            label = amount < 0 ? "You have budgeted more than you have, by" : "Left to budget:"
-        case .tracking:
-            amount = budget.saved ?? 0
-            label = budget.savedIsProjected ? "Projected savings:" : "Saved:"
+        let amount = budget.headlineAmount
+        let label = switch budget.budgetType {
+        case .envelope: amount < 0 ? "You have budgeted more than you have, by" : "Left to budget:"
+        case .tracking: budget.savedIsProjected ? "Projected savings:" : "Saved:"
         }
         let formatted = Money.formatted(abs(amount), currency: model.currency)
         return .result(value: Money.formatted(amount, currency: model.currency), dialog: "\(label) \(formatted).")

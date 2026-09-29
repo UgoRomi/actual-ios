@@ -135,6 +135,9 @@ struct TargetTemplate: Decodable, Identifiable, Sendable, Equatable {
     var json: JSONValue { .object(fields) }
 
     var type: String { string("type") ?? "" }
+    /// A balance cap or long-term goal, which Actual lists apart from the automations.
+    var isOption: Bool { kind == .limit || kind == .goal }
+
     var kind: Kind? {
         switch type {
         case "periodic", "simple": .fixed

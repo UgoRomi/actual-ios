@@ -19,6 +19,34 @@ struct MoneyText: View {
     }
 }
 
+/// A choice in a list, checked when selected.
+struct CheckRow: View {
+    let title: String
+    var detail: String? = nil
+    let selected: Bool
+    var body: some View {
+        HStack {
+            Text(title).foregroundStyle(Color.primary)
+            Spacer()
+            if let detail { Text(detail).font(.caption).foregroundStyle(Color.secondary) }
+            if selected { Image(systemName: "checkmark").foregroundStyle(ActualTheme.purple) }
+        }
+    }
+}
+
+extension Optional {
+    /// Whether there is a value; setting false clears it. Binds sheets and dialogs
+    /// to optional state: `isPresented: $selection.isPresent`.
+    var isPresent: Bool {
+        get { self != nil }
+        set { if !newValue { self = nil } }
+    }
+}
+
+extension Array {
+    subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
+}
+
 struct ErrorNotice: View {
     let message: String
     var retry: (() -> Void)? = nil

@@ -19,7 +19,6 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
     let negative: Bool
     /// Categories that need attention: overspent first, then the lowest balances.
     let categories: [Category]
-    let updated: Date
 
     static let appGroup = "group.com.ugoromi.actualnative"
     static let fileName = "widget-snapshot.json"
@@ -53,6 +52,5 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
         budgetName: "My Budget", month: "September", headline: "To Budget", amount: "1,250.00", negative: false,
         categories: [.init(name: "Groceries", balance: "-32.10", overspent: true),
                      .init(name: "Dining Out", balance: "18.40", overspent: false),
-                     .init(name: "Fuel", balance: "42.00", overspent: false)],
-        updated: Date())
+                     .init(name: "Fuel", balance: "42.00", overspent: false)])
 }

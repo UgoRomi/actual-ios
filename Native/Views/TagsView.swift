@@ -20,10 +20,6 @@ private extension Int {
     func clamped(to range: ClosedRange<Int>) -> Int { Swift.min(Swift.max(self, range.lowerBound), range.upperBound) }
 }
 
-private extension Array {
-    subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
-}
-
 /// Notes with their #tags in each tag's color, as Actual's register shows them.
 struct NotesText: View {
     let notes: String
@@ -140,6 +136,7 @@ private struct TagEditor: View {
     @State private var color = ActualTheme.purple
     @State private var confirmsDelete = false
     @State private var loaded = false
+    @State private var colorSave: Task<Void, Never>?
 
     private var tag: Tag? { model.overview?.tags.first { $0.id == tagID } }
 
@@ -178,7 +175,12 @@ private struct TagEditor: View {
         }
         .onChange(of: color) { _, newColor in
             guard loaded else { return }
-            Task { await model.manage("updateTag", ["id": .string(tagID), "color": .string(newColor.hex)]) }
+            colorSave?.cancel()
+            colorSave = Task {
+                try? await Task.sleep(for: .milliseconds(400))
+                guard !Task.isCancelled else { return }
+                await model.manage("updateTag", ["id": .string(tagID), "color": .string(newColor.hex)])
+            }
         }
         .onDisappear(perform: saveDescription)
         .sheet(isPresented: $renaming) {

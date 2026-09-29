@@ -98,8 +98,7 @@ struct TransactionsView: View {
         .sheet(isPresented: $showsReconcile) { if let accountID { ReconcileSheet(accountID: accountID) } }
         .sheet(item: $selectedTransaction) { transaction in TransactionEditor(transaction: transaction, accountID: transaction.accountId) }
         // Actual's scheduled transaction menu.
-        .confirmationDialog(selectedScheduled?.title ?? "", isPresented: Binding(
-            get: { selectedScheduled != nil }, set: { if !$0 { selectedScheduled = nil } }),
+        .confirmationDialog(selectedScheduled?.title ?? "", isPresented: $selectedScheduled.isPresent,
                             titleVisibility: .visible, presenting: selectedScheduled) { scheduled in
             let id: [String: JSONValue] = ["id": .string(scheduled.scheduleId)]
             Button("Post Transaction") { Task { await model.manage("postSchedule", id) } }
@@ -133,7 +132,7 @@ struct TransactionsView: View {
         .sheet(item: $importing) { file in
             if let accountID { ImportSheet(accountID: accountID, fileName: file.name, data: file.data) }
         }
-        .alert("Import", isPresented: Binding(get: { fileError != nil }, set: { if !$0 { fileError = nil } })) {
+        .alert("Import", isPresented: $fileError.isPresent) {
             Button("OK") {}
         } message: { Text(fileError ?? "") }
         .sheet(isPresented: $renaming) {

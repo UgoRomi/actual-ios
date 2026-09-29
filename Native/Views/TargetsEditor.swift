@@ -104,9 +104,9 @@ struct TargetsEditor: View {
                 }
             }
             Section {
-                ForEach(templates.filter { ![.limit, .goal].contains($0.kind) }) { row($0, loaded) }
+                ForEach(templates.filter { !$0.isOption }) { row($0, loaded) }
                     .onDelete { offsets in
-                        let automations = templates.filter { ![.limit, .goal].contains($0.kind) }
+                        let automations = templates.filter { !$0.isOption }
                         let ids = Set(offsets.map { automations[$0].id })
                         templates.removeAll { ids.contains($0.id) }
                     }
@@ -118,7 +118,7 @@ struct TargetsEditor: View {
                 Text("Automations budget this category when you apply targets. Lower priorities are budgeted first.")
             }
             Section("Options") {
-                ForEach(templates.filter { [.limit, .goal].contains($0.kind) }) { row($0, loaded) }
+                ForEach(templates.filter(\.isOption)) { row($0, loaded) }
                 if !templates.contains(where: { $0.kind == .limit }) {
                     Button("Add Balance Cap", systemImage: "plus") { add(.limit) }
                 }
@@ -155,7 +155,7 @@ struct TargetsEditor: View {
     private func contribution(_ id: UUID) -> Int? {
         guard let preview = currentPreview, let index = templates.firstIndex(where: { $0.id == id }),
               index < preview.perTemplate.count,
-              ![.limit, .goal].contains(templates[index].kind) else { return nil }
+              !templates[index].isOption else { return nil }
         return preview.perTemplate[index]
     }
 

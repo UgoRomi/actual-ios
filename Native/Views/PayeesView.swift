@@ -57,7 +57,7 @@ struct PayeesView: View {
                             isPresented: $confirmsDeleteUnused, titleVisibility: .visible) {
             Button("Delete", role: .destructive) {
                 Task {
-                    if await model.manage("deletePayees", ["ids": .array(unused.map { .string($0.id) })]) { await load() }
+                    await model.manage("deletePayees", ["ids": .array(unused.map { .string($0.id) })])
                 }
             }
         } message: { Text("Rules that use them may stop matching.") }

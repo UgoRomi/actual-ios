@@ -15,6 +15,7 @@ struct RulesView: View {
     }
 
     var body: some View {
+        let describer = describer
         List {
             if let error = model.errorMessage ?? loadError { Section { ErrorNotice(message: error) } }
             ForEach(shown) { rule in
@@ -49,7 +50,7 @@ struct RulesView: View {
             }
         }
         .task(id: model.dataRevision) { await load() }
-        .sheet(item: $editing, onDismiss: { Task { await load() } }) { route in RuleEditor(rule: route.rule) }
+        .sheet(item: $editing) { route in RuleEditor(rule: route.rule) }
     }
 
     private func load() async {
@@ -87,6 +88,7 @@ struct RuleEditor: View {
     private var describer: RuleDescriber { RuleDescriber(model: model) }
 
     var body: some View {
+        let describer = describer
         NavigationStack {
             Form {
                 if !editable {
@@ -166,6 +168,9 @@ struct RuleEditor: View {
                 }
             }
             .task(id: rule.conditions.map(\.raw).description + rule.conditionsOp) {
+                // Wait for typing to pause: each count queries every transaction.
+                try? await Task.sleep(for: .milliseconds(250))
+                guard !Task.isCancelled else { return }
                 matches = try? await model.ruleMatches(rule)
             }
             .confirmationDialog("Apply this rule to \(matches ?? 0) transactions?", isPresented: $confirmsApply,
@@ -389,11 +394,7 @@ private struct IDPicker: View {
     var body: some View {
         List(options.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }, id: \.id) { option in
             Button { selection = option.id; dismiss() } label: {
-                HStack {
-                    Text(option.name).foregroundStyle(Color.primary)
-                    Spacer()
-                    if selection == option.id { Image(systemName: "checkmark").foregroundStyle(ActualTheme.purple) }
-                }
+                CheckRow(title: option.name, selected: selection == option.id)
             }
         }
         .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
@@ -412,11 +413,7 @@ private struct IDMultiPicker: View {
                 if let index = selection.firstIndex(of: option.id) { selection.remove(at: index) }
                 else { selection.append(option.id) }
             } label: {
-                HStack {
-                    Text(option.name).foregroundStyle(Color.primary)
-                    Spacer()
-                    if selection.contains(option.id) { Image(systemName: "checkmark").foregroundStyle(ActualTheme.purple) }
-                }
+                CheckRow(title: option.name, selected: selection.contains(option.id))
             }
         }
         .navigationTitle("Values").navigationBarTitleDisplayMode(.inline)

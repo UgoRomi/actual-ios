@@ -63,9 +63,8 @@ struct RuleItem: Decodable, Sendable, Equatable, Identifiable {
     /// Actual's valid operators for a condition field (shared/rules.ts), less tags.
     static func ops(for field: String) -> [String] {
         switch field {
-        case "payee", "category": ["is", "contains", "matches", "oneOf", "isNot", "doesNotContain", "notOneOf"]
+        case "payee", "category", "imported_payee": ["is", "contains", "matches", "oneOf", "isNot", "doesNotContain", "notOneOf"]
         case "account": ["is", "contains", "matches", "oneOf", "isNot", "doesNotContain", "notOneOf", "onBudget", "offBudget"]
-        case "imported_payee": ["is", "contains", "matches", "oneOf", "isNot", "doesNotContain", "notOneOf"]
         case "notes": ["is", "contains", "matches", "isNot", "doesNotContain", "hasTags", "hasAnyTag"]
         case "amount": ["is", "isapprox", "isbetween", "gt", "gte", "lt", "lte"]
         case "date": ["is", "isapprox", "gt", "gte", "lt", "lte"]

@@ -489,7 +489,7 @@ struct PayeePicker: View {
                             selection = ""
                             dismiss()
                         } label: {
-                            row(account.name, detail: account.offbudget ? "Off budget" : nil,
+                            CheckRow(title: account.name, detail: account.offbudget ? "Off budget" : nil,
                                 selected: transferAccount == account.id)
                         }
                         .accessibilityLabel("Transfer to or from \(account.name)")
@@ -508,17 +508,9 @@ struct PayeePicker: View {
     }
 
     private func choice(_ title: String, value: String) -> some View {
-        Button { choose(value) } label: { row(title, selected: transferAccount.isEmpty && selection == value) }
+        Button { choose(value) } label: { CheckRow(title: title, selected: transferAccount.isEmpty && selection == value) }
     }
 
-    private func row(_ title: String, detail: String? = nil, selected: Bool) -> some View {
-        HStack {
-            Text(title).foregroundStyle(Color.primary)
-            Spacer()
-            if let detail { Text(detail).font(.caption).foregroundStyle(Color.secondary) }
-            if selected { Image(systemName: "checkmark").foregroundStyle(ActualTheme.purple) }
-        }
-    }
 
     private func choose(_ value: String) {
         selection = value
@@ -563,11 +555,7 @@ struct CategoryPicker: View {
             selection = id
             dismiss()
         } label: {
-            HStack {
-                Text(title).foregroundStyle(Color.primary)
-                Spacer()
-                if selection == id { Image(systemName: "checkmark").foregroundStyle(ActualTheme.purple) }
-            }
+            CheckRow(title: title, selected: selection == id)
         }
     }
 }

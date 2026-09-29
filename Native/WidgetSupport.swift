@@ -14,15 +14,10 @@ enum WidgetSupport {
             if !model.isBudgetOpen { WidgetSnapshot.clear(); WidgetCenter.shared.reloadAllTimelines() }
             return
         }
-        let amount: Int
-        let headline: String
-        switch budget.budgetType {
-        case .envelope:
-            amount = budget.toBudget ?? 0
-            headline = amount < 0 ? "Overbudgeted" : "To Budget"
-        case .tracking:
-            amount = budget.saved ?? 0
-            headline = budget.savedIsProjected ? "Projected savings" : "Saved"
+        let amount = budget.headlineAmount
+        let headline = switch budget.budgetType {
+        case .envelope: amount < 0 ? "Overbudgeted" : "To Budget"
+        case .tracking: budget.savedIsProjected ? "Projected savings" : "Saved"
         }
         let attention = budget.visibleGroups.flatMap(\.categories).filter { !$0.isIncome }
             .sorted { $0.balance < $1.balance }.prefix(4)
@@ -34,9 +29,8 @@ enum WidgetSupport {
             negative: amount < 0,
             categories: attention.map {
                 .init(name: $0.name, balance: Money.formatted($0.balance, currency: model.currency), overspent: $0.balance < 0)
-            },
-            updated: Date())
-        guard snapshot.withoutDate != WidgetSnapshot.read()?.withoutDate else { return }
+            })
+        guard snapshot != WidgetSnapshot.read() else { return }
         snapshot.write()
         WidgetCenter.shared.reloadAllTimelines()
     }
@@ -46,13 +40,5 @@ enum WidgetSupport {
         let request = BGAppRefreshTaskRequest(identifier: refreshTask)
         request.earliestBeginDate = Date(timeIntervalSinceNow: 30 * 60)
         try? BGTaskScheduler.shared.submit(request)
-    }
-}
-
-private extension WidgetSnapshot {
-    /// The snapshot without its time, to skip reloading the widget when nothing changed.
-    var withoutDate: WidgetSnapshot {
-        WidgetSnapshot(budgetName: budgetName, month: month, headline: headline, amount: amount, negative: negative,
-                       categories: categories, updated: .distantPast)
     }
 }
