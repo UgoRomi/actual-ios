@@ -79,6 +79,7 @@ struct BudgetOverview: Decodable, Sendable {
     var format: BudgetFormat? = nil
     var accounts: [Account]
     let payees: [Payee]
+    var tags: [Tag] = []
 
     var openAccounts: [Account] { accounts.filter { !$0.closed } }
 }
@@ -467,6 +468,39 @@ enum TransactionChange: Sendable {
 }
 
 struct Payee: Decodable, Identifiable, Sendable { let id: String; let name: String }
+
+/// A tag for #tags in notes, as Actual's tags page lists them.
+struct Tag: Decodable, Identifiable, Sendable, Hashable {
+    let id: String
+    let tag: String
+    /// A hex color, such as #7C3AED; nil uses Actual's default tag color.
+    let color: String?
+    let description: String?
+    let hidden: Bool
+}
+
+/// Actual's #tags in notes: a # then anything but whitespace or #, where ## escapes a tag.
+enum NoteTags {
+    static func extract(_ notes: String?) -> [String] {
+        guard let notes, notes.contains("#") else { return [] }
+        var tags: [String] = []
+        var index = notes.startIndex
+        while let hash = notes[index...].firstIndex(of: "#") {
+            let next = notes.index(after: hash)
+            // A doubled # is an escaped tag.
+            if hash > notes.startIndex, notes[notes.index(before: hash)] == "#" { index = next; continue }
+            if next < notes.endIndex, notes[next] == "#" { index = notes.index(after: next); continue }
+            let end = notes[next...].firstIndex { $0 == "#" || $0.isWhitespace } ?? notes.endIndex
+            if end > next {
+                let tag = String(notes[next..<end])
+                if !tags.contains(tag) { tags.append(tag) }
+            }
+            index = end
+            if index == notes.endIndex { break }
+        }
+        return tags
+    }
+}
 
 /// A payee on Actual's payees page: how many rules use it, and whether any transaction does.
 struct ManagedPayee: Decodable, Identifiable, Sendable, Hashable {

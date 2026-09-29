@@ -33,6 +33,7 @@ struct SettingsView: View {
                     Section("Manage") {
                         NavigationLink { PayeesView() } label: { Label("Payees", systemImage: "person.2") }
                         NavigationLink { RulesView() } label: { Label("Rules", systemImage: "wand.and.rays") }
+                        NavigationLink { TagsView() } label: { Label("Tags", systemImage: "number") }
                     }
                     formatting
                 }

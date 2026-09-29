@@ -173,6 +173,29 @@ extension EngineSmoke {
     let transferPayee = try await engine.call("overview", as: BudgetOverview.self).accounts.first!.id
     try await expectFailure("mergePayees", ["targetId": .string(cafe.id), "mergeIds": .array([.string(transferPayee)])],
                             "no longer exists")
+    // Tags: discovered from notes, colored, renamed in every note, hidden, and deleted.
+    func tags() async throws -> [Tag] { try await engine.call("tags", as: [Tag].self) }
+    _ = try await engine.call("saveTransaction", arguments: [
+      "accountId": .string(keep), "date": .string("2026-09-21"), "amount": .number(-900),
+      "payeeName": .string("Native Tag Shop"), "notes": .string("trip #nativetrip ##escaped"), "cleared": .bool(false),
+    ])
+    try await call("discoverTags", [:])
+    guard let trip = try await tags().first(where: { $0.tag == "nativetrip" }) else { throw EngineFailure("Tag not discovered") }
+    check(try await !tags().contains { $0.tag == "escaped" || $0.tag == "#escaped" }, "## escapes a tag")
+    try await expectFailure("createTag", ["tag": .string("two words")], "without spaces")
+    try await call("createTag", ["tag": .string("#nativeextra"), "color": .string("#112233")])
+    check(try await tags().first { $0.tag == "nativeextra" }?.color == "#112233")
+    try await expectFailure("updateTag", ["id": .string(trip.id), "color": .string("red")], "valid color")
+    try await call("updateTag", ["id": .string(trip.id), "tag": .string("nativejourney"), "color": .string("#AA00FF"),
+                                 "description": .string("Holidays"), "hidden": .bool(true)])
+    let renamed = try await tags().first { $0.id == trip.id }
+    check(renamed?.tag == "nativejourney" && renamed?.color == "#AA00FF" && renamed?.description == "Holidays" && renamed?.hidden == true)
+    let tagged = try await engine.call("register", as: [Transaction].self).first { $0.accountId == keep && $0.amount == -900 }
+    check(tagged?.notes == "trip #nativejourney ##escaped", "Renaming changes the tag in notes: \(String(describing: tagged?.notes))")
+    check(try await engine.call("overview", as: BudgetOverview.self).tags.contains { $0.tag == "nativejourney" })
+    try await call("deleteTag", ["id": .string(trip.id)])
+    check(try await !tags().contains { $0.id == trip.id })
+
     // Formatting settings sync with the budget, limited to Actual's choices.
     try await call("savePreference", ["id": .string("numberFormat"), "value": .string("dot-comma")])
     try await call("savePreference", ["id": .string("hideFraction"), "value": .string("true")])

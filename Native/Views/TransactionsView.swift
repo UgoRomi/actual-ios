@@ -4,6 +4,8 @@ struct TransactionsView: View {
     var accountID: String? = nil
     var accountName: String? = nil
     var embedsNavigation = true
+    /// Only transactions whose notes have this #tag, as Actual's tag filter shows them.
+    var tag: String? = nil
     @Environment(AppModel.self) private var model
     @State private var search = ""
     @State private var selectedTransaction: Transaction?
@@ -26,14 +28,17 @@ struct TransactionsView: View {
     }
 
     private var content: some View {
-        let sections = TransactionSection.grouped(model.transactions, accountID: accountID,
+        let listed = tag.map { tag in model.transactions.filter { transaction in
+            ([transaction.notes ?? ""] + (transaction.splits ?? []).map(\.notes)).contains { NoteTags.extract($0).contains(tag) }
+        } } ?? model.transactions
+        let sections = TransactionSection.grouped(listed, accountID: accountID,
                                                   search: search, currency: model.currency)
         return List {
             if let error = model.errorMessage { Section { ErrorNotice(message: error) { Task { await model.refresh() } } } }
             if let accountID { BankSyncNotice(accountID: accountID) }
             if let account, let reconciliation { ReconcilingBanner(account: account, reconciliation: reconciliation) }
             let upcoming = model.upcoming.filter { scheduled in
-                (accountID == nil || scheduled.accountId == accountID)
+                tag == nil && (accountID == nil || scheduled.accountId == accountID)
                     && (search.isEmpty || scheduled.title.localizedCaseInsensitiveContains(search)
                         || (scheduled.categoryName ?? "").localizedCaseInsensitiveContains(search))
             }
@@ -184,7 +189,7 @@ struct TransactionRow: View {
                 Text(transaction.title).font(.body.weight(.medium)).foregroundStyle(.primary)
                 Text(transaction.canEdit ? transaction.detail : "\(transaction.detail) · view only")
                     .font(.caption).foregroundStyle(.secondary)
-                if let notes = transaction.notes, !notes.isEmpty { Text(notes).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
+                if let notes = transaction.notes, !notes.isEmpty { NotesText(notes: notes).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
             }
             Spacer(minLength: 8)
             MoneyText(value: transaction.amount, currency: currency, positiveColor: .green).font(.body.weight(.semibold))

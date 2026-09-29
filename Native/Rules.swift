@@ -66,7 +66,7 @@ struct RuleItem: Decodable, Sendable, Equatable, Identifiable {
         case "payee", "category": ["is", "contains", "matches", "oneOf", "isNot", "doesNotContain", "notOneOf"]
         case "account": ["is", "contains", "matches", "oneOf", "isNot", "doesNotContain", "notOneOf", "onBudget", "offBudget"]
         case "imported_payee": ["is", "contains", "matches", "oneOf", "isNot", "doesNotContain", "notOneOf"]
-        case "notes": ["is", "contains", "matches", "isNot", "doesNotContain"]
+        case "notes": ["is", "contains", "matches", "isNot", "doesNotContain", "hasTags", "hasAnyTag"]
         case "amount": ["is", "isapprox", "isbetween", "gt", "gte", "lt", "lte"]
         case "date": ["is", "isapprox", "gt", "gte", "lt", "lte"]
         default: ["is"]

@@ -211,6 +211,43 @@ export async function manage(method: string, args: Obj): Promise<unknown> {
       await lib.send("preferences/save", { id, value } as never);
       return {};
     }
+    case "tags":
+      return (await lib.send("tags-get")).map((t) => ({
+        id: t.id,
+        tag: t.tag,
+        color: t.color ?? null,
+        description: t.description ?? null,
+        hidden: Boolean(t.hidden),
+      }));
+    case "discoverTags":
+      // As Actual's "Find existing tags": add a tag for every #tag already in notes.
+      await lib.send("tags-discover");
+      return {};
+    case "createTag":
+      await lib.send("tags-create", {
+        tag: tagName(args.tag),
+        color: tagColor(args.color),
+        description: text(args.description).trim() || null,
+      });
+      return {};
+    case "updateTag": {
+      const tag = await findTag(args.id);
+      if (args.tag !== undefined && text(args.tag).trim() !== tag.tag)
+        await lib.send("tags-rename", { id: tag.id, tag: tagName(args.tag) });
+      await lib.send("tags-update", {
+        id: tag.id,
+        ...(args.color !== undefined && { color: tagColor(args.color) }),
+        ...(args.description !== undefined && { description: text(args.description).trim() || null }),
+        ...(typeof args.hidden === "boolean" && { hidden: args.hidden }),
+      });
+      return {};
+    }
+    case "deleteTag": {
+      // As in Actual, the #tag stays in notes; only its color and settings go.
+      const tag = await findTag(args.id);
+      await lib.send("tags-delete", { id: tag.id });
+      return {};
+    }
     case "payees": {
       // As Actual's payees page: ordinary payees, how many rules use each, and which are unused.
       const payees = (await lib.send("payees-get")).filter((p) => !p.transfer_acct);
@@ -248,6 +285,24 @@ export async function manage(method: string, args: Obj): Promise<unknown> {
   }
 }
 
+// Actual's tag names: any characters but whitespace and '#'.
+function tagName(value: unknown): string {
+  const name = text(value).trim().replace(/^#/, "");
+  if (!/^[^#\s]+$/.test(name)) throw new Error("Enter a tag name without spaces or #.");
+  return name;
+}
+function tagColor(value: unknown): string | null {
+  if (value == null || value === "") return null;
+  const color = text(value).trim();
+  if (!/^#[0-9a-fA-F]{6}$/.test(color)) throw new Error("Choose a valid color.");
+  return color;
+}
+async function findTag(id: unknown) {
+  const tag = (await lib.send("tags-get")).find((t) => t.id === id);
+  if (!tag) throw new Error("This tag no longer exists.");
+  return tag;
+}
+
 // Transfer payees stand for accounts, which Actual never renames, merges, or deletes as payees.
 async function ordinaryPayee(id: unknown) {
   const payee = (await lib.send("payees-get")).find((p) => p.id === id);
@@ -266,4 +321,5 @@ export const managementMethods = [
   "createCategoryGroup", "updateCategoryGroup", "deleteCategoryGroup", "createCategory", "updateCategory",
   "deleteCategory", "moveCategory", "moveCategoryGroup", "saveNotes", "createAccount", "updateAccount",
   "closeAccount", "reopenAccount", "renamePayee", "deletePayees", "mergePayees", "savePreference",
+  "discoverTags", "createTag", "updateTag", "deleteTag",
 ];

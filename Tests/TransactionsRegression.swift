@@ -79,6 +79,12 @@ import SQLite3
         BudgetDate.configure(nil)
         print("PASS: number formats, hidden decimals, date formats, and the first day of the week")
 
+        // Actual's #tags: anything but whitespace or #; ## escapes a tag.
+        precondition(NoteTags.extract("lunch #food #work #food") == ["food", "work"])
+        precondition(NoteTags.extract("a#b ##escaped #") == ["b"], "\(NoteTags.extract("a#b ##escaped #"))")
+        precondition(NoteTags.extract("#one#two") == ["one", "two"] && NoteTags.extract(nil).isEmpty)
+        print("PASS: #tags in notes, with escapes")
+
         // As in Actual's mobile register, a transfer names the other account and its direction.
         var sent = transaction("sent", payee: "Ally Savings", category: "Uncategorized", amount: -5000,
                                transfer: true, transferAccount: "savings")

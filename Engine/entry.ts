@@ -232,6 +232,14 @@ async function overview() {
     },
     accounts,
     payees: payees.filter((p) => !p.transfer_acct).map((p) => ({ id: p.id, name: p.name })),
+    // Tags color #tags in notes, as Actual shows them.
+    tags: (await lib.send("tags-get")).map((t) => ({
+      id: t.id,
+      tag: t.tag,
+      color: t.color ?? null,
+      description: t.description ?? null,
+      hidden: Boolean(t.hidden),
+    })),
   };
 }
 // One month of the budget: its summary and visible category groups.
@@ -730,7 +738,7 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       return { budgets: await budgets() };
     }
     default:
-      if ([...managementMethods, "categoryNeedsTransfer", "payees"].includes(method)) {
+      if ([...managementMethods, "categoryNeedsTransfer", "payees", "tags"].includes(method)) {
         if (!getPrefs()?.id) throw new Error("Open a budget first.");
         return manage(method, args);
       }
