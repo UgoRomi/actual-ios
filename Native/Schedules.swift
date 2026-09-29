@@ -19,6 +19,20 @@ struct Schedule: Decodable, Identifiable, Sendable {
     let status: Status
 }
 
+/// Transactions linked to a schedule, and unlinked ones its conditions match.
+struct ScheduleTransactions: Decodable, Sendable {
+    struct Item: Decodable, Identifiable, Sendable {
+        let id: String
+        let date: String
+        let amount: Int
+        let accountId: String?
+        let payeeId: String?
+        let notes: String
+    }
+    let linked: [Item]
+    let matching: [Item]
+}
+
 /// An upcoming transaction from a schedule, shown before the saved ones as Actual's registers do.
 struct ScheduledTransaction: Decodable, Identifiable, Sendable {
     let id: String
@@ -91,6 +105,29 @@ enum ScheduleDate: Decodable, Sendable, Equatable {
         var endOccurrences = 1
         var endDate: String? = nil
 
+        /// A specific day of a monthly schedule: a day of the month, or the nth weekday; -1 is the last.
+        struct Pattern: Hashable, Sendable {
+            /// "day", or a weekday such as "FR".
+            var type: String
+            var value: Int
+
+            static let weekdays = ["SU", "MO", "TU", "WE", "TH", "FR", "SA"]
+        }
+
+        /// Actual's patterns as specific days; setting them replaces the patterns.
+        var specificDays: [Pattern] {
+            get {
+                patterns.compactMap { pattern in
+                    guard case .object(let fields) = pattern, case .string(let type) = fields["type"],
+                          case .number(let value) = fields["value"] else { return nil }
+                    return Pattern(type: type, value: value)
+                }
+            }
+            set {
+                patterns = newValue.map { .object(["type": .string($0.type), "value": .number($0.value)]) }
+            }
+        }
+
         init(start: String, frequency: Frequency) {
             self.start = start
             self.frequency = frequency
@@ -139,7 +176,7 @@ enum ScheduleDate: Decodable, Sendable, Equatable {
             case .afterOccurrences: text += endOccurrences == 1 ? ", once" : ", \(endOccurrences) times"
             case .onDate: if let endDate { text += ", until \(endDate)" }
             }
-            if !patterns.isEmpty { text += ", with a custom pattern" }
+            if !specificDays.isEmpty { text += ", on specific days" }
             return text
         }
     }

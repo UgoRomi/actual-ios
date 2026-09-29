@@ -596,6 +596,8 @@ struct BudgetFormat: Decodable, Sendable, Equatable {
     var dateFormat: String?
     /// 0 is Sunday.
     var firstDayOfWeekIdx: Int?
+    /// How far ahead registers list upcoming scheduled transactions: 1, 7, 14, oneMonth, or currentMonth.
+    var upcomingLength: String? = nil
 
     static let numberFormats: [(value: String, label: String)] = [
         ("comma-dot", "1,000.33"), ("dot-comma", "1.000,33"), ("space-comma", "1\u{202F}000,33"),

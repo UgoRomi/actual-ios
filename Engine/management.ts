@@ -204,6 +204,8 @@ export async function manage(method: string, args: Obj): Promise<unknown> {
         hideFraction: ["true", "false"],
         dateFormat: ["MM/dd/yyyy", "dd/MM/yyyy", "yyyy-MM-dd", "MM.dd.yyyy", "dd.MM.yyyy", "dd-MM-yyyy"],
         firstDayOfWeekIdx: ["0", "1", "2", "3", "4", "5", "6"],
+        // How far ahead registers list upcoming scheduled transactions.
+        upcomingScheduledTransactionLength: ["1", "7", "14", "oneMonth", "currentMonth"],
       };
       const id = text(args.id);
       const value = text(args.value);

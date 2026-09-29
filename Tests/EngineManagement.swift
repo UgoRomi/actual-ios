@@ -202,7 +202,8 @@ extension EngineSmoke {
     try await call("savePreference", ["id": .string("dateFormat"), "value": .string("dd.MM.yyyy")])
     try await call("savePreference", ["id": .string("firstDayOfWeekIdx"), "value": .string("1")])
     let format = try await engine.call("overview", as: BudgetOverview.self).format
-    check(format == BudgetFormat(numberFormat: "dot-comma", hideFraction: true, dateFormat: "dd.MM.yyyy", firstDayOfWeekIdx: 1),
+    check(format == BudgetFormat(numberFormat: "dot-comma", hideFraction: true, dateFormat: "dd.MM.yyyy", firstDayOfWeekIdx: 1,
+                                 upcomingLength: "7"),
           "\(String(describing: format))")
     try await expectFailure("savePreference", ["id": .string("numberFormat"), "value": .string("weird")], "offered settings")
     try await expectFailure("savePreference", ["id": .string("budgetType"), "value": .string("tracking")], "offered settings")

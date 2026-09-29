@@ -229,6 +229,7 @@ async function overview() {
       hideFraction: String(preferences.hideFraction) === "true",
       dateFormat: preferences.dateFormat || null,
       firstDayOfWeekIdx: preferences.firstDayOfWeekIdx ? Number(preferences.firstDayOfWeekIdx) : null,
+      upcomingLength: preferences.upcomingScheduledTransactionLength || "7",
     },
     accounts,
     payees: payees.filter((p) => !p.transfer_acct).map((p) => ({ id: p.id, name: p.name })),
@@ -749,7 +750,7 @@ async function perform(method: string, args: Obj): Promise<unknown> {
         if (!getPrefs()?.id) throw new Error("Open a budget first.");
         return ruleCommand(method, args);
       }
-      if ([...scheduleWrites, "upcomingDates"].includes(method)) {
+      if ([...scheduleWrites, "upcomingDates", "scheduleTransactions"].includes(method)) {
         if (!getPrefs()?.id) throw new Error("Open a budget first.");
         return scheduleCommand(method, args);
       }

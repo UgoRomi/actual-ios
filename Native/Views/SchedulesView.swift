@@ -55,6 +55,7 @@ struct SchedulesView: View {
                     Button("Add schedule", systemImage: "plus") { editing = ScheduleEditRoute(schedule: nil) }
                         .disabled(model.isBusy)
                 }
+                ToolbarItem(placement: .topBarTrailing) { upcomingMenu }
                 ToolbarItem(placement: .topBarTrailing) { SettingsButton() }
             }
             .refreshable { await model.refresh(); await load() }
@@ -66,6 +67,25 @@ struct SchedulesView: View {
                 Button("Delete Schedule", role: .destructive) { run("deleteSchedule", schedule) }
             } message: { _ in Text("Transactions it already added stay in your accounts.") }
         }
+    }
+
+    /// Actual's upcoming length: how far ahead registers list scheduled transactions.
+    private var upcomingMenu: some View {
+        Menu("Upcoming", systemImage: "calendar.day.timeline.right") {
+            Picker("Show upcoming transactions for", selection: Binding(
+                get: { model.overview?.format?.upcomingLength ?? "7" },
+                set: { value in
+                    Task { await model.manage("savePreference", ["id": .string("upcomingScheduledTransactionLength"),
+                                                                 "value": .string(value)]) }
+                })) {
+                Text("1 day").tag("1")
+                Text("1 week").tag("7")
+                Text("2 weeks").tag("14")
+                Text("1 month").tag("oneMonth")
+                Text("End of the current month").tag("currentMonth")
+            }
+        }
+        .disabled(model.isBusy)
     }
 
     private func load() async {
@@ -261,10 +281,44 @@ struct ScheduleEditor: View {
                             }
                         }
                     }
-                } header: { Text("Date") } footer: {
-                    if repeats && !recurrence.patterns.isEmpty {
-                        Text("This schedule also repeats on a custom pattern set in Actual, which is kept.")
+                } header: { Text("Date") }
+                if repeats && recurrence.frequency == .monthly {
+                    // As Actual's date editor: repeat on days of the month, or the nth weekday.
+                    Section {
+                        ForEach(recurrence.specificDays.indices, id: \.self) { index in
+                            HStack {
+                                Picker("Which", selection: Binding(
+                                    get: { recurrence.specificDays[safe: index]?.value ?? 1 },
+                                    set: { value in recurrence.specificDays[index].value = value })) {
+                                    Text("Last").tag(-1)
+                                    ForEach(1...31, id: \.self) { Text(ordinal($0)).tag($0) }
+                                }.labelsHidden()
+                                Picker("Day", selection: Binding(
+                                    get: { recurrence.specificDays[safe: index]?.type ?? "day" },
+                                    set: { type in recurrence.specificDays[index].type = type })) {
+                                    Text("Day").tag("day")
+                                    ForEach(Array(ScheduleDate.Recurrence.Pattern.weekdays.enumerated()), id: \.element) { index, day in
+                                        Text(Calendar(identifier: .gregorian).weekdaySymbols[index]).tag(day)
+                                    }
+                                }.labelsHidden()
+                            }
+                        }
+                        .onDelete { recurrence.specificDays.remove(atOffsets: $0) }
+                        Button("Add Specific Day", systemImage: "plus") {
+                            recurrence.specificDays.append(.init(type: "day", value: Calendar.current.component(.day, from: start)))
+                        }
+                    } header: { Text("Specific days") } footer: {
+                        Text(recurrence.specificDays.isEmpty
+                             ? "Repeats on the start date’s day. Add days such as the 1st and 15th, or the last Friday."
+                             : "Swipe to remove a day.")
                     }
+                }
+                if let schedule {
+                    Section {
+                        NavigationLink { ScheduleTransactionsView(schedule: schedule) } label: {
+                            Label("Linked Transactions", systemImage: "link")
+                        }
+                    } footer: { Text("Link transactions that paid this schedule, as Actual does when they match.") }
                 }
                 if !upcoming.isEmpty {
                     Section("Next dates") {
@@ -303,6 +357,12 @@ struct ScheduleEditor: View {
                 upcoming = (try? await model.upcomingDates(date)) ?? []
             }
         }
+    }
+
+    private func ordinal(_ number: Int) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .ordinal
+        return formatter.string(from: number as NSNumber) ?? String(number)
     }
 
     private var unit: String {
@@ -378,4 +438,76 @@ struct ScheduleEditor: View {
         validation = nil
         Task { if await model.manage("saveSchedule", arguments) { dismiss() } }
     }
+}
+
+/// A schedule's linked transactions, and ones its conditions match, to link or unlink.
+private struct ScheduleTransactionsView: View {
+    let schedule: Schedule
+    @Environment(AppModel.self) private var model
+    @State private var transactions: ScheduleTransactions?
+    @State private var loadError: String?
+
+    var body: some View {
+        List {
+            if let error = model.errorMessage ?? loadError { Section { ErrorNotice(message: error) } }
+            if let transactions {
+                Section {
+                    if transactions.linked.isEmpty { Text("None yet").foregroundStyle(.secondary) }
+                    ForEach(transactions.linked) { item in
+                        row(item).swipeActions {
+                            Button("Unlink", systemImage: "link.badge.minus") { link(item, false) }.tint(.orange)
+                        }
+                    }
+                } header: { Text("Linked") } footer: {
+                    if !transactions.linked.isEmpty { Text("Swipe to unlink.") }
+                }
+                Section {
+                    if transactions.matching.isEmpty { Text("No other transactions match").foregroundStyle(.secondary) }
+                    ForEach(transactions.matching) { item in
+                        Button { link(item, true) } label: {
+                            HStack { row(item); Image(systemName: "link.badge.plus").foregroundStyle(ActualTheme.purple) }
+                        }.buttonStyle(.plain)
+                    }
+                } header: { Text("Matching") } footer: {
+                    Text("Transactions with this schedule’s payee, account, and amount. Tap one to link it.")
+                }
+            } else if loadError == nil {
+                ProgressView()
+            }
+        }
+        .disabled(model.isBusy)
+        .navigationTitle("Linked Transactions").navigationBarTitleDisplayMode(.inline)
+        .task(id: model.dataRevision) { await load() }
+    }
+
+    private func row(_ item: ScheduleTransactions.Item) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.payeeId.flatMap { id in model.overview?.payees.first { $0.id == id }?.name } ?? "No payee")
+                Text([BudgetDate.display(item.date),
+                      item.accountId.flatMap { id in model.overview?.accounts.first { $0.id == id }?.name }]
+                    .compactMap { $0 }.joined(separator: " · "))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer()
+            MoneyText(value: item.amount, currency: model.currency, positiveColor: .green)
+        }
+    }
+
+    private func load() async {
+        do { transactions = try await model.scheduleTransactions(schedule.id); loadError = nil }
+        catch { loadError = error.localizedDescription }
+    }
+
+    private func link(_ item: ScheduleTransactions.Item, _ link: Bool) {
+        Task {
+            if await model.manage("linkScheduleTransactions", [
+                "id": .string(schedule.id), "transactionIds": .array([.string(item.id)]), "link": .bool(link),
+            ]) { await load() }
+        }
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
 }

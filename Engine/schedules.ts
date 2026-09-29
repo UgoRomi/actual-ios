@@ -105,6 +105,20 @@ export async function schedules() {
   }));
 }
 
+function patterns(value: unknown) {
+  if (value == null) return [];
+  if (!Array.isArray(value)) throw new Error("Choose valid specific days.");
+  return value.map((item) => {
+    const pattern = (item ?? {}) as Obj;
+    const type = text(pattern.type);
+    const day = pattern.value;
+    if (!["day", "SU", "MO", "TU", "WE", "TH", "FR", "SA"].includes(type)) throw new Error("Choose valid specific days.");
+    if (typeof day !== "number" || !Number.isInteger(day) || !(day === -1 || (day >= 1 && day <= 31)))
+      throw new Error("Choose valid specific days.");
+    return { type, value: day };
+  });
+}
+
 // A repeating date, checked the way Actual's date editor limits it.
 function recurrence(value: Obj) {
   const frequency = text(value.frequency);
@@ -124,8 +138,9 @@ function recurrence(value: Obj) {
     start,
     frequency,
     interval,
-    // Patterns set in Actual, such as "the last Friday", are kept as they are.
-    patterns: Array.isArray(value.patterns) ? value.patterns : [],
+    // Specific days of a monthly schedule, as Actual's date editor sets them:
+    // a day of the month, or the nth weekday, where -1 is the last.
+    patterns: frequency === "monthly" ? patterns(value.patterns) : [],
     skipWeekend: value.skipWeekend === true,
     weekendSolveMode,
     endMode,
@@ -206,6 +221,45 @@ export async function scheduleCommand(method: string, args: Obj): Promise<unknow
         } as never);
       return {};
     }
+    case "scheduleTransactions": {
+      // A schedule's linked transactions, and ones its conditions match that are not linked yet,
+      // as the transactions list in Actual's schedule editor shows them.
+      const schedule = await find(args.id);
+      const summary = (rows: Obj[]) =>
+        rows.map((row) => ({
+          id: row.id,
+          date: row.date,
+          amount: row.amount,
+          accountId: row.account ?? null,
+          payeeId: row.payee ?? null,
+          notes: row.notes ?? "",
+        }));
+      const { data: linked } = await lib.send(
+        "query",
+        lib.q("transactions").filter({ schedule: schedule.id }).select("*").orderBy({ date: "desc" }).serialize(),
+      );
+      const { filters } = await lib.send("make-filters-from-conditions", {
+        conditions: ((schedule._conditions ?? []) as Obj[]).filter((c) => c.field !== "date"),
+      } as never);
+      const { data: matching } = filters.length
+        ? await lib.send(
+            "query",
+            lib.q("transactions").filter({ $and: [...filters, { schedule: null }] }).select("*")
+              .orderBy({ date: "desc" }).limit(50).serialize(),
+          )
+        : { data: [] };
+      return { linked: summary(linked as Obj[]), matching: summary(matching as Obj[]) };
+    }
+    case "linkScheduleTransactions": {
+      const schedule = await find(args.id);
+      const ids = Array.isArray(args.transactionIds) ? args.transactionIds.map(text).filter(Boolean) : [];
+      if (!ids.length) throw new Error("Choose transactions to link.");
+      const link = args.link !== false;
+      await lib.send("transactions-batch-update", {
+        updated: ids.map((id) => ({ id, schedule: link ? schedule.id : null })),
+      } as never);
+      return {};
+    }
     case "upcomingDates": {
       const count = typeof args.count === "number" ? Math.min(Math.max(Math.round(args.count), 1), 12) : 5;
       const config = args.date;
@@ -217,4 +271,6 @@ export async function scheduleCommand(method: string, args: Obj): Promise<unknow
   }
 }
 
-export const scheduleWrites = ["saveSchedule", "deleteSchedule", "skipSchedule", "postSchedule", "completeSchedule"];
+export const scheduleWrites = [
+  "saveSchedule", "deleteSchedule", "skipSchedule", "postSchedule", "completeSchedule", "linkScheduleTransactions",
+];

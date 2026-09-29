@@ -505,6 +505,7 @@ final class AppModel {
         "deleteCategory", "moveCategory", "moveCategoryGroup", "saveNotes", "createAccount", "updateAccount",
         "closeAccount", "reopenAccount", "renamePayee", "deletePayees", "mergePayees", "savePreference",
         "saveRule", "deleteRule", "applyRule", "discoverTags", "createTag", "updateTag", "deleteTag",
+        "linkScheduleTransactions",
         // Schedules: posting adds a transaction, and saving can add a payee.
         "saveSchedule", "deleteSchedule", "skipSchedule", "postSchedule", "completeSchedule",
     ]
@@ -528,6 +529,11 @@ final class AppModel {
     /// Every schedule with its status. Reading schedules changes nothing.
     func schedules() async throws -> [Schedule] {
         try await client().call("schedules", as: [Schedule].self)
+    }
+
+    /// A schedule's linked transactions, and unlinked ones its conditions match.
+    func scheduleTransactions(_ id: String) async throws -> ScheduleTransactions {
+        try await client().call("scheduleTransactions", arguments: ["id": .string(id)], as: ScheduleTransactions.self)
     }
 
     /// The next dates a schedule's date falls on.
