@@ -38,6 +38,11 @@ final class AppModel {
     var targetsMessage: String?
     /// Changes whenever saved budget data may have changed, so reports reload.
     var dataRevision = 0
+    /// Calendar, summary, and spending reports count off-budget accounts and transfers to them.
+    /// Off by default, unlike Actual, so investment accounts do not read as spending.
+    var reportsIncludeOffBudget = UserDefaults.standard.bool(forKey: "reports.includeOffBudget") {
+        didSet { UserDefaults.standard.set(reportsIncludeOffBudget, forKey: "reports.includeOffBudget") }
+    }
     /// The engine's latest register and accounts, before pending edits.
     private var loadedOverview: BudgetOverview?
     private var loadedTransactions: [Transaction] = []
@@ -459,7 +464,7 @@ final class AppModel {
     /// Cash flow `detail` adds income, expenses, and balance by day or month.
     func report(_ widgetID: String, timeFrame: ReportTimeFrame? = nil, interval: String? = nil,
                 detail: Bool = false) async throws -> ReportData {
-        var options: [String: JSONValue] = ["detail": .bool(detail)]
+        var options: [String: JSONValue] = ["detail": .bool(detail), "includeOffBudget": .bool(reportsIncludeOffBudget)]
         if let timeFrame { options["timeFrame"] = timeFrame.json }
         if let interval { options["interval"] = .string(interval) }
         return try await client().call("report", arguments: ["id": .string(widgetID), "options": .object(options)],
@@ -468,8 +473,10 @@ final class AppModel {
 
     /// The transactions a calendar widget counts on one day.
     func reportTransactions(_ widgetID: String, date: String) async throws -> [ReportTransaction] {
-        try await client().call("reportTransactions", arguments: ["id": .string(widgetID), "date": .string(date)],
-                                as: [ReportTransaction].self)
+        try await client().call("reportTransactions", arguments: [
+            "id": .string(widgetID), "date": .string(date),
+            "options": .object(["includeOffBudget": .bool(reportsIncludeOffBudget)]),
+        ], as: [ReportTransaction].self)
     }
 
     /// A category's average monthly activity over up to the last 12 months, as

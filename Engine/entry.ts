@@ -445,7 +445,7 @@ async function perform(method: string, args: Obj): Promise<unknown> {
     case "report":
       return runMutator(() => report(text(args.id), object(args.options ?? {})));
     case "reportTransactions":
-      return runMutator(() => reportTransactions(text(args.id), text(args.date)));
+      return runMutator(() => reportTransactions(text(args.id), text(args.date), object(args.options ?? {})));
     case "acknowledgeSyncWarning": {
       // Actual only warns when another device's changes are discarded; this
       // device may then show different values for them. Once the user accepts

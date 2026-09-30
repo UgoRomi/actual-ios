@@ -12,7 +12,9 @@ struct ReportDetailView: View {
     @State private var data: ReportData?
     @State private var error: String?
 
-    private struct Request: Equatable { let preset: ReportRangePreset?; let interval: String?; let revision: Int }
+    private struct Request: Equatable {
+        let preset: ReportRangePreset?; let interval: String?; let revision: Int; let includeOffBudget: Bool
+    }
 
     var body: some View {
         ScrollView {
@@ -30,7 +32,13 @@ struct ReportDetailView: View {
         .background(ActualTheme.background)
         .navigationTitle(widget.title).navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
-        .task(id: Request(preset: preset, interval: interval, revision: model.dataRevision)) { await load() }
+        .toolbar {
+            if [.spending, .summary, .calendar].contains(widget.kind) {
+                ToolbarItem(placement: .topBarTrailing) { ReportAccountsMenu() }
+            }
+        }
+        .task(id: Request(preset: preset, interval: interval, revision: model.dataRevision,
+                          includeOffBudget: model.reportsIncludeOffBudget)) { await load() }
     }
 
     @ViewBuilder private func content(_ data: ReportData) -> some View {
@@ -298,7 +306,7 @@ private struct CalendarDetail: View {
                 if let selectedDate, selectedDate.hasPrefix(month.month) { dayTransactions(selectedDate) }
             }
         }
-        .task(id: selectedDate) { await loadDay() }
+        .task(id: [selectedDate, String(model.reportsIncludeOffBudget)]) { await loadDay() }
     }
 
     @ViewBuilder private func dayTransactions(_ date: String) -> some View {

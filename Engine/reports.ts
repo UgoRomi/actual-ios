@@ -201,6 +201,28 @@ async function filters(meta: Obj, key = "conditions", opKey = "conditionsOp") {
   return { [meta[opKey] === "or" ? "$or" : "$and"]: filters };
 }
 
+// Native, not upstream: calendar, summary, and spending leave out off-budget
+// accounts and transfers to or from them, unless the app includes them or the
+// widget's own filters choose an off-budget account.
+async function budgetScope(meta: Obj, override: Obj, keys: [string, string][] = [["conditions", "conditionsOp"]]) {
+  if (override.includeOffBudget === true) return {};
+  const offBudget = new Set(
+    ((await lib.send("accounts-get")) as Array<{ id: string; offbudget: unknown }>)
+      .filter((a) => a.offbudget)
+      .map((a) => a.id),
+  );
+  const chosen = keys.some(([key]) =>
+    conditions(meta[key]).some(
+      (c) =>
+        c.field === "account" &&
+        (c.op === "is" || c.op === "oneOf") &&
+        (Array.isArray(c.value) ? c.value : [c.value]).some((id) => offBudget.has(String(id))),
+    ),
+  );
+  if (chosen) return {};
+  return { "account.offbudget": false, "payee.transfer_acct.offbudget": { $ne: true } };
+}
+
 async function widget(id: string) {
   const [found] = await rows<{ type: string; meta: unknown }>(lib.q("dashboard").filter({ id }).select("*"));
   if (!found) throw new Error("This report is no longer on the dashboard. Refresh to see the current dashboard.");
@@ -568,7 +590,7 @@ async function spendingBudgetFilters(list: Condition[], op: unknown) {
 }
 
 // spending-spreadsheet.ts createSpendingSpreadsheet
-async function spending(meta: Obj) {
+async function spending(meta: Obj, override: Obj) {
   const [compare, compareTo] = spendingRange(meta);
   const range = averageRange(meta.averageRange);
   const endDate = months.getMonthEnd(compare + "-01");
@@ -594,12 +616,14 @@ async function spending(meta: Obj) {
   const startDate = (averageMonths.size ? averageStart : compare) + "-01";
 
   const where = await filters(meta);
+  const scope = await budgetScope(meta, override);
   type Row = { date: string; amount: number; categoryIncome: boolean | number | null; accountOffBudget: boolean | number | null };
   // makeQuery.ts, by day.
   const query = (name: "assets" | "debts", from: string, to: string) =>
     lib
       .q("transactions")
       .filter(where)
+      .filter(scope)
       .filter({ $and: [{ date: { $transform: "$day", $gte: from } }, { date: { $transform: "$day", $lte: to } }] })
       .filter(name === "assets" ? { amount: { $gt: 0 } } : { amount: { $lt: 0 } })
       .groupBy([{ $day: "$date" }, { $id: "$account" }, { $id: "$payee" }, { $id: "$category" }, { $id: "$payee.transfer_acct.id" }])
@@ -712,6 +736,7 @@ async function summary(meta: Obj, override: Obj) {
     .q("transactions")
     .filter({ $and: [{ date: { $gte: startDay } }, { date: { $lte: endDay } }] })
     .filter(where)
+    .filter(await budgetScope(meta, override))
     .select(["date", { amount: { $sum: "$amount" } }, { count: { $count: "*" } }]);
   if (type === "avgPerMonth" || type === "avgPerYear") query = query.groupBy(["date"]);
   const data = await rows<{ date: string; amount: number; count: number }>(query);
@@ -744,7 +769,11 @@ async function summary(meta: Obj, override: Obj) {
     }
     case "percentage": {
       const divisorWhere = await filters(content, "divisorConditions", "divisorConditionsOp");
-      let divisorQuery = lib.q("transactions").filter(divisorWhere).select([{ amount: { $sum: "$amount" } }]);
+      let divisorQuery = lib
+        .q("transactions")
+        .filter(divisorWhere)
+        .filter(await budgetScope(content, override, [["divisorConditions", "divisorConditionsOp"]]))
+        .select([{ amount: { $sum: "$amount" } }]);
       if (!content.divisorAllTimeDateRange)
         divisorQuery = divisorQuery.filter({ $and: [{ date: { $gte: startDay } }, { date: { $lte: endDay } }] });
       const divisor = (await rows<{ amount: number }>(divisorQuery))[0]?.amount ?? 0;
@@ -774,11 +803,13 @@ async function calendar(meta: Obj, override: Obj) {
   const startDay = months.firstDayOfMonth(start);
   const endDay = months.lastDayOfMonth(end);
   const where = await filters(meta);
+  const scope = await budgetScope(meta, override);
   const query = () =>
     lib
       .q("transactions")
       .filter({ $and: [{ date: { $gte: startDay } }, { date: { $lte: endDay } }] })
       .filter(where)
+      .filter(scope)
       .groupBy(["date"])
       .select(["date", { amount: { $sum: "$amount" } }]);
   const expenses = await rows<Balance>(query().filter({ $and: { amount: { $lt: 0 } } }));
@@ -815,7 +846,7 @@ export async function report(id: string, override: Obj) {
     case "cash-flow-card":
       return { type, cashFlow: await cashFlow(meta, override) };
     case "spending-card":
-      return { type, spending: await spending(meta) };
+      return { type, spending: await spending(meta, override) };
     case "summary-card":
       return { type, summary: await summary(meta, override) };
     case "calendar-card":
@@ -826,7 +857,7 @@ export async function report(id: string, override: Obj) {
 }
 
 // Calendar.tsx: the transactions a calendar widget counts on one day.
-export async function reportTransactions(id: string, date: string) {
+export async function reportTransactions(id: string, date: string, override: Obj = {}) {
   if (!months.isValidYearMonthDay(date)) throw new Error("Choose a valid date.");
   const { type, meta } = await widget(id);
   if (type !== "calendar-card") throw new Error("Only calendar reports list transactions.");
@@ -840,7 +871,15 @@ export async function reportTransactions(id: string, date: string) {
     payee: string | null;
     category: string | null;
     is_parent: boolean;
-  }>(lib.q("transactions").filter(where).filter({ date }).select("*").options({ splits: "grouped" }));
+  }>(
+    lib
+      .q("transactions")
+      .filter(where)
+      .filter(await budgetScope(meta, override))
+      .filter({ date })
+      .select("*")
+      .options({ splits: "grouped" }),
+  );
   const payees = new Map((await lib.send("api/payees-get")).map((p) => [p.id, p]));
   const accounts = new Map(((await lib.send("accounts-get")) as Array<{ id: string; name: string }>).map((a) => [a.id, a.name]));
   const categories = new Map(

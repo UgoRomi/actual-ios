@@ -19,6 +19,8 @@ extension EngineSmoke {
         SELECT IFNULL(SUM(t.amount), 0) AS total FROM v_transactions t
         LEFT JOIN accounts a ON a.id = t.account
         LEFT JOIN categories c ON c.id = t.category
+        LEFT JOIN payees p ON p.id = t.payee
+        LEFT JOIN accounts ta ON ta.id = p.transfer_acct
         WHERE t.is_parent = 0 AND t.account IS NOT NULL AND \(condition)
         """, params).first?["total"])
     }
@@ -30,6 +32,8 @@ extension EngineSmoke {
     }
     func monthEnd(_ offset: Int) -> Date { calendar.date(byAdding: .day, value: -1, to: monthStart(offset + 1))! }
     let today = day(now)
+    /// What calendar, summary, and spending count unless the app includes off-budget accounts.
+    let onBudget = "a.offbudget = 0 AND (ta.offbudget IS NULL OR ta.offbudget = 0)"
     let currentMonth = BudgetDate.month(now)
     /// JavaScript's Math.round.
     func jsRound(_ value: Double) -> Int { Int((value + 0.5).rounded(.down)) }
@@ -143,7 +147,7 @@ extension EngineSmoke {
     // Spending: this month against last month, the budget, and the three-month average.
     let spending = try await report(widget("spending-card")).spending!
     check(spending.compare == currentMonth && spending.compareTo == BudgetDate.month(monthStart(-1)))
-    let spend = "a.offbudget = 0 AND (c.is_income IS NULL OR c.is_income = 0) AND t.date BETWEEN ? AND ?"
+    let spend = onBudget + " AND (c.is_income IS NULL OR c.is_income = 0) AND t.date BETWEEN ? AND ?"
     let spentToday = try sum(spend, [first, today])
     check(spending.days[spending.todayIndex].compare == spentToday, "Spent to date \(String(describing: spending.days[spending.todayIndex].compare))")
     check(spending.todayIndex == min(calendar.component(.day, from: now), 28) - 1)
@@ -174,19 +178,40 @@ extension EngineSmoke {
     let perTransaction = try await report("w-tx").summary!
     check(Int(perTransaction.divisor) == count && Int(perTransaction.total!) == jsRound(Double(spent) / Double(count)))
     let share = try await report("w-pct").summary!
-    let income = try sum("t.amount > 0 AND t.date BETWEEN ? AND ?", [yearStart, today])
+    let income = try sum(onBudget + " AND t.amount > 0 AND t.date BETWEEN ? AND ?", [yearStart, today])
     check(share.divisor == Double(income) && share.total == Double(jsRound(Double(spent) / Double(income) * 10000)) / 100,
           "Percentage \(String(describing: share.total))")
 
     // Calendar: a live three-month range of daily income and spending, without transfers,
-    // including later this month.
+    // including later this month. Off-budget accounts count only when the app includes them, as Actual does.
     let cal = try await report("w-cal").calendar!
+    let calAll = try await report("w-cal", ["includeOffBudget": .bool(true)]).calendar!
     check(cal.months.map(\.month) == (-2...0).map { BudgetDate.month(monthStart($0)) }, "\(cal.months.map(\.month))")
-    for (offset, month) in zip(-2...0, cal.months) {
+    for (offset, (month, all)) in zip(-2...0, zip(cal.months, calAll.months)) {
       let range = [day(monthStart(offset)), day(monthEnd(offset))]
-      check(month.totalExpense == -(try sum("t.amount < 0 AND t.transfer_id IS NULL AND t.date BETWEEN ? AND ?", range)))
-      check(month.totalIncome == (try sum("t.amount > 0 AND t.transfer_id IS NULL AND t.date BETWEEN ? AND ?", range)))
+      let plain = "t.transfer_id IS NULL AND t.date BETWEEN ? AND ?"
+      check(month.totalExpense == -(try sum(onBudget + " AND t.amount < 0 AND " + plain, range)))
+      check(month.totalIncome == (try sum(onBudget + " AND t.amount > 0 AND " + plain, range)))
       check(month.days.reduce(0) { $0 + $1.expense } == month.totalExpense)
+      check(all.totalExpense == -(try sum("t.amount < 0 AND " + plain, range)))
+      check(all.totalIncome == (try sum("t.amount > 0 AND " + plain, range)))
+    }
+    // Including them, spending counts transfers into off-budget accounts again, as Actual does.
+    let includedSpend = try await report(widget("spending-card"), ["includeOffBudget": .bool(true)]).spending!
+    let upstreamSpend = "a.offbudget = 0 AND (c.is_income IS NULL OR c.is_income = 0) AND t.date BETWEEN ? AND ?"
+    check(includedSpend.days[27].compareTo == (try sum(upstreamSpend, [day(monthStart(-1)), day(monthEnd(-1))])))
+    // A widget that chooses an off-budget account keeps it.
+    if let investment = accounts.first(where: { $0.offbudget && !$0.closed }) {
+      let meta = #"{"content":"{\"type\":\"sum\"}","timeFrame":{"start":"2000-01","end":"2000-01","mode":"full"},"conditions":[{"field":"account","op":"is","value":"\#(investment.id)"}],"conditionsOp":"and"}"#
+      _ = try sql(
+        "INSERT INTO dashboard (id, type, width, height, x, y, meta, tombstone, dashboard_page_id) VALUES ('w-off', 'summary-card', 3, 2, 0, 30, ?, 0, ?)",
+        [meta, page.id])
+      let chosen = try await report("w-off").summary!
+      let bounds = [chosen.start, chosen.end].map { Int($0.replacingOccurrences(of: "-", with: ""))! }
+      let expected = try sum("t.account = ? AND t.date BETWEEN ? AND ?", [investment.id] + bounds)
+      check(chosen.dividend == expected && expected != 0, "Off-budget summary \(chosen.dividend) vs \(expected)")
+    } else {
+      throw EngineFailure("Demo needs an off-budget account")
     }
     guard let busiest = cal.months.flatMap(\.days).max(by: { $0.expense < $1.expense }) else {
       throw EngineFailure("Demo calendar has no spending")

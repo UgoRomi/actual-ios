@@ -39,6 +39,7 @@ struct ReportsView: View {
                 if let pages = dashboard?.pages, pages.count > 1 {
                     ToolbarItem(placement: .topBarLeading) { dashboardPicker(pages) }
                 }
+                ToolbarItem(placement: .topBarTrailing) { ReportAccountsMenu() }
                 ToolbarItem(placement: .topBarTrailing) { SettingsButton() }
             }
             .refreshable { await model.refresh(); await load() }
@@ -68,6 +69,23 @@ struct ReportsView: View {
         } catch {
             self.error = error.localizedDescription
         }
+    }
+}
+
+/// Whether calendar, summary, and spending reports count off-budget accounts.
+struct ReportAccountsMenu: View {
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        @Bindable var model = model
+        Menu {
+            Toggle("Include off-budget accounts", isOn: $model.reportsIncludeOffBudget)
+            Text("Calendar, summary, and spending reports")
+        } label: {
+            Label("Accounts", systemImage: model.reportsIncludeOffBudget
+                  ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+        }
+        .accessibilityLabel("Report accounts")
     }
 }
 
@@ -103,7 +121,7 @@ struct ReportCard: View {
             }
             .buttonStyle(.plain)
             .accessibilityHint("Open report")
-            .task(id: model.dataRevision) { await load() }
+            .task(id: [model.dataRevision, model.reportsIncludeOffBudget ? 1 : 0]) { await load() }
         }
     }
 

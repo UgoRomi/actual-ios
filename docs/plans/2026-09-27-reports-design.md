@@ -35,3 +35,5 @@ Each widget's saved filters, time frame, and options apply. The engine reads the
 ## Delivered behavior
 
 As designed. The engine returns every widget's data with Actual's calculations, checked against direct SQL on the demo's default dashboard, and the app reloads reports after edits, syncs, and bank refreshes. `ReportDate.range` labels ranges like `DateRange.tsx`. Detail pages also let net worth switch between daily, weekly, monthly, and yearly intervals, as its page in Actual does. See `../validation.md`.
+
+As a native difference, calendar, summary, and spending leave out off-budget accounts and transfers to or from them unless the app passes `includeOffBudget`, or the widget's filters choose an off-budget account. See `../validation.md`.
