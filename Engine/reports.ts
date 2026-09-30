@@ -223,6 +223,12 @@ async function budgetScope(meta: Obj, override: Obj, keys: [string, string][] = 
   return { "account.offbudget": false, "payee.transfer_acct.offbudget": { $ne: true } };
 }
 
+// Native, not upstream: the calendar leaves out transfers between two on-budget
+// accounts, which are neither income nor spending.
+const noBudgetTransfers = {
+  $or: [{ "account.offbudget": true }, { "payee.transfer_acct": null }, { "payee.transfer_acct.offbudget": true }],
+};
+
 async function widget(id: string) {
   const [found] = await rows<{ type: string; meta: unknown }>(lib.q("dashboard").filter({ id }).select("*"));
   if (!found) throw new Error("This report is no longer on the dashboard. Refresh to see the current dashboard.");
@@ -810,6 +816,7 @@ async function calendar(meta: Obj, override: Obj) {
       .filter({ $and: [{ date: { $gte: startDay } }, { date: { $lte: endDay } }] })
       .filter(where)
       .filter(scope)
+      .filter(noBudgetTransfers)
       .groupBy(["date"])
       .select(["date", { amount: { $sum: "$amount" } }]);
   const expenses = await rows<Balance>(query().filter({ $and: { amount: { $lt: 0 } } }));
@@ -876,6 +883,7 @@ export async function reportTransactions(id: string, date: string, override: Obj
       .q("transactions")
       .filter(where)
       .filter(await budgetScope(meta, override))
+      .filter(noBudgetTransfers)
       .filter({ date })
       .select("*")
       .options({ splits: "grouped" }),

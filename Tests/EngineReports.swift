@@ -196,6 +196,34 @@ extension EngineSmoke {
       check(all.totalExpense == -(try sum("t.amount < 0 AND " + plain, range)))
       check(all.totalIncome == (try sum("t.amount > 0 AND " + plain, range)))
     }
+    // Without a transfer filter, the calendar still leaves out transfers between on-budget accounts.
+    let open = accounts.filter { !$0.closed }
+    let onBudgetAccounts = open.filter { !$0.offbudget }
+    guard onBudgetAccounts.count > 1, let offBudgetAccount = open.first(where: \.offbudget) else {
+      throw EngineFailure("Demo needs two on-budget accounts and an off-budget one")
+    }
+    for other in [onBudgetAccounts[1], offBudgetAccount] {
+      _ = try await engine.call("saveTransaction", arguments: [
+        "accountId": .string(onBudgetAccounts[0].id), "date": .string(BudgetDate.day(now)),
+        "transferAccountId": .string(other.id), "categoryId": .null, "amount": .number(-12_345),
+        "notes": .string("Report transfer"), "cleared": .bool(false),
+      ])
+    }
+    _ = try sql(
+      "INSERT INTO dashboard (id, type, width, height, x, y, meta, tombstone, dashboard_page_id) VALUES ('w-cal-all', 'calendar-card', 3, 2, 0, 31, ?, 0, ?)",
+      [#"{"timeFrame":{"start":"2024-01","end":"2024-03","mode":"sliding-window"},"conditions":[],"conditionsOp":"and"}"#, page.id])
+    let notBudgetTransfer = "NOT (a.offbudget = 0 AND IFNULL(ta.offbudget, 1) = 0)"
+    check(try sum("a.offbudget = 0 AND ta.offbudget = 0 AND t.amount < 0") != 0)
+    check(try sum("a.offbudget = 0 AND ta.offbudget = 1") != 0)
+    for include in [false, true] {
+      let unfiltered = try await report("w-cal-all", ["includeOffBudget": .bool(include)]).calendar!
+      for month in unfiltered.months {
+        let range = [day(ReportDate.date(month.month)!), Int(month.month.replacingOccurrences(of: "-", with: "") + "31")!]
+        let scope = (include ? "1" : onBudget) + " AND " + notBudgetTransfer + " AND t.date BETWEEN ? AND ?"
+        check(month.totalExpense == -(try sum("t.amount < 0 AND " + scope, range)), "Calendar \(month.month) expense")
+        check(month.totalIncome == (try sum("t.amount > 0 AND " + scope, range)), "Calendar \(month.month) income")
+      }
+    }
     // Including them, spending counts transfers into off-budget accounts again, as Actual does.
     let includedSpend = try await report(widget("spending-card"), ["includeOffBudget": .bool(true)]).spending!
     let upstreamSpend = "a.offbudget = 0 AND (c.is_income IS NULL OR c.is_income = 0) AND t.date BETWEEN ? AND ?"
