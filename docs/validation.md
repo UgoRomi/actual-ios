@@ -370,3 +370,11 @@ Widget editing follows Actual's report pages and card menus at the pinned revisi
 The UI test `testDemoReportEditing` passed on a new iPhone 17 Pro / iOS 27 simulator, followed by `testDemoReports` on the same budget. It opens a spending widget's editor and cancels; renames a summary, tries fixed months, sets one year, switches to a percentage and back, and adds a transfer filter; saves a range from the report's page with **Save to Widget** and sees it in the editor; and edits the text widget. Screenshots of the editor, the filter editor, the page with **Save to Widget**, and the edited dashboard were inspected.
 
 Not verified end to end: edited widgets as shown in Actual web (their stored meta and sync are checked instead), a percentage summary's divisor filters and the spending month pickers on screen beyond opening them, editing on a dashboard with several pages, dark appearance, and VoiceOver.
+
+## Uncategorized badge in registers (2026-09-30)
+
+`./scripts/test-transactions.sh` passed with a new check of which register rows ask for a category: a transaction without one and a split with a part without one, but not transfers, reconciliation adjustments (recognized by Actual's note, **Reconciliation balance adjustment**), or transactions in off-budget accounts.
+
+The UI test `testDemoUncategorizedBadge` passed on a new iPhone 17 Pro / iOS 27 simulator. It adds a transaction without a category, then reconciles the account with an adjustment. In the screenshot, the new transaction has the badge and the adjustment beside it does not.
+
+Not verified end to end: the badge on a split with uncategorized parts on screen (the count is checked instead), adjustments created by Actual in another language, whose note differs, custom themes, dark appearance, and VoiceOver.

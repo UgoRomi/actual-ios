@@ -385,6 +385,18 @@ struct Transaction: Decodable, Identifiable, Sendable {
         if isParent { return "Split" + ((splits?.count).map { " · \($0) parts" } ?? "") }
         return transferAccountId != nil && categoryId == nil ? "Transfer" : categoryName ?? "Uncategorized"
     }
+
+    /// The notes Actual gives the adjustment a reconciliation creates; it marks one no other way.
+    static let reconciliationNotes = "Reconciliation balance adjustment"
+
+    /// How many categories the register asks for: one for a transaction without a category, or one
+    /// for each such part of a split. Transfers and reconciliation adjustments ask for none, nor do
+    /// off-budget accounts, which Actual never categorizes.
+    func missingCategories(offBudget: Set<String>) -> Int {
+        guard !offBudget.contains(accountId), notes != Self.reconciliationNotes else { return 0 }
+        if isParent { return (splits ?? []).count { !$0.isTransfer && $0.categoryId == nil } }
+        return categoryId == nil && !isTransfer && transferAccountId == nil ? 1 : 0
+    }
 }
 
 /// One part of a split transaction.

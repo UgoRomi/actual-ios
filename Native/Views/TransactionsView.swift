@@ -39,6 +39,7 @@ struct TransactionsView: View {
         let sections = TransactionSection.grouped(listed, accountID: accountID, search: search,
                                                   currency: model.currency, limit: shownCount)
         let hasMore = sections.reduce(0) { $0 + $1.transactions.count } == shownCount
+        let offBudget = Set((model.overview?.accounts ?? []).filter(\.offbudget).map(\.id))
         return ThemedList {
             if let error = model.errorMessage { Section { ErrorNotice(message: error) { Task { await model.refresh() } } } }
             if let accountID { BankSyncNotice(accountID: accountID) }
@@ -65,7 +66,8 @@ struct TransactionsView: View {
                     ForEach(section.transactions) { transaction in
                         HStack(spacing: 4) {
                             Button { selectedTransaction = transaction } label: {
-                                TransactionRow(transaction: transaction, currency: model.currency)
+                                TransactionRow(transaction: transaction, currency: model.currency,
+                                               missingCategories: transaction.missingCategories(offBudget: offBudget))
                             }.buttonStyle(.plain)
                             ClearedToggle(transaction: transaction)
                         }
@@ -206,6 +208,8 @@ struct ScheduledTransactionRow: View {
 struct TransactionRow: View {
     let transaction: Transaction
     let currency: String
+    /// Categories the transaction still needs; see `Transaction.missingCategories`.
+    var missingCategories = 0
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: 5) {
@@ -215,7 +219,13 @@ struct TransactionRow: View {
                 HStack(spacing: 4) {
                     if transaction.isTransfer { Image(systemName: "arrow.left.arrow.right").accessibilityHidden(true) }
                     else if transaction.isParent { Image(systemName: "square.split.2x2").accessibilityHidden(true) }
-                    Text(transaction.canEdit ? transaction.detail : "\(transaction.detail) · view only")
+                    // Actual highlights a missing category; a split says how many of its parts lack one.
+                    if missingCategories == 0 || transaction.isParent {
+                        Text(transaction.canEdit ? transaction.detail : "\(transaction.detail) · view only")
+                    }
+                    if missingCategories > 0 {
+                        UncategorizedBadge(parts: transaction.isParent ? missingCategories : nil)
+                    }
                 }.font(.caption).foregroundStyle(.secondary)
                 if let notes = transaction.notes, !notes.isEmpty { NotesText(notes: notes).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
             }
@@ -223,6 +233,20 @@ struct TransactionRow: View {
             MoneyText.transaction(transaction.amount, currency: currency).font(.body.weight(.semibold))
         }.padding(.vertical, 6).contentShape(Rectangle())
             .accessibilityElement(children: .combine)
+    }
+}
+
+/// Marks a transaction that still needs a category, in the color of the budget's uncategorized banner.
+struct UncategorizedBadge: View {
+    /// A split's parts without a category; nil for an ordinary transaction.
+    var parts: Int? = nil
+    var body: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "tag.fill").accessibilityHidden(true)
+            Text(parts.map { "\($0) uncategorized" } ?? "Uncategorized")
+        }
+        .font(.caption2.weight(.semibold)).padding(.horizontal, 7).padding(.vertical, 2)
+        .foregroundStyle(ActualTheme.warning).background(ActualTheme.warning.opacity(0.12), in: Capsule())
     }
 }
 

@@ -69,6 +69,14 @@ import SQLite3
         precondition(uncategorized.map(\.id) == ["none", "part-none", "off-transfer"], "\(uncategorized.map(\.id))")
         print("PASS: category and uncategorized lists include split parts and skip on-budget transfers and off-budget accounts")
 
+        // The register marks missing categories, but not on transfers, reconciliation adjustments, or off-budget accounts.
+        let adjustment = transaction("adjustment", payee: nil, category: "Uncategorized",
+                                     notes: Transaction.reconciliationNotes)
+        let marked = (listed + [adjustment, transaction("linked", transfer: true)])
+            .map { ($0.id, $0.missingCategories(offBudget: ["off"])) }.filter { $0.1 > 0 }
+        precondition(marked.map(\.0) == ["none", "split"] && marked.map(\.1) == [1, 1], "\(marked)")
+        print("PASS: the register marks missing categories, except on transfers, reconciliation adjustments, and off-budget accounts")
+
         // The budget's number and date formats, as Actual's settings choose them.
         Money.configure(BudgetFormat(numberFormat: "dot-comma", hideFraction: false))
         precondition(Money.formatted(123_456) == "1.234,56", Money.formatted(123_456))
