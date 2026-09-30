@@ -614,6 +614,59 @@ final class ActualNativeUITests: XCTestCase {
         capture("budget-dot-comma")
     }
 
+    /// Chooses each theme from Settings, then makes, renames, and deletes a theme.
+    @MainActor
+    func testDemoThemes() {
+        let app = XCUIApplication()
+        app.launch()
+        let demoButton = app.buttons["Explore a demo budget"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        XCTAssertTrue(app.tabBars.buttons["Budget"].waitForExistence(timeout: 60), "The demo budget should open")
+        app.tabBars.buttons["Budget"].tap()
+        app.buttons["Settings"].firstMatch.tap()
+
+        let setting = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Theme")).firstMatch
+        scroll(app, to: setting)
+        setting.tap()
+        XCTAssertTrue(app.navigationBars["Theme"].waitForExistence(timeout: 10))
+        for name in ["Sterling", "Payday"] {
+            app.buttons[name].tap()
+            XCTAssertTrue(app.buttons[name].isSelected)
+            XCTAssertFalse(app.buttons["Actual"].isSelected)
+            capture("theme-\(name.lowercased())")
+        }
+
+        // A new theme copies the one in use and opens for editing.
+        app.buttons["New Theme"].tap()
+        XCTAssertTrue(app.navigationBars["My Theme"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.descendants(matching: .any)["Accent"].firstMatch.exists, "Each color can be changed")
+        capture("theme-editor")
+        // Wherever the name is typed, the change saves at once.
+        let name = app.textFields["Name"]
+        name.tap()
+        name.typeText("Seaside")
+        let renamed = NSPredicate(format: "identifier CONTAINS %@", "Seaside")
+        let editor = app.navigationBars.matching(renamed).firstMatch
+        XCTAssertTrue(editor.waitForExistence(timeout: 10), "Changes save as they are made")
+        editor.buttons.firstMatch.tap()
+        let row = app.buttons.matching(NSPredicate(format: "label CONTAINS %@ AND NOT label BEGINSWITH %@", "Seaside", "Edit")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        XCTAssertTrue(row.isSelected, "A new theme is put to use")
+
+        // Deleting the theme in use returns to Actual's.
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Edit ")).firstMatch.tap()
+        let delete = app.buttons["Delete Theme"]
+        scroll(app, to: delete)
+        delete.tap()
+        app.buttons["Delete Theme"].firstMatch.tap()
+        XCTAssertTrue(app.navigationBars["Theme"].waitForExistence(timeout: 10))
+        XCTAssertTrue(wait(forAbsence: row))
+        XCTAssertTrue(app.buttons["Actual"].isSelected)
+        app.navigationBars["Theme"].buttons.firstMatch.tap()
+        XCTAssertTrue(setting.waitForExistence(timeout: 10))
+        XCTAssertTrue(setting.label.contains("Actual"), setting.label)
+    }
+
     /// Adds a tag from Settings, and gives a monthly schedule a specific day.
     @MainActor
     func testDemoTagsAndSpecificDays() {

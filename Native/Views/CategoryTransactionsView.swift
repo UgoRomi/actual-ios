@@ -15,7 +15,7 @@ struct CategoryTransactionsView: View {
     var body: some View {
         let entries = entries
         let days = Dictionary(grouping: entries, by: \.transaction.date)
-        List {
+        ThemedList {
             if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
             if entries.isEmpty {
                 ContentUnavailableView(filter == .uncategorized ? "Everything is categorized" : "No transactions",

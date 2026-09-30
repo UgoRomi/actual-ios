@@ -59,7 +59,7 @@ struct TransactionEditor: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            ThemedForm {
                 if !editable {
                     Section {
                         Label("View only", systemImage: "lock")
@@ -117,7 +117,7 @@ struct TransactionEditor: View {
                 } header: { Text("Details") } footer: { if editable { transferFooter } }
                 .disabled(!editable || model.isBusy)
                 splitSection.disabled(!editable || model.isBusy)
-                if let validation { Section { Text(validation).foregroundStyle(.red) } }
+                if let validation { Section { Text(validation).foregroundStyle(ActualTheme.negative) } }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
                 if transaction != nil && editable {
                     Section {
@@ -221,9 +221,9 @@ struct TransactionEditor: View {
                 }
             } footer: {
                 if let left = amountLeft, left != 0 {
-                    Text("Amount left: \(Money.formatted(left, currency: model.currency))").foregroundStyle(.orange)
+                    Text("Amount left: \(Money.formatted(left, currency: model.currency))").foregroundStyle(ActualTheme.warning)
                 } else if amountLeft == nil {
-                    Text("Enter each amount with no more than two decimal places.").foregroundStyle(.red)
+                    Text("Enter each amount with no more than two decimal places.").foregroundStyle(ActualTheme.negative)
                 } else {
                     Text("The parts add up to the total.")
                 }
@@ -473,7 +473,7 @@ struct PayeePicker: View {
     }
 
     var body: some View {
-        List {
+        ThemedList {
             if canAdd {
                 Section {
                     Button { choose(query) } label: { Label("Add “\(query)”", systemImage: "plus.circle") }
@@ -537,7 +537,7 @@ struct CategoryPicker: View {
     }
 
     var body: some View {
-        List {
+        ThemedList {
             if query.isEmpty { Section { choice("Uncategorized", id: "") } }
             ForEach(matches) { group in
                 Section(group.name) {

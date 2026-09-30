@@ -16,14 +16,14 @@ struct RulesView: View {
 
     var body: some View {
         let describer = describer
-        List {
+        ThemedList {
             if let error = model.errorMessage ?? loadError { Section { ErrorNotice(message: error) } }
             ForEach(shown) { rule in
                 Button { editing = RuleEditRoute(rule: rule) } label: {
                     VStack(alignment: .leading, spacing: 6) {
                         if let stage = rule.stage {
                             Text(stage == "pre" ? "Runs first" : "Runs last").font(.caption.weight(.semibold))
-                                .foregroundStyle(ActualTheme.purple)
+                                .foregroundStyle(ActualTheme.accent)
                         }
                         Text(describer.describe(rule)).font(.subheadline).foregroundStyle(Color.primary)
                             .multilineTextAlignment(.leading)
@@ -90,7 +90,7 @@ struct RuleEditor: View {
     var body: some View {
         let describer = describer
         NavigationStack {
-            Form {
+            ThemedForm {
                 if !editable {
                     Section {
                         Label(rule.isSchedule ? "From a schedule" : "View only", systemImage: "lock")
@@ -213,7 +213,7 @@ private struct ConditionEditor: View {
     }
 
     var body: some View {
-        Form {
+        ThemedForm {
             Section {
                 Picker("Field", selection: Binding(get: { item.field }, set: { item = item.changing(field: $0) })) {
                     ForEach(RuleItem.conditionFields, id: \.self) { Text(RuleDescriber.fieldName($0).capitalized).tag($0) }
@@ -246,7 +246,7 @@ private struct ActionEditor: View {
     @Environment(\.ruleEditable) private var editable
 
     var body: some View {
-        Form {
+        ThemedForm {
             Section {
                 Picker("Action", selection: Binding(get: { item.op }, set: { item = item.withActionOp($0) })) {
                     Text("Set a field").tag("set")
@@ -395,8 +395,9 @@ private struct IDPicker: View {
         List(options.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }, id: \.id) { option in
             Button { selection = option.id; dismiss() } label: {
                 CheckRow(title: option.name, selected: selection == option.id)
-            }
+            }.themedRows()
         }
+        .themedPage()
         .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
         .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always))
     }
@@ -414,8 +415,9 @@ private struct IDMultiPicker: View {
                 else { selection.append(option.id) }
             } label: {
                 CheckRow(title: option.name, selected: selection.contains(option.id))
-            }
+            }.themedRows()
         }
+        .themedPage()
         .navigationTitle("Values").navigationBarTitleDisplayMode(.inline)
         .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always))
     }

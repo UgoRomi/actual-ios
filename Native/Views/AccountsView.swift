@@ -5,7 +5,7 @@ struct AccountsView: View {
     @State private var addingAccount = false
     var body: some View {
         NavigationStack {
-            List {
+            ThemedList {
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) { Task { await model.refresh() } } } }
                 BankSyncNotice()
                 if let overview = model.overview {
@@ -52,7 +52,7 @@ struct AccountsView: View {
                                 } else if account.canSyncBank {
                                     if account.bankSyncNeedsAttention {
                                         Label("Bank connection needs attention", systemImage: "exclamationmark.circle")
-                                            .font(.caption).foregroundStyle(.orange)
+                                            .font(.caption).foregroundStyle(ActualTheme.warning)
                                     } else if let date = account.lastBankSyncDate {
                                         Text("Bank refreshed \(date, style: .relative) ago").font(.caption).foregroundStyle(.secondary)
                                     } else {

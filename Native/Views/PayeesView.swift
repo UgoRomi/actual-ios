@@ -17,7 +17,7 @@ struct PayeesView: View {
     private var unused: [ManagedPayee] { payees.filter(\.unused) }
 
     var body: some View {
-        List {
+        ThemedList {
             if let error = model.errorMessage ?? loadError { Section { ErrorNotice(message: error) } }
             if !unused.isEmpty {
                 Section {
@@ -38,7 +38,7 @@ struct PayeesView: View {
                             if payee.unused { Text("Unused").font(.caption).foregroundStyle(.secondary) }
                             if payee.ruleCount > 0 {
                                 Text(payee.ruleCount == 1 ? "1 rule" : "\(payee.ruleCount) rules")
-                                    .font(.caption).foregroundStyle(ActualTheme.purple)
+                                    .font(.caption).foregroundStyle(ActualTheme.accent)
                             }
                         }
                     }
@@ -83,7 +83,7 @@ private struct PayeeDetail: View {
     private var payee: ManagedPayee? { payees.first { $0.id == payeeID } }
 
     var body: some View {
-        Form {
+        ThemedForm {
             if let payee {
                 Section {
                     Button { renaming = true } label: { LabeledContent("Name", value: payee.name) }
@@ -143,8 +143,9 @@ private struct MergeTargetPicker: View {
         NavigationStack {
             List(payees.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }) { payee in
                 Button(payee.name) { Task { if await merge(payee) { dismiss() } } }
-                    .foregroundStyle(Color.primary).disabled(model.isBusy)
+                    .foregroundStyle(Color.primary).disabled(model.isBusy).themedRows()
             }
+            .themedPage()
             .navigationTitle("Merge Into").navigationBarTitleDisplayMode(.inline)
             .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search payees")
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }

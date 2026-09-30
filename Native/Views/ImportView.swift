@@ -17,7 +17,7 @@ struct ImportSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            ThemedForm {
                 if let loadError { Section { ErrorNotice(message: loadError) } }
                 if let preview {
                     if preview.fileType == "csv", settings != nil { csvSettings(preview) }
@@ -120,13 +120,13 @@ struct ImportSheet: View {
     private func rowView(_ row: ImportPreview.Row) -> some View {
         HStack(spacing: 12) {
             Image(systemName: selected.contains(row.id) ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(selected.contains(row.id) ? ActualTheme.purple : .secondary)
+                .foregroundStyle(selected.contains(row.id) ? ActualTheme.accent : .secondary)
             VStack(alignment: .leading, spacing: 3) {
                 Text(row.payee.isEmpty ? "No payee" : row.payee)
                 HStack(spacing: 6) {
                     Text(BudgetDate.display(row.date))
                     if row.ignored { Text("· Already imported") }
-                    else if row.existing { Text("· Updates a match").foregroundStyle(.orange) }
+                    else if row.existing { Text("· Updates a match").foregroundStyle(ActualTheme.warning) }
                 }.font(.caption).foregroundStyle(.secondary)
             }
             Spacer()

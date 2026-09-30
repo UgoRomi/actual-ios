@@ -197,11 +197,11 @@ final class CalculatorKeypad: UIInputView, UIInputViewAudioFeedback {
         }
         configuration.image = image.flatMap { UIImage(systemName: $0) }
         configuration.preferredSymbolConfigurationForImage = UIImage.SymbolConfiguration(pointSize: 20, weight: .medium)
-        configuration.baseForegroundColor = style == .primary ? .white : .label
+        configuration.baseForegroundColor = style == .primary ? UIColor(ActualTheme.onAccent) : .label
         configuration.baseBackgroundColor = switch style {
         case .character: UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.3) : .white }
         case .function: UIColor { $0.userInterfaceStyle == .dark ? UIColor(white: 1, alpha: 0.12) : UIColor(white: 0, alpha: 0.1) }
-        case .primary: UIColor(ActualTheme.purple)
+        case .primary: UIColor(ActualTheme.accent)
         }
         configuration.cornerStyle = .fixed
         configuration.background.cornerRadius = 10

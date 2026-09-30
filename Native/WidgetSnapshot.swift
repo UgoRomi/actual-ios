@@ -10,6 +10,12 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
         let overspent: Bool
     }
 
+    /// A theme color as #RRGGBB, for light and dark appearance.
+    struct Tone: Codable, Sendable, Equatable {
+        let light: String
+        let dark: String
+    }
+
     let budgetName: String
     /// Such as "September 2026".
     let month: String
@@ -19,6 +25,9 @@ struct WidgetSnapshot: Codable, Sendable, Equatable {
     let negative: Bool
     /// Categories that need attention: overspent first, then the lowest balances.
     let categories: [Category]
+    /// The theme's accent and overspending colors. Without them the widget uses Actual's purple and iOS's red.
+    var accentColor: Tone?
+    var negativeColor: Tone?
 
     static let appGroup = "group.com.ugoromi.actualnative"
     static let fileName = "widget-snapshot.json"

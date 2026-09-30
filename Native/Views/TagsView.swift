@@ -41,7 +41,7 @@ struct NotesText: View {
             var piece = AttributedString(word)
             let name = word.hasPrefix("#") && !word.hasPrefix("##") ? String(word.dropFirst()) : ""
             if tags.contains(name) {
-                piece.foregroundColor = Color(hex: colors[name] ?? nil) ?? ActualTheme.purple
+                piece.foregroundColor = Color(hex: colors[name] ?? nil) ?? ActualTheme.accent
                 piece.font = .caption.weight(.semibold)
             }
             result += piece
@@ -77,13 +77,13 @@ struct TagsView: View {
 
     var body: some View {
         let counts = counts
-        List {
+        ThemedList {
             if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
             Section {
                 ForEach(tags) { tag in
                     NavigationLink { TagEditor(tagID: tag.id) } label: {
                         HStack {
-                            Circle().fill(Color(hex: tag.color) ?? ActualTheme.purple).frame(width: 12, height: 12)
+                            Circle().fill(Color(hex: tag.color) ?? ActualTheme.accent).frame(width: 12, height: 12)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("#\(tag.tag)").foregroundStyle(tag.hidden ? .secondary : .primary)
                                 if let description = tag.description, !description.isEmpty {
@@ -133,7 +133,7 @@ private struct TagEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State private var renaming = false
     @State private var description = ""
-    @State private var color = ActualTheme.purple
+    @State private var color = ActualTheme.accent
     @State private var confirmsDelete = false
     @State private var loaded = false
     @State private var colorSave: Task<Void, Never>?
@@ -141,7 +141,7 @@ private struct TagEditor: View {
     private var tag: Tag? { model.overview?.tags.first { $0.id == tagID } }
 
     var body: some View {
-        Form {
+        ThemedForm {
             if let tag {
                 Section {
                     Button { renaming = true } label: { LabeledContent("Name", value: "#\(tag.tag)") }
@@ -171,7 +171,7 @@ private struct TagEditor: View {
             guard !loaded, let tag else { return }
             loaded = true
             description = tag.description ?? ""
-            color = Color(hex: tag.color) ?? ActualTheme.purple
+            color = Color(hex: tag.color) ?? ActualTheme.accent
         }
         .onChange(of: color) { _, newColor in
             guard loaded else { return }

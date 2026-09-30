@@ -172,7 +172,7 @@ private struct CashFlowDetail: View {
                 }
                 .chartForegroundStyleScale([
                     "Income": ReportColor.positive, "Expenses": ReportColor.negative,
-                    "Transfers": ReportColor.comparison, "Balance": ActualTheme.purple,
+                    "Transfers": ReportColor.comparison, "Balance": ActualTheme.accent,
                 ])
                 .amountAxis(currency: currency)
                 .frame(height: 280)

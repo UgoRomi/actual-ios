@@ -22,7 +22,7 @@ struct SchedulesView: View {
 
     var body: some View {
         NavigationStack {
-            List {
+            ThemedList {
                 if let error = model.errorMessage ?? loadError {
                     Section { ErrorNotice(message: error) { Task { await load() } } }
                 }
@@ -151,7 +151,7 @@ struct SchedulesView: View {
             }
             Spacer(minLength: 8)
             Text(amountText(schedule)).monospacedDigit().font(.body.weight(.semibold))
-                .foregroundStyle(schedule.amount.scheduled > 0 ? Color.green : Color.primary)
+                .foregroundStyle(schedule.amount.scheduled > 0 ? ActualTheme.positive : Color.primary)
         }.padding(.vertical, 4).contentShape(Rectangle())
             .accessibilityElement(children: .combine)
     }
@@ -179,10 +179,10 @@ struct ScheduleStatusBadge: View {
 
     var body: some View {
         let color: Color = switch status {
-        case .missed: .red
-        case .due: .orange
-        case .upcoming: ActualTheme.purple
-        case .paid: .green
+        case .missed: ActualTheme.negative
+        case .due: ActualTheme.warning
+        case .upcoming: ActualTheme.accent
+        case .paid: ActualTheme.positive
         case .completed, .scheduled: .secondary
         }
         Text(Self.label(status)).font(.caption2.weight(.semibold))
@@ -224,7 +224,7 @@ struct ScheduleEditor: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            ThemedForm {
                 Section {
                     TextField("Name", text: $name, prompt: Text("Optional, such as Rent"))
                         .accessibilityLabel("Name")
@@ -333,7 +333,7 @@ struct ScheduleEditor: View {
                 } footer: {
                     Text("On each date, Actual adds the transaction for you. Otherwise it waits for a matching transaction.")
                 }
-                if let validation { Section { Text(validation).foregroundStyle(.red) } }
+                if let validation { Section { Text(validation).foregroundStyle(ActualTheme.negative) } }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
                 if schedule != nil {
                     Section { Button("Delete Schedule", role: .destructive) { confirmsDelete = true } }
@@ -447,14 +447,14 @@ private struct ScheduleTransactionsView: View {
     @State private var loadError: String?
 
     var body: some View {
-        List {
+        ThemedList {
             if let error = model.errorMessage ?? loadError { Section { ErrorNotice(message: error) } }
             if let transactions {
                 Section {
                     if transactions.linked.isEmpty { Text("None yet").foregroundStyle(.secondary) }
                     ForEach(transactions.linked) { item in
                         row(item).swipeActions {
-                            Button("Unlink", systemImage: "link.badge.minus") { link(item, false) }.tint(.orange)
+                            Button("Unlink", systemImage: "link.badge.minus") { link(item, false) }.tint(ActualTheme.warning)
                         }
                     }
                 } header: { Text("Linked") } footer: {
@@ -464,7 +464,7 @@ private struct ScheduleTransactionsView: View {
                     if transactions.matching.isEmpty { Text("No other transactions match").foregroundStyle(.secondary) }
                     ForEach(transactions.matching) { item in
                         Button { link(item, true) } label: {
-                            HStack { row(item); Image(systemName: "link.badge.plus").foregroundStyle(ActualTheme.purple) }
+                            HStack { row(item); Image(systemName: "link.badge.plus").foregroundStyle(ActualTheme.accent) }
                         }.buttonStyle(.plain)
                     }
                 } header: { Text("Matching") } footer: {
