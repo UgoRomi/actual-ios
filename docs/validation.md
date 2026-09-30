@@ -378,3 +378,13 @@ Not verified end to end: edited widgets as shown in Actual web (their stored met
 The UI test `testDemoUncategorizedBadge` passed on a new iPhone 17 Pro / iOS 27 simulator. It adds a transaction without a category, then reconciles the account with an adjustment. In the screenshot, the new transaction has the badge and the adjustment beside it does not.
 
 Not verified end to end: the badge on a split with uncategorized parts on screen (the count is checked instead), adjustments created by Actual in another language, whose note differs, custom themes, dark appearance, and VoiceOver.
+
+## Split Evenly and Use Remaining (2026-09-30)
+
+Checked against upstream Actual 26.9.0 (the pinned revision): the mobile editor's **Use remaining** and the desktop register's **Distribute**, which gives leftover cents to the first parts.
+
+`./scripts/test-transactions.sh` passed with new checks of the arithmetic: an even share with extra cents first (10.00 in three parts is 3.34, 3.33, 3.33), no parts, and what one part needs given the others, including when the others exceed the total.
+
+The UI test `testDemoSplitTransaction` passed on a new iPhone 17 Pro / iOS 26.5 simulator. It now fills the second part with **Use Remaining**, checks that the buttons disappear once the split balances, then uses **Split Evenly** to set both parts to 15.00. The split-editor screenshot was inspected. The first run failed in the test itself: the form unloads off-screen rows, so it now finds the button by its amount rather than by its position.
+
+Not verified end to end: custom themes, dark appearance, and VoiceOver.

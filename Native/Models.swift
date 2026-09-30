@@ -734,6 +734,21 @@ enum Money {
     }
 }
 
+/// Quick amounts for a split's parts, in minor units.
+enum SplitAmounts {
+    /// The total shared among `count` parts. As in Actual's Distribute, leftover cents go to the first parts.
+    static func even(_ total: Int, count: Int) -> [Int] {
+        guard count > 0 else { return [] }
+        let share = total / count, extra = total - share * count
+        return (0..<count).map { share + ($0 < abs(extra) ? extra.signum() : 0) }
+    }
+
+    /// What one part needs for the parts to add up to the total, given the other parts' amounts.
+    static func remaining(_ total: Int, others: [Int]) -> Int {
+        total - others.reduce(0, +)
+    }
+}
+
 /// Actual's amount arithmetic (loot-core's `evalArithmetic`) with exact decimals. Like Actual's
 /// calculator keypad, it offers + - * / and parentheses, but not `^`.
 private struct Calculation {

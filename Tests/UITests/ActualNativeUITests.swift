@@ -464,9 +464,20 @@ final class ActualNativeUITests: XCTestCase {
         scroll(app, to: left)
         XCTAssertTrue(left
             .waitForExistence(timeout: 5), "An unbalanced split shows what is left")
-        parts.element(boundBy: 1).tap()
-        app.buttons["Clear"].tap()
-        tapKeys(app, "10=")
+        // Each part offers what the others leave; the second part takes the 10.
+        let useRemaining = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Use Remaining"))
+        let useTen = useRemaining.matching(NSPredicate(format: "label CONTAINS %@", "10")).firstMatch
+        scroll(app, to: useTen)
+        XCTAssertTrue(useTen.waitForExistence(timeout: 5), "Each part offers what the others leave")
+        useTen.tap()
+        XCTAssertEqual(parts.element(boundBy: 1).value as? String, "10\(decimalSeparator)00")
+        XCTAssertFalse(useRemaining.firstMatch.exists, "A balanced split offers nothing left")
+        // Split Evenly shares the 30 between both parts.
+        let evenly = app.buttons["Split Evenly"]
+        scroll(app, to: evenly)
+        evenly.tap()
+        XCTAssertEqual(parts.element(boundBy: 0).value as? String, "15\(decimalSeparator)00")
+        XCTAssertEqual(parts.element(boundBy: 1).value as? String, "15\(decimalSeparator)00")
         let category = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Category")).firstMatch
         category.tap()
         let food = app.buttons["Food"].firstMatch
