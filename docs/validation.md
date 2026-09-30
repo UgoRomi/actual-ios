@@ -349,3 +349,24 @@ On a new iPhone 17 Pro / iOS 26.5 simulator, the new `testDemoThemes` passed: it
 `docs/screenshots/07-theme-sterling.png` to `11-theme-editor.png` show Sterling and Payday in both appearances, and the editor.
 
 Not verified end to end: the widget drawn with a theme on a home screen, the system color picker sheet itself, colors chosen outside sRGB (they are stored as sRGB), themes on iPad, VoiceOver, and increased-contrast settings with the two new presets. The simulator needed a restart before a changed appearance took effect.
+
+## Editing report widgets (2026-09-30)
+
+Widget editing follows Actual's report pages and card menus at the pinned revision (`reports/reports/*.tsx`, `ReportCard.tsx`, `MarkdownCard.tsx`, `filters/FiltersMenu.tsx`, `dateRangePresets.ts`), which save a widget's meta with loot-core's `dashboard-update-widget`. `Engine/report-editing.ts` returns a widget's settings with Actual's defaults and saves only the settings that changed, merged into the widget as it is then.
+
+`./scripts/test-engine.sh` and `node Engine/typecheck.mjs` passed. `Tests/EngineReportEditing.swift` edits the demo budget's default dashboard and reads each widget's stored meta directly, then its report:
+- Net worth: opens with Actual's defaults; saves a name, a one-year range, weekly interval, stacked graph, and an account filter, and the report then shows them. A cleared name becomes `Net Worth`. The last four months save as a live range and reopen as one.
+- Cash flow: saves fixed months and the balance line, and nothing else.
+- Spending: the default widget keeps following the current month when only its comparison changes; a chosen month pins it, and **Current month** unpins it.
+- Summary: a percentage with divisor filters and an all-time divisor keeps the default dashboard's font size in its content, its filters, and its range; **All time** starts at the first month with transactions.
+- Calendar: a range of days, a filter on a month, a named condition, and a setting this app does not know all survive a save that changes only the filters.
+- Text: Markdown and position.
+- Refused, with nothing saved: another kind of widget's setting, an unknown interval, a fixed range that ends before it starts, an invalid average or month, a filter Actual cannot run (named by its position), and widgets edited in Actual.
+
+`./scripts/test-sync.sh` passed with a widget's name and interval saved offline: after syncing, Actual's own API reads them from the server's copy.
+
+`./scripts/test-auto-sync.sh` and `./scripts/test-openid.sh` passed. Their compile lists had fallen behind the files `AppModel` needs, so neither built; they now list the same models as `test-bank-sync.sh`.
+
+The UI test `testDemoReportEditing` passed on a new iPhone 17 Pro / iOS 27 simulator, followed by `testDemoReports` on the same budget. It opens a spending widget's editor and cancels; renames a summary, tries fixed months, sets one year, switches to a percentage and back, and adds a transfer filter; saves a range from the report's page with **Save to Widget** and sees it in the editor; and edits the text widget. Screenshots of the editor, the filter editor, the page with **Save to Widget**, and the edited dashboard were inspected.
+
+Not verified end to end: edited widgets as shown in Actual web (their stored meta and sync are checked instead), a percentage summary's divisor filters and the spending month pickers on screen beyond opening them, editing on a dashboard with several pages, dark appearance, and VoiceOver.

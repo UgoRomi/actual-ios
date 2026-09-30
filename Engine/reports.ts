@@ -21,10 +21,10 @@ type TimeFrame = { start?: string; end?: string; mode?: Mode };
 type Interval = "Daily" | "Weekly" | "Monthly" | "Yearly";
 type Condition = Obj & { field?: unknown; op?: unknown; value?: unknown; customName?: unknown };
 
-function record(value: unknown): Obj {
+export function record(value: unknown): Obj {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Obj) : {};
 }
-function text(value: unknown): string | undefined {
+export function text(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 async function rows<T = Obj>(query: Query): Promise<T[]> {
@@ -40,7 +40,7 @@ async function syncedPrefs() {
 async function firstDayOfWeek() {
   return text((await syncedPrefs()).firstDayOfWeekIdx) || "0";
 }
-async function latestTransaction() {
+export async function latestTransaction() {
   return (await lib.send("get-latest-transaction"))?.date ?? months.currentDay();
 }
 
@@ -167,7 +167,7 @@ export function calculateTimeRange(
   }
 }
 
-const modes = new Set<string>([
+export const modes = new Set<string>([
   "sliding-window",
   "static",
   "full",
@@ -178,8 +178,8 @@ const modes = new Set<string>([
   "currentQuarter",
   "previousQuarter",
 ]);
-const datePattern = /^\d{4}-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?$/;
-function timeFrame(value: unknown): TimeFrame | undefined {
+export const datePattern = /^\d{4}-(0[1-9]|1[0-2])(-(0[1-9]|[12]\d|3[01]))?$/;
+export function timeFrame(value: unknown): TimeFrame | undefined {
   const raw = record(value);
   if (!Object.keys(raw).length) return undefined;
   const start = text(raw.start), end = text(raw.end), mode = text(raw.mode);
@@ -201,13 +201,13 @@ async function filters(meta: Obj, key = "conditions", opKey = "conditionsOp") {
   return { [meta[opKey] === "or" ? "$or" : "$and"]: filters };
 }
 
-async function widget(id: string) {
+export async function widget(id: string) {
   const [found] = await rows<{ type: string; meta: unknown }>(lib.q("dashboard").filter({ id }).select("*"));
   if (!found) throw new Error("This report is no longer on the dashboard. Refresh to see the current dashboard.");
   return { type: found.type, meta: record(found.meta) };
 }
 
-function interval(value: unknown): Interval {
+export function interval(value: unknown): Interval {
   return value === "Daily" || value === "Weekly" || value === "Yearly" ? value : "Monthly";
 }
 
@@ -381,7 +381,7 @@ function alignTransfers(
 }
 
 // CashFlow.tsx: the whole current month; the query clamps to today.
-function cashFlowDefault(): TimeFrame {
+export function cashFlowDefault(): TimeFrame {
   return { start: months.currentMonth(), end: months.currentMonth(), mode: "sliding-window" };
 }
 
@@ -488,7 +488,7 @@ async function cashFlow(meta: Obj, override: Obj) {
 }
 
 // spendingAverageRange.ts
-function averageRange(value: unknown) {
+export function averageRange(value: unknown) {
   const raw = record(value);
   if (raw.mode === "last-n-months" && [3, 6, 12].includes(Number(raw.months)))
     return { mode: "last-n-months", months: Number(raw.months) } as const;
@@ -689,20 +689,31 @@ async function spending(meta: Obj) {
   };
 }
 
+// Summary.tsx and Calendar.tsx: without a saved range, this month on.
+export function monthToDateDefault(): TimeFrame {
+  return { start: months.dayFromDate(months.currentMonth()), end: months.currentDay(), mode: "full" };
+}
+// A summary widget keeps its options as JSON in meta.content.
+export function summaryContent(meta: Obj): Obj {
+  try {
+    if (typeof meta.content === "string") return record(JSON.parse(meta.content));
+  } catch {}
+  return { type: "sum" };
+}
+export const summaryTypes = ["sum", "avgPerMonth", "avgPerYear", "avgPerTransact", "percentage"];
+export function summaryType(content: Obj): string {
+  return summaryTypes.includes(String(content.type)) ? String(content.type) : "sum";
+}
+
 // summary-spreadsheet.ts
 async function summary(meta: Obj, override: Obj) {
   const [start, end] = calculateTimeRange(
     timeFrame(override.timeFrame) ?? timeFrame(meta.timeFrame),
-    { start: months.dayFromDate(months.currentMonth()), end: months.currentDay(), mode: "full" },
+    monthToDateDefault(),
     await latestTransaction(),
   );
-  let content: Obj = { type: "sum" };
-  try {
-    if (typeof meta.content === "string") content = record(JSON.parse(meta.content));
-  } catch {}
-  const type = ["sum", "avgPerMonth", "avgPerYear", "avgPerTransact", "percentage"].includes(String(content.type))
-    ? String(content.type)
-    : "sum";
+  const content = summaryContent(meta);
+  const type = summaryType(content);
   const startDay = months.firstDayOfMonth(start);
   const endDay =
     months.getMonth(end) === months.getMonth(months.currentDay()) ? months.currentDay() : months.lastDayOfMonth(end);
@@ -768,7 +779,7 @@ async function summary(meta: Obj, override: Obj) {
 async function calendar(meta: Obj, override: Obj) {
   const [start, end] = calculateTimeRange(
     timeFrame(override.timeFrame) ?? timeFrame(meta.timeFrame),
-    { start: months.dayFromDate(months.currentMonth()), end: months.currentDay(), mode: "full" },
+    monthToDateDefault(),
     await latestTransaction(),
   );
   const startDay = months.firstDayOfMonth(start);

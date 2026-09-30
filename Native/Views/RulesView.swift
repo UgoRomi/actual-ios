@@ -70,7 +70,8 @@ extension RuleDescriber {
             payees: Dictionary((model.overview?.payees ?? []).map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a }),
             accounts: Dictionary((model.overview?.accounts ?? []).map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a }),
             categories: Dictionary((model.budget?.categories ?? []).map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a }),
-            currency: model.currency)
+            currency: model.currency,
+            groups: Dictionary((model.budget?.groups ?? []).map { ($0.id, $0.name) }, uniquingKeysWith: { a, _ in a }))
     }
 }
 
@@ -201,9 +202,12 @@ extension EnvironmentValues {
     }
 }
 
-/// A condition's field, how it matches, and its value.
-private struct ConditionEditor: View {
+/// A condition's field, how it matches, and its value. Rules and report filters share it.
+struct ConditionEditor: View {
     @Binding var item: RuleItem
+    /// The fields offered: a rule's, or a report filter's.
+    var fields = RuleItem.conditionFields
+    var title = "Condition"
     @Environment(\.ruleEditable) private var editable
 
     private var direction: String {
@@ -216,7 +220,7 @@ private struct ConditionEditor: View {
         ThemedForm {
             Section {
                 Picker("Field", selection: Binding(get: { item.field }, set: { item = item.changing(field: $0) })) {
-                    ForEach(RuleItem.conditionFields, id: \.self) { Text(RuleDescriber.fieldName($0).capitalized).tag($0) }
+                    ForEach(fields, id: \.self) { Text(RuleDescriber.fieldName($0).capitalized).tag($0) }
                 }
                 if item.field == "amount" {
                     Picker("Direction", selection: Binding(get: { direction }, set: { value in
@@ -236,7 +240,7 @@ private struct ConditionEditor: View {
             }
         }
         .disabled(!editable)
-        .navigationTitle("Condition").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -281,6 +285,7 @@ private struct RuleValueEditor: View {
         case "payee": (model.overview?.payees ?? []).map { ($0.id, $0.name) }
         case "account": (model.overview?.accounts ?? []).map { ($0.id, $0.name) }
         case "category": (model.budget?.categories ?? []).map { ($0.id, $0.name) }
+        case "category_group": (model.budget?.groups ?? []).map { ($0.id, $0.name) }
         default: []
         }
     }

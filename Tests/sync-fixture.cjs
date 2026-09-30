@@ -128,7 +128,10 @@ const encryptionPassword = "disposable-encryption-test";
     const rule = rules.find((r) => r.conditions.some((c) => c.value === "native sync rule"));
     assert.equal(rule?.actions[0].value, category.id, "Native rule arrived");
     assert.equal((await internal.send("preferences/get")).numberFormat, "dot-comma");
-    console.log("PASS: upstream Actual API sees native budget moves, categories, notes, split transfer, payee, schedule, rule, and setting");
+    const widgets = (await api.aqlQuery(api.q("dashboard").filter({ type: "net-worth-card" }).select("*"))).data;
+    const widget = widgets.find((w) => w.meta?.name === "Native Sync Widget");
+    assert.equal(widget?.meta.interval, "Weekly", "Native widget edit arrived");
+    console.log("PASS: upstream Actual API sees native budget moves, categories, notes, split transfer, payee, schedule, rule, setting, and dashboard widget");
     console.log("PASS: upstream Actual API sees native encrypted offline edit and exact balance");
   }
   await api.shutdown();

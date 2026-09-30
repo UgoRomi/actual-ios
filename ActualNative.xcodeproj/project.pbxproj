@@ -13,6 +13,7 @@
 		081A59EF9A79FBC45265C273 /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 203FCBAC6256D607C727A9CE /* WidgetSnapshot.swift */; };
 		095DE5EF907D462DBD3537A9 /* ManageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B5E55D034124E4FA7708A32 /* ManageViews.swift */; };
 		098355D42E8947DDB81495CD /* ReportDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2465D96E6AC740AD9BCDF926 /* ReportDetails.swift */; };
+		7A1C0E5D2F3B4A6C8D9E0F11 /* ReportWidgetEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1C0E5D2F3B4A6C8D9E0F12 /* ReportWidgetEditor.swift */; };
 		0AED486DC5028236E648FC8C /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66177DE593ACD3F7FBE818F7 /* Models.swift */; };
 		0D29242560594EF4BA07BFC1 /* PayeesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 729C3F507D21493BA3BB885A /* PayeesView.swift */; };
 		1EE747E8A7BA4902B438745D /* TagsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F6D4459327E4E6FB05D7E0F /* TagsView.swift */; };
@@ -103,6 +104,7 @@
 		203FCBAC6256D607C727A9CE /* WidgetSnapshot.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WidgetSnapshot.swift; path = Native/WidgetSnapshot.swift; sourceTree = "<group>"; };
 		22F448B416504426D44ADE65 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/RootView.swift; sourceTree = "<group>"; };
 		2465D96E6AC740AD9BCDF926 /* ReportDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ReportDetails.swift; sourceTree = "<group>"; };
+		7A1C0E5D2F3B4A6C8D9E0F12 /* ReportWidgetEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ReportWidgetEditor.swift; sourceTree = "<group>"; };
 		26AB470B66CA9603C9E53F67 /* Resources */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Native/Resources; sourceTree = "<group>"; };
 		2E635C1267B14E15F71F5D1A /* ActualNativeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = ActualNativeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		33E8BE36FC801D3CF8C5A001 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/AppModel.swift; sourceTree = "<group>"; };
@@ -203,6 +205,7 @@
 				3D9944038F13D5EE416AC7AF /* Targets.swift */,
 				6D5D76757B1F406481F8379E /* ReportComponents.swift */,
 				2465D96E6AC740AD9BCDF926 /* ReportDetails.swift */,
+				7A1C0E5D2F3B4A6C8D9E0F12 /* ReportWidgetEditor.swift */,
 				6A24D3505F8B4997956B4A63 /* ReportsView.swift */,
 				811B55025A214E8B9035B5F9 /* Reports.swift */,
 				3D1C8D9F0C3BC17165ACEE19 /* Theme.swift */,
@@ -420,6 +423,7 @@
 				9750BCB19B18BC9E2218101D /* Targets.swift in Sources */,
 				809F71A2A5B047F39C676F68 /* ReportComponents.swift in Sources */,
 				098355D42E8947DDB81495CD /* ReportDetails.swift in Sources */,
+				7A1C0E5D2F3B4A6C8D9E0F11 /* ReportWidgetEditor.swift in Sources */,
 				C5A7C19B2C7C46E0A8A55A02 /* ReportsView.swift in Sources */,
 				2F8FE7A1BB3C4F7184F1D7FF /* Reports.swift in Sources */,
 				6E1F6E9757C9755493C9A6A3 /* TargetsEditor.swift in Sources */,

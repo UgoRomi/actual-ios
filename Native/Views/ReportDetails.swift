@@ -1,25 +1,50 @@
 import Charts
 import SwiftUI
 
-/// A report's page. Ranges and options chosen here are not saved to the widget,
-/// as Actual keeps them until you save the widget, which this app leaves to Actual.
+/// A report's page. Ranges and options chosen here only try them out, as in Actual,
+/// until **Save to Widget** saves them, as Actual's "Save widget" does. **Edit** opens
+/// every saved setting.
 struct ReportDetailView: View {
     let widget: ReportWidget
     let earliestMonth: String
     @Environment(AppModel.self) private var model
     @State private var preset: ReportRangePreset?
     @State private var interval: String?
+    /// The widget's own interval, known once it loads without another chosen.
+    @State private var savedInterval: String?
+    @State private var showBalance: Bool?
+    @State private var spendingMode: SpendingReport.Mode?
     @State private var data: ReportData?
     @State private var error: String?
+    @State private var saveError: String?
+    @State private var savedName: String?
+    @State private var isEditing = false
+
+    /// What is tried out on this page and differs from the widget, as the settings to save.
+    private var choices: [String: JSONValue] {
+        var choices: [String: JSONValue] = [:]
+        if let preset { choices["timeFrame"] = preset.timeFrame(earliestMonth: earliestMonth).json }
+        if let interval { choices["interval"] = .string(interval) }
+        if let showBalance { choices["showBalance"] = .bool(showBalance) }
+        if let spendingMode { choices["spendingMode"] = .string(spendingMode.rawValue) }
+        return choices
+    }
 
     private struct Request: Equatable { let preset: ReportRangePreset?; let interval: String?; let revision: Int }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                if widget.kind != .spending {
-                    ReportRangeMenu(preset: $preset, oneMonth: [.cashFlow, .summary, .calendar].contains(widget.kind))
+                HStack {
+                    if widget.kind != .spending {
+                        ReportRangeMenu(preset: $preset, oneMonth: [.cashFlow, .summary, .calendar].contains(widget.kind))
+                    }
+                    Spacer()
+                    if !choices.isEmpty {
+                        Button("Save to Widget") { saveChoices() }.buttonStyle(.glassProminent).disabled(model.isBusy)
+                    }
                 }
+                if let saveError { ErrorNotice(message: saveError) }
                 if let data {
                     content(data)
                 } else {
@@ -28,19 +53,50 @@ struct ReportDetailView: View {
             }.padding(20).frame(maxWidth: 760).frame(maxWidth: .infinity)
         }
         .background(ActualTheme.background)
-        .navigationTitle(widget.title).navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(savedName ?? widget.title).navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) { Button("Edit") { isEditing = true } }
+        }
+        .sheet(isPresented: $isEditing) {
+            ReportWidgetEditor(widget: widget, earliestMonth: earliestMonth) { name in
+                savedName = name
+                discardChoices()
+            }
+        }
         .refreshable { await load() }
         .task(id: Request(preset: preset, interval: interval, revision: model.dataRevision)) { await load() }
+    }
+
+    /// Saves what this page shows to the widget. The page then shows the saved widget.
+    private func saveChoices() {
+        let choices = choices
+        Task {
+            if await model.saveReportWidget(widget.id, changes: choices) {
+                discardChoices()
+            } else {
+                saveError = model.errorMessage
+            }
+        }
+    }
+
+    private func discardChoices() {
+        preset = nil
+        interval = nil
+        showBalance = nil
+        spendingMode = nil
+        saveError = nil
     }
 
     @ViewBuilder private func content(_ data: ReportData) -> some View {
         let currency = model.currency
         if let report = data.netWorth {
-            NetWorthDetail(report: report, currency: currency, interval: $interval)
+            // Choosing the widget's own interval again is no change to save.
+            NetWorthDetail(report: report, currency: currency,
+                           interval: Binding(get: { interval }, set: { interval = $0 == savedInterval ? nil : $0 }))
         } else if let report = data.cashFlow {
-            CashFlowDetail(report: report, currency: currency)
+            CashFlowDetail(report: report, currency: currency, showBalance: $showBalance)
         } else if let report = data.spending {
-            SpendingDetail(report: report, currency: currency)
+            SpendingDetail(report: report, currency: currency, mode: $spendingMode)
         } else if let report = data.summary {
             SummaryDetail(report: report, currency: currency)
         } else if let report = data.calendar {
@@ -50,9 +106,12 @@ struct ReportDetailView: View {
 
     private func load() async {
         do {
-            data = try await model.report(
-                widget.id, timeFrame: preset?.timeFrame(earliestMonth: earliestMonth), interval: interval,
+            let chosen = interval
+            let loaded = try await model.report(
+                widget.id, timeFrame: preset?.timeFrame(earliestMonth: earliestMonth), interval: chosen,
                 detail: widget.kind == .cashFlow)
+            data = loaded
+            if chosen == nil { savedInterval = loaded.netWorth?.interval }
             error = nil
         } catch is CancellationError {
         } catch {
@@ -131,7 +190,8 @@ private struct NetWorthDetail: View {
 private struct CashFlowDetail: View {
     let report: CashFlowReport
     let currency: String
-    @State private var showBalance: Bool?
+    /// Nil shows the widget's saved choice.
+    @Binding var showBalance: Bool?
 
     var body: some View {
         let detail = report.detail
@@ -151,7 +211,7 @@ private struct CashFlowDetail: View {
         }
         if let detail {
             DetailSection {
-                Toggle("Show balance", isOn: Binding(get: { balance }, set: { showBalance = $0 }))
+                Toggle("Show balance", isOn: Binding(get: { balance }, set: { showBalance = $0 == report.showBalance ? nil : $0 }))
                 Chart {
                     ForEach(detail.points) { point in
                         let date = ReportDate.date(point.date) ?? .distantPast
@@ -187,14 +247,15 @@ private struct CashFlowDetail: View {
 private struct SpendingDetail: View {
     let report: SpendingReport
     let currency: String
-    @State private var mode: SpendingReport.Mode?
+    /// Nil shows the widget's saved comparison.
+    @Binding var mode: SpendingReport.Mode?
 
     var body: some View {
         let mode = self.mode ?? report.mode
         let day = report.days.indices.contains(report.todayIndex) ? report.days[report.todayIndex] : nil
         let toDate = report.compare == BudgetDate.month(Date()) ? " to date" : ""
         DetailSection {
-            Picker("Compare to", selection: Binding(get: { mode }, set: { self.mode = $0 })) {
+            Picker("Compare to", selection: Binding(get: { mode }, set: { self.mode = $0 == report.mode ? nil : $0 })) {
                 ForEach(SpendingReport.Mode.allCases) { Text($0.title).tag($0) }
             }.pickerStyle(.segmented)
             Text(SpendingText.comparison(report, mode: mode)).font(.subheadline).foregroundStyle(.secondary)
