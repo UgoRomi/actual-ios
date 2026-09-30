@@ -24,6 +24,19 @@ struct BudgetProvider: TimelineProvider {
 
 private let purple = Color(red: 0.49, green: 0.23, blue: 0.93)
 
+private extension Color {
+    /// A theme color from the app, or the fallback without one.
+    init(_ tone: WidgetSnapshot.Tone?, else fallback: Color) {
+        func color(_ hex: String) -> UIColor? {
+            guard hex.count == 7, hex.hasPrefix("#"), let value = UInt32(hex.dropFirst(), radix: 16) else { return nil }
+            return UIColor(red: CGFloat((value >> 16) & 0xFF) / 255, green: CGFloat((value >> 8) & 0xFF) / 255,
+                           blue: CGFloat(value & 0xFF) / 255, alpha: 1)
+        }
+        guard let tone, let light = color(tone.light), let dark = color(tone.dark) else { self = fallback; return }
+        self.init(uiColor: UIColor { $0.userInterfaceStyle == .dark ? dark : light })
+    }
+}
+
 struct BudgetWidgetView: View {
     let entry: BudgetEntry
     @Environment(\.widgetFamily) private var family
@@ -53,7 +66,7 @@ struct BudgetWidgetView: View {
                                     Text(category.name).font(.caption).lineLimit(1)
                                     Spacer(minLength: 4)
                                     Text(category.balance).font(.caption.weight(.semibold)).monospacedDigit()
-                                        .foregroundStyle(category.overspent ? Color.red : Color.primary)
+                                        .foregroundStyle(category.overspent ? Color(snapshot.negativeColor, else: .red) : Color.primary)
                                 }
                             }
                         }
@@ -72,11 +85,12 @@ struct BudgetWidgetView: View {
 
     private func headline(_ snapshot: WidgetSnapshot) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Label(snapshot.budgetName, systemImage: "chart.pie.fill").font(.caption2).foregroundStyle(purple).lineLimit(1)
+            Label(snapshot.budgetName, systemImage: "chart.pie.fill").font(.caption2)
+                .foregroundStyle(Color(snapshot.accentColor, else: purple)).lineLimit(1)
             Spacer(minLength: 0)
             Text(snapshot.headline).font(.caption).foregroundStyle(.secondary)
             Text(snapshot.amount).font(.title2.bold()).monospacedDigit().minimumScaleFactor(0.5).lineLimit(1)
-                .foregroundStyle(snapshot.negative ? Color.red : Color.primary)
+                .foregroundStyle(snapshot.negative ? Color(snapshot.negativeColor, else: .red) : Color.primary)
             Text(snapshot.month).font(.caption2).foregroundStyle(.secondary)
         }
     }

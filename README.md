@@ -1,6 +1,6 @@
 # Actual Native
 
-An unofficial SwiftUI iOS client for Actual Budget. A separate app with native Liquid Glass navigation, Actual purple and navy, and the real Actual engine running locally through JavaScriptCore.
+An unofficial SwiftUI iOS client for Actual Budget. A separate app with native Liquid Glass navigation, Actual's purple and navy or a theme of your own, and the real Actual engine running locally through JavaScriptCore.
 
 This is a development build, with no App Store submission or distribution signing configured.
 
@@ -33,6 +33,7 @@ This is a development build, with no App Store submission or distribution signin
 - As in Actual's mobile app, adding, editing, deleting, clearing, and unlocking a transaction show immediately, and the editor closes without waiting for the save. Balances update with them. If a save fails, the change is undone and the register explains why.
 - Open end-to-end encrypted budgets using their encryption password.
 - Native light/dark appearances, system glass controls, and locale-aware integer-cent entry.
+- Choose a theme in **Settings → Theme**: **Actual** (purple and navy, as before), **Sterling** (black, white, and silver), or **Payday** (flamingo pink on pale aqua, with a teal-to-cobalt summary card). **New Theme** copies the theme in use for you to change: its accent, page, rows and cards, the summary card's two colors, and the colors of positive, warning, and negative amounts, each for light and dark appearance. Changes show across the app as you make them. Text on the accent and the summary card turns black or white to stay readable. Like Actual's theme, a theme is a setting of this device, not of the budget; the home-screen widget follows it. Actual's installable custom themes restyle its web interface with CSS, so they do not apply here.
 - Amounts use a calculator keypad laid out like Actual's mobile calculator. Enter a number, or a calculation with + − × ÷ and parentheses, such as `120+30` for a category's budget. **=** or leaving the field shows the result. As in Actual, a calculation is rounded to the nearest cent; a single number still may not have more than two decimal places.
 
 A transfer linked to part of a split is edited from the split. Rules for new splits, split rules and rule templates, bank setup, reordering accounts, editing report dashboards and widgets, and custom reports remain in Actual web/desktop. So do targets for income categories in tracking budgets, end-of-month cleanup, checking notes templates, and moving targets back to notes. Existing Actual transaction rules still run through its engine.
@@ -108,6 +109,8 @@ The sync test starts a temporary server on a free localhost port, downloads an e
 Simulator UI checks are in `Tests/UITests`. See [docs/validation.md](docs/validation.md) for the command and observed coverage.
 
 Run `./scripts/test-amounts.sh` for amount entry: localized numbers, calculations, rounding, and invalid input.
+
+Run `./scripts/test-themes.sh` for themes: color parsing and contrast, that every preset keeps text, amounts, and its accent legible in both appearances, and adding, editing, saving, and deleting your own themes.
 
 Run `./scripts/test-transactions.sh` for register grouping/search regressions and a 10,000-transaction fixture. Optionally pass a local `db.sqlite` path to test it read-only, with `--baseline` to compare the previous section-preparation cost. See the validation notes for the opt-in large-budget simulator test.
 

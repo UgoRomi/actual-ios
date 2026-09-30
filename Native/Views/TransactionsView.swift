@@ -39,7 +39,7 @@ struct TransactionsView: View {
         let sections = TransactionSection.grouped(listed, accountID: accountID, search: search,
                                                   currency: model.currency, limit: shownCount)
         let hasMore = sections.reduce(0) { $0 + $1.transactions.count } == shownCount
-        return List {
+        return ThemedList {
             if let error = model.errorMessage { Section { ErrorNotice(message: error) { Task { await model.refresh() } } } }
             if let accountID { BankSyncNotice(accountID: accountID) }
             if let account, let reconciliation { ReconcilingBanner(account: account, reconciliation: reconciliation) }
@@ -195,7 +195,7 @@ struct ScheduledTransactionRow: View {
             }
             Spacer(minLength: 8)
             // Actual's register shows previews in light text.
-            MoneyText(value: scheduled.amount, currency: currency, positiveColor: .green, negativeColor: .secondary)
+            MoneyText(value: scheduled.amount, currency: currency, positiveColor: ActualTheme.positive, negativeColor: .secondary)
                 .font(.body.weight(.semibold))
         }.padding(.vertical, 6).contentShape(Rectangle())
             .accessibilityElement(children: .combine)

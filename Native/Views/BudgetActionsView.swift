@@ -65,7 +65,7 @@ struct MoveMoneyForm: View {
     }
 
     var body: some View {
-        Form {
+        ThemedForm {
             Section {
                 AmountField(label: amountHeader, text: $amount, large: true, focusesOnAppear: true)
             } header: { Text(amountHeader) } footer: {
@@ -83,7 +83,7 @@ struct MoveMoneyForm: View {
                     }
                 }
             }
-            if let validation { Section { Text(validation).foregroundStyle(.red) } }
+            if let validation { Section { Text(validation).foregroundStyle(ActualTheme.negative) } }
             if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
         }
         .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
@@ -106,9 +106,9 @@ struct MoveMoneyForm: View {
                 Spacer()
                 if let balance {
                     Text(Money.formatted(balance, currency: model.currency)).monospacedDigit()
-                        .font(.subheadline).foregroundStyle(balance < 0 ? Color.red : Color.secondary)
+                        .font(.subheadline).foregroundStyle(balance < 0 ? ActualTheme.negative : Color.secondary)
                 }
-                if selection == source { Image(systemName: "checkmark").foregroundStyle(ActualTheme.purple) }
+                if selection == source { Image(systemName: "checkmark").foregroundStyle(ActualTheme.accent) }
             }
         }
         .accessibilityAddTraits(selection == source ? .isSelected : [])
@@ -146,13 +146,13 @@ struct HoldForm: View {
     @State private var initialized = false
 
     var body: some View {
-        Form {
+        ThemedForm {
             Section {
                 AmountField(label: "Hold this amount", text: $amount, large: true, focusesOnAppear: true)
             } header: { Text("Hold this amount") } footer: {
                 Text("Held money leaves this month’s To Budget and becomes available to budget next month.")
             }
-            if let validation { Section { Text(validation).foregroundStyle(.red) } }
+            if let validation { Section { Text(validation).foregroundStyle(ActualTheme.negative) } }
             if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
         }
         .navigationTitle("Hold for Next Month").navigationBarTitleDisplayMode(.inline)
@@ -196,14 +196,14 @@ struct EnvelopeSummarySheet: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            Form {
+            ThemedForm {
                 if let budget = model.budget, let summary = budget.envelope {
                     let toBudget = budget.toBudget ?? 0
                     Section {
                         LabeledContent(toBudget < 0 ? "Overbudgeted" : "To Budget") {
                             Text(Money.formatted(toBudget, currency: model.currency))
                                 .font(.title2.bold()).monospacedDigit()
-                                .foregroundStyle(toBudget < 0 ? Color.red : Color.primary)
+                                .foregroundStyle(toBudget < 0 ? ActualTheme.negative : Color.primary)
                         }
                     }
                     Section("How it adds up") {
@@ -290,12 +290,12 @@ struct OverspentList: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        List {
+        ThemedList {
             ForEach(model.budget?.overspent ?? []) { category in
                 NavigationLink(value: BudgetRoute.move(.cover(category: category.id))) {
                     LabeledContent(category.name) {
                         Text(Money.formatted(category.balance, currency: model.currency))
-                            .monospacedDigit().foregroundStyle(.red)
+                            .monospacedDigit().foregroundStyle(ActualTheme.negative)
                     }
                 }
             }
@@ -353,7 +353,7 @@ struct BudgetBanners: View {
                 let total = uncategorized.reduce(0) { $0 + $1.amount }
                 banner(
                     "\(uncategorized.count) uncategorized \(uncategorized.count == 1 ? "transaction" : "transactions") (\(Money.formatted(total, currency: model.currency)))",
-                    systemImage: "tag", action: "Categorize", tint: .orange
+                    systemImage: "tag", action: "Categorize", tint: ActualTheme.warning
                 ) { onOpen(.transactions(.uncategorized, title: "Uncategorized")) }
             }
             if budget.budgetType == .envelope, let toBudget = budget.toBudget, toBudget < 0 {
@@ -363,7 +363,7 @@ struct BudgetBanners: View {
         }
     }
 
-    private func banner(_ text: String, systemImage: String, action: String?, tint: Color = .red,
+    private func banner(_ text: String, systemImage: String, action: String?, tint: Color = ActualTheme.negative,
                         perform: @escaping () -> Void) -> some View {
         HStack(spacing: 12) {
             Label(text, systemImage: systemImage).font(.subheadline.weight(.medium))

@@ -18,6 +18,7 @@ struct RootView: View {
         }
         // Date pickers start the week on the budget's first day, as Actual's do.
         .environment(\.calendar, model.overview.map { _ in BudgetDate.calendar } ?? .autoupdatingCurrent)
+        .tint(ActualTheme.accent)
         .disabled(model.isOpeningBudget)
         .overlay {
             if !model.hasStarted || model.isOpeningBudget { openingBudget }
@@ -26,7 +27,7 @@ struct RootView: View {
 
     private var openingBudget: some View {
         VStack(spacing: 18) {
-            Image(systemName: "chart.pie.fill").font(.system(size: 44)).foregroundStyle(ActualTheme.purple)
+            Image(systemName: "chart.pie.fill").font(.system(size: 44)).foregroundStyle(ActualTheme.accent)
             ProgressView(model.isSyncingBudget ? "Syncing your budget…" : "Opening your budget…")
             if model.isAwaitingOpeningSync {
                 VStack(spacing: 8) {
@@ -50,8 +51,8 @@ struct WelcomeView: View {
                 VStack(alignment: .leading, spacing: 28) {
                     VStack(alignment: .leading, spacing: 20) {
                         Image(systemName: "chart.pie.fill")
-                            .font(.system(size: 48)).foregroundStyle(.white)
-                            .padding(22).background(ActualTheme.purple, in: RoundedRectangle(cornerRadius: 28))
+                            .font(.system(size: 48)).foregroundStyle(ActualTheme.onAccent)
+                            .padding(22).background(ActualTheme.accent, in: RoundedRectangle(cornerRadius: 28))
                             .accessibilityHidden(true)
                         Text("Actual").font(.largeTitle.bold())
                         Text("Make room for what matters.")
@@ -99,7 +100,7 @@ struct WelcomeView: View {
                     }
                     VStack(spacing: 14) {
                         Button { showConnection = true } label: {
-                            Text("Connect to your server").frame(maxWidth: .infinity).padding(.vertical, 8)
+                            Text("Connect to your server").foregroundStyle(ActualTheme.onAccent).frame(maxWidth: .infinity).padding(.vertical, 8)
                         }.buttonStyle(.glassProminent)
                         Button { Task { await model.perform("demo") } } label: {
                             Text("Explore a demo budget").frame(maxWidth: .infinity).padding(.vertical, 8)

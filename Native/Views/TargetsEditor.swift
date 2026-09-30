@@ -30,7 +30,7 @@ struct TargetsEditor: View {
     }
 
     var body: some View {
-        Form {
+        ThemedForm {
             if let loadError {
                 Section { ErrorNotice(message: loadError) { Task { await load() } } }
             } else if let loaded {
@@ -83,7 +83,7 @@ struct TargetsEditor: View {
                     if let currentPreview { MoneyText(value: currentPreview.budgeted, currency: model.currency) }
                     else { ProgressView() }
                 }
-                if let previewError { Text(previewError).foregroundStyle(.red) }
+                if let previewError { Text(previewError).foregroundStyle(ActualTheme.negative) }
             } footer: {
                 if loaded.source == .notes, !loaded.noteLines.isEmpty {
                     Text("Imported from the category’s notes. Review and save to manage these targets here; Actual then ignores the #template lines in its notes.")
@@ -99,7 +99,7 @@ struct TargetsEditor: View {
             if let conflicts = currentPreview?.conflicts, !conflicts.isEmpty {
                 Section {
                     ForEach(conflicts, id: \.self) { conflict in
-                        Label(conflict, systemImage: "exclamationmark.circle").foregroundStyle(.red)
+                        Label(conflict, systemImage: "exclamationmark.circle").foregroundStyle(ActualTheme.negative)
                     }
                 }
             }
@@ -145,7 +145,7 @@ struct TargetsEditor: View {
                 Text(template.summary(currency: model.currency, income: loaded.incomeCategories))
                     .font(.subheadline).foregroundStyle(.secondary)
                 if let problem = problem(template.id) {
-                    Label(problem, systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(.red)
+                    Label(problem, systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(ActualTheme.negative)
                 }
             }
         }
@@ -232,7 +232,7 @@ private struct TargetDetail: View {
     private var kind: TargetTemplate.Kind { template.kind ?? .fixed }
 
     var body: some View {
-        Form {
+        ThemedForm {
             Section {
                 if TargetTemplate.Kind.automations.contains(kind) {
                     Picker("Type", selection: Binding(get: { kind }, set: { template.change(to: $0) })) {
@@ -251,7 +251,7 @@ private struct TargetDetail: View {
                     if let contribution {
                         LabeledContent("This month") { MoneyText(value: contribution, currency: currency) }
                     }
-                    if let problem { Label(problem, systemImage: "exclamationmark.circle").foregroundStyle(.red) }
+                    if let problem { Label(problem, systemImage: "exclamationmark.circle").foregroundStyle(ActualTheme.negative) }
                 }
             }
             if let priority = template.priority {
@@ -359,7 +359,7 @@ private struct TargetDetail: View {
         case .refill:
             if !all.contains(where: { $0.kind == .limit }) {
                 Label("Add a balance cap for this category to refill to.", systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(ActualTheme.warning)
                 Button("Add Balance Cap", systemImage: "plus", action: addCap)
             } else {
                 Text("Budgets enough to bring the balance back up to the balance cap.").foregroundStyle(.secondary)

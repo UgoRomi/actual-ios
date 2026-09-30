@@ -176,10 +176,10 @@ struct BudgetView: View {
     private func summary(_ budget: BudgetMonth) -> some View {
         let headline = SummaryHeadline(budget)
         let title = Label(headline.title, systemImage: headline.systemImage)
-            .font(.subheadline.weight(.medium)).foregroundStyle(.white.opacity(0.8))
+            .font(.subheadline.weight(.medium)).foregroundStyle(ActualTheme.onCard.opacity(0.8))
         let amount = Text(Money.formatted(headline.amount, currency: model.currency))
             .font(.system(.title, design: .rounded, weight: .bold)).monospacedDigit()
-            .foregroundStyle(.white)
+            .foregroundStyle(ActualTheme.onCard)
         return VStack(alignment: .leading, spacing: 10) {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) { title; Spacer(minLength: 0); amount }
@@ -198,13 +198,13 @@ struct BudgetView: View {
             }
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-        .background(ActualTheme.navy.gradient, in: RoundedRectangle(cornerRadius: 22))
+        .background(ActualTheme.card, in: RoundedRectangle(cornerRadius: 22))
     }
 
     private func summaryValue(_ label: String, _ value: Int) -> some View {
         HStack(spacing: 6) {
-            Text(label).foregroundStyle(.white.opacity(0.7))
-            Text(Money.formatted(value, currency: model.currency)).fontWeight(.semibold).monospacedDigit().foregroundStyle(.white)
+            Text(label).foregroundStyle(ActualTheme.onCard.opacity(0.7))
+            Text(Money.formatted(value, currency: model.currency)).fontWeight(.semibold).monospacedDigit().foregroundStyle(ActualTheme.onCard)
         }.font(.subheadline).accessibilityElement(children: .combine)
     }
 
@@ -225,7 +225,7 @@ struct BudgetView: View {
 
     private func filterChip(_ option: BudgetFilter, count: Int) -> some View {
         let selected = filter == option
-        let tint: Color = option == .overspent ? .red : .orange
+        let tint = option == .overspent ? ActualTheme.negative : ActualTheme.warning
         return Button {
             withAnimation(.snappy) { filter = option }
         } label: {
@@ -234,15 +234,15 @@ struct BudgetView: View {
                 if option != .all {
                     Text(count, format: .number)
                         .font(.caption.bold()).monospacedDigit()
-                        .foregroundStyle(selected ? Color.white : count > 0 ? tint : Color.secondary)
+                        .foregroundStyle(selected ? ActualTheme.onAccent : count > 0 ? tint : Color.secondary)
                         .padding(.horizontal, 6).padding(.vertical, 1)
-                        .background(selected ? Color.white.opacity(0.22) : count > 0 ? tint.opacity(0.14) : Color.secondary.opacity(0.12), in: Capsule())
+                        .background(selected ? ActualTheme.onAccent.opacity(0.22) : count > 0 ? tint.opacity(0.14) : Color.secondary.opacity(0.12), in: Capsule())
                 }
             }
             .font(.subheadline.weight(.medium))
-            .foregroundStyle(selected ? Color.white : Color.primary)
+            .foregroundStyle(selected ? ActualTheme.onAccent : Color.primary)
             .padding(.horizontal, 12).padding(.vertical, 7)
-            .background(selected ? ActualTheme.purple : ActualTheme.surface, in: Capsule())
+            .background(selected ? ActualTheme.accent : ActualTheme.surface, in: Capsule())
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -315,7 +315,7 @@ struct BudgetView: View {
                 amount(category.budgeted).font(.subheadline).foregroundStyle(.secondary)
             }
         } balance: {
-            amount(category.spent).font(.subheadline.weight(.semibold)).foregroundStyle(.green)
+            amount(category.spent).font(.subheadline.weight(.semibold)).foregroundStyle(ActualTheme.positive)
                 .padding(.horizontal, Self.balanceInset)
         }
         .padding(.horizontal, 16).padding(.vertical, 10)
@@ -425,19 +425,20 @@ struct BudgetView: View {
 
 /// A category's funding against its goal, colored like Actual's balance:
 /// overspent in red, then underfunded in orange and funded in green when targets set a goal.
+@MainActor
 struct TargetStatus {
     let category: BudgetCategory
     init(_ category: BudgetCategory) { self.category = category }
 
     var isUnderfunded: Bool { (category.goalDifference ?? 0) < 0 }
     var balanceColor: Color {
-        if category.balance < 0 { return .red }
+        if category.balance < 0 { return ActualTheme.negative }
         guard category.goal != nil else { return .primary }
-        return isUnderfunded ? .orange : .green
+        return isUnderfunded ? ActualTheme.warning : ActualTheme.positive
     }
     /// Whether the balance has a status color, which rows set on a tinted background.
     var highlightsBalance: Bool { category.balance < 0 || category.goal != nil }
-    var labelColor: Color { category.balance >= 0 && isUnderfunded ? .orange : .secondary }
+    var labelColor: Color { category.balance >= 0 && isUnderfunded ? ActualTheme.warning : .secondary }
 
     func label(currency: String) -> String {
         if category.balance < 0 { return "Overspent" }
@@ -494,7 +495,7 @@ struct BudgetEditor: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            Form {
+            ThemedForm {
                 Section {
                     AmountField(label: "Budgeted amount", text: $amount, placeholder: "Budgeted amount", focusesOnAppear: true)
                 } header: { Text("Budgeted for \(month)") } footer: { Text("Set the total amount you want to budget for this category.") }
@@ -582,7 +583,7 @@ struct BudgetEditor: View {
                         Label("Edit Category", systemImage: "pencil")
                     }
                 } footer: { Text("Rename, add notes, hide, reorder, move to another group, or delete.") }
-                if let validation { Section { Text(validation).foregroundStyle(.red) } }
+                if let validation { Section { Text(validation).foregroundStyle(ActualTheme.negative) } }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
             }
             .navigationTitle(category.name).navigationBarTitleDisplayMode(.inline)

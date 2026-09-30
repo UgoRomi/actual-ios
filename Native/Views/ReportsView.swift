@@ -282,11 +282,11 @@ struct NetWorthChart: View {
                 ForEach(report.points) { point in
                     AreaMark(x: .value("Date", ReportDate.date(point.date) ?? .distantPast),
                              y: .value("Net worth", ChartAmount.value(point.total)))
-                    .foregroundStyle(ActualTheme.purple.opacity(0.18).gradient)
+                    .foregroundStyle(ActualTheme.accent.opacity(0.18).gradient)
                     .interpolationMethod(.monotone)
                     LineMark(x: .value("Date", ReportDate.date(point.date) ?? .distantPast),
                              y: .value("Net worth", ChartAmount.value(point.total)))
-                    .foregroundStyle(ActualTheme.purple)
+                    .foregroundStyle(ActualTheme.accent)
                     .interpolationMethod(.monotone)
                 }
             }
@@ -326,7 +326,7 @@ struct SpendingChart: View {
                 }
             }
         }
-        .chartForegroundStyleScale([compareName: ActualTheme.purple, otherName: ReportColor.comparison])
+        .chartForegroundStyleScale([compareName: ActualTheme.accent, otherName: ReportColor.comparison])
         .chartXScale(domain: 1...28)
         .chartLegend(compact ? .hidden : .automatic)
         .chartXAxis(compact ? .hidden : .automatic)

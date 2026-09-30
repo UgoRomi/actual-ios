@@ -8,7 +8,7 @@ struct SettingsView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            ThemedForm {
                 Section("Your budget") {
                     LabeledContent("Name", value: model.overview?.budgetName ?? "Actual")
                     LabeledContent("Currency", value: model.currency.isEmpty ? "Budget default (no symbol)" : model.currency)
@@ -38,12 +38,17 @@ struct SettingsView: View {
                     formatting
                 }
                 Section {
+                    NavigationLink { ThemesView() } label: {
+                        LabeledContent { Text(ThemeStore.shared.theme.name) } label: { Label("Theme", systemImage: "paintpalette") }
+                    }
+                } header: { Text("Appearance") }
+                Section {
                     Button("Choose another budget") {
                         Task { if await model.closeBudget() { dismiss() } }
                     }.disabled(model.isBusy)
                 } footer: { Text("Your saved budget stays on this device. You can delete it from the budget list.") }
                 Section {
-                    Label("Actual", systemImage: "chart.pie.fill").foregroundStyle(ActualTheme.purple).font(.headline)
+                    Label("Actual", systemImage: "chart.pie.fill").foregroundStyle(ActualTheme.accent).font(.headline)
                     Text("Unofficial client for Actual Budget.").font(.subheadline).foregroundStyle(.secondary)
                 }
             }
@@ -114,7 +119,7 @@ struct ConnectionView: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            ThemedForm {
                 Section {
                     TextField("https://actual.example.com", text: $serverURL)
                         .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
@@ -138,7 +143,7 @@ struct ConnectionView: View {
                 } header: { Text("Actual server") } footer: {
                     Text(serverFooter)
                 }.disabled(model.isBusy)
-                if let validation { Section { Text(validation).foregroundStyle(.red) } }
+                if let validation { Section { Text(validation).foregroundStyle(ActualTheme.negative) } }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
                 if connected && !model.serverBudgets.isEmpty {
                     Section("Server budgets") {

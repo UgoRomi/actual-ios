@@ -15,11 +15,12 @@ struct ActualNativeApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
-                .tint(ActualTheme.purple)
                 .task { await model.activate() }
                 .onChange(of: scenePhase) { _, phase in
                     if phase == .background {
                         model.enteredBackground()
+                        // A theme change shows on the widget once the app is left.
+                        WidgetSupport.update(from: model)
                         WidgetSupport.scheduleRefresh()
                     } else if phase == .active { Task { await model.activate() } }
                 }

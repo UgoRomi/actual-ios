@@ -21,6 +21,7 @@ enum WidgetSupport {
         }
         let attention = budget.visibleGroups.flatMap(\.categories).filter { !$0.isIncome }
             .sorted { $0.balance < $1.balance }.prefix(4)
+        let theme = ThemeStore.shared.theme
         let snapshot = WidgetSnapshot(
             budgetName: overview.budgetName,
             month: model.selectedMonth.formatted(.dateTime.month(.wide).year()),
@@ -29,6 +30,10 @@ enum WidgetSupport {
             negative: amount < 0,
             categories: attention.map {
                 .init(name: $0.name, balance: Money.formatted($0.balance, currency: model.currency), overspent: $0.balance < 0)
+            },
+            accentColor: .init(light: theme.light.accent, dark: theme.dark.accent),
+            negativeColor: theme.light.negative.flatMap { light in
+                theme.dark.negative.map { .init(light: light, dark: $0) }
             })
         guard snapshot != WidgetSnapshot.read() else { return }
         snapshot.write()

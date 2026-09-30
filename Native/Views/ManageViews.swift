@@ -14,9 +14,9 @@ struct NameSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            ThemedForm {
                 Section { TextField("Name", text: $name).focused($focused).submitLabel(.done).onSubmit(submit) }
-                if let validation { Section { Text(validation).foregroundStyle(.red) } }
+                if let validation { Section { Text(validation).foregroundStyle(ActualTheme.negative) } }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
             }
             .navigationTitle(title).navigationBarTitleDisplayMode(.inline)
@@ -50,7 +50,7 @@ struct NotesSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            ThemedForm {
                 Section { TextEditor(text: $notes).frame(minHeight: 180) }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
             }
@@ -81,7 +81,7 @@ struct DeleteTransferForm: View {
     @State private var selection: String?
 
     var body: some View {
-        Form {
+        ThemedForm {
             Section { Text(message).font(.subheadline) }
             ForEach(candidates) { group in
                 Section(group.name) {
@@ -122,7 +122,7 @@ struct CategoryManageForm: View {
     private var category: BudgetCategory? { group?.categories.first { $0.id == categoryID } }
 
     var body: some View {
-        Form {
+        ThemedForm {
             if let category, let group {
                 Section {
                     Button { renaming = true } label: { LabeledContent("Name", value: category.name) }
@@ -228,7 +228,7 @@ struct GroupManageSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            ThemedForm {
                 if let group {
                     Section {
                         Button { renaming = true } label: { LabeledContent("Name", value: group.name) }
@@ -342,7 +342,7 @@ struct NewAccountSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            ThemedForm {
                 Section {
                     TextField("Name", text: $name, prompt: Text("e.g. Bank, Savings, Credit Card, Cash"))
                         .accessibilityLabel("Name")
@@ -357,7 +357,7 @@ struct NewAccountSheet: View {
                 } header: { Text("Starting balance") } footer: {
                     Text("Use a negative amount, such as −250, for a credit card or loan balance.")
                 }
-                if let validation { Section { Text(validation).foregroundStyle(.red) } }
+                if let validation { Section { Text(validation).foregroundStyle(ActualTheme.negative) } }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
             }
             .navigationTitle("New Account").navigationBarTitleDisplayMode(.inline)
@@ -404,7 +404,7 @@ struct CloseAccountSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            ThemedForm {
                 Section {
                     Text(hasTransactions
                          ? "This account has transactions, so it is closed rather than deleted. You can reopen it later."
@@ -440,7 +440,7 @@ struct CloseAccountSheet: View {
                         Text("Force closing deletes the account and all its transactions. Transfers to it lose their other side.")
                     }
                 }
-                if let validation { Section { Text(validation).foregroundStyle(.red) } }
+                if let validation { Section { Text(validation).foregroundStyle(ActualTheme.negative) } }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
             }
             .disabled(model.isBusy)

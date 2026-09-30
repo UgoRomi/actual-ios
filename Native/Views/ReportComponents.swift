@@ -2,9 +2,10 @@ import Charts
 import SwiftUI
 
 /// Actual's report colors: income and savings green, spending red.
+@MainActor
 enum ReportColor {
-    static let positive = Color.green
-    static let negative = Color.red
+    static var positive: Color { ActualTheme.positive }
+    static var negative: Color { ActualTheme.negative }
     static let neutral = Color.secondary
     static let comparison = Color.gray
 
@@ -242,7 +243,7 @@ struct CalendarMonthGrid: View {
         }
         .padding(.vertical, compact ? 2 : 5).padding(.horizontal, 3)
         .frame(maxWidth: .infinity, minHeight: compact ? 26 : 44)
-        .background(selectedDate == date ? ActualTheme.purple.opacity(0.18) : Color.primary.opacity(0.04),
+        .background(selectedDate == date ? ActualTheme.accent.opacity(0.18) : Color.primary.opacity(0.04),
                     in: RoundedRectangle(cornerRadius: 6))
         return Group {
             if let onSelect, day != nil {

@@ -12,7 +12,7 @@ struct ReconcileSheet: View {
 
     var body: some View {
         NavigationStack {
-            Form {
+            ThemedForm {
                 Section {
                     AmountField(label: "Bank balance", text: $amount, large: true, focusesOnAppear: true)
                 } header: { Text("Bank balance") } footer: {
@@ -31,7 +31,7 @@ struct ReconcileSheet: View {
                         Text("Reconciled \(date.formatted(.relative(presentation: .named))) (\(date.formatted(date: .abbreviated, time: .omitted)))")
                     } else { Text("Not yet reconciled") }
                 }
-                if let validation { Section { Text(validation).foregroundStyle(.red) } }
+                if let validation { Section { Text(validation).foregroundStyle(ActualTheme.negative) } }
             }
             .navigationTitle("Reconcile").navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -69,11 +69,11 @@ struct ReconcilingBanner: View {
             VStack(alignment: .leading, spacing: 14) {
                 if difference == 0 {
                     Label("All reconciled!", systemImage: "checkmark.circle.fill")
-                        .font(.headline).foregroundStyle(.green)
+                        .font(.headline).foregroundStyle(ActualTheme.positive)
                     Text("Your cleared balance matches your bank’s balance of \(Text(money(reconciliation.targetBalance)).bold()).")
                         .font(.subheadline)
                     Button { Task { await model.finishReconciliation(lock: true) } } label: {
-                        Text("Lock transactions").frame(maxWidth: .infinity)
+                        Text("Lock transactions").foregroundStyle(ActualTheme.onAccent).frame(maxWidth: .infinity)
                     }.buttonStyle(.glassProminent)
                 } else {
                     Text("Your cleared balance \(Text(money(cleared)).bold()) needs \(Text((difference > 0 ? "+" : "") + money(difference)).bold()) to match your bank’s balance of \(Text(money(reconciliation.targetBalance)).bold()).")
@@ -82,7 +82,7 @@ struct ReconcilingBanner: View {
                         Text("Create reconciliation transaction").frame(maxWidth: .infinity)
                     }.buttonStyle(.glass)
                     Button { Task { await model.finishReconciliation(lock: false) } } label: {
-                        Text("Exit reconciliation").frame(maxWidth: .infinity)
+                        Text("Exit reconciliation").foregroundStyle(ActualTheme.onAccent).frame(maxWidth: .infinity)
                     }.buttonStyle(.glassProminent)
                 }
             }.padding(.vertical, 6)
@@ -112,7 +112,7 @@ struct ClearedToggle: View {
             Image(systemName: transaction.isReconciled ? "lock.fill" : transaction.cleared ? "checkmark.circle.fill" : "circle")
                 .font(.body)
                 // Actual's register marks cleared and reconciled transactions in green.
-                .foregroundStyle(transaction.isReconciled || transaction.cleared ? Color.green : Color.secondary)
+                .foregroundStyle(transaction.isReconciled || transaction.cleared ? ActualTheme.positive : Color.secondary)
                 .frame(width: 44, height: 44).contentShape(Rectangle())
         }
         .buttonStyle(.borderless)
