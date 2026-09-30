@@ -44,6 +44,8 @@ Select the `ActualNative` scheme and an iOS simulator, then Run. The script bund
 
 Simulator builds use local ad hoc signing so Keychain works. For an iPhone, choose your development team and a unique bundle identifier in Xcode, and enable automatic signing. Device installation has not yet been verified.
 
+The app icon is Actual's logo mark, rendered in light, dark, and tinted variants by `./scripts/generate-app-icon.sh` (requires `rsvg-convert`). Edit the script and rerun it to change the icon.
+
 ## Check the engine
 
 The following executable test creates only disposable local budgets:
