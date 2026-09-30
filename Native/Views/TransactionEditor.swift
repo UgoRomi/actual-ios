@@ -206,6 +206,11 @@ struct TransactionEditor: View {
                                        : partIsBudgetTransfer(part) ? "Transfer" : name(ofCategory: part.category))
                     }.disabled(isOffBudget || partIsBudgetTransfer(part))
                     TextField("Notes", text: $part.notes, axis: .vertical).lineLimit(1...3)
+                    // As Actual's mobile editor's Use remaining, give this part what the others leave.
+                    if amountLeft != 0, let remaining = remaining(for: part), remaining >= 0 {
+                        Button("Use Remaining: \(Money.formatted(remaining, currency: model.currency))",
+                               systemImage: "equal.circle") { part.amount = Money.editable(remaining) }
+                    }
                     Button("Delete Split", systemImage: "trash", role: .destructive) {
                         splits.removeAll { $0.id == part.id }
                     }
@@ -219,6 +224,8 @@ struct TransactionEditor: View {
                     let left = max(amountLeft ?? 0, 0)
                     splits.append(SplitDraft(amount: left == 0 ? "" : Money.editable(left)))
                 }
+                Button("Split Evenly", systemImage: "divide") { splitEvenly() }
+                    .disabled(splits.count < 2 || (Money.parse(amount) ?? 0) <= 0)
             } footer: {
                 if let left = amountLeft, left != 0 {
                     Text("Amount left: \(Money.formatted(left, currency: model.currency))").foregroundStyle(ActualTheme.warning)
@@ -228,6 +235,25 @@ struct TransactionEditor: View {
                     Text("The parts add up to the total.")
                 }
             }
+        }
+    }
+
+    /// The total less the other parts; nil when an amount is invalid.
+    private func remaining(for part: SplitDraft) -> Int? {
+        guard let total = Money.parse(amount) else { return nil }
+        var others: [Int] = []
+        for other in splits where other.id != part.id {
+            guard let value = other.amount.isEmpty ? 0 : Money.parse(other.amount) else { return nil }
+            others.append(value)
+        }
+        return SplitAmounts.remaining(total, others: others)
+    }
+
+    /// Share the total equally among every part.
+    private func splitEvenly() {
+        guard let total = Money.parse(amount) else { return }
+        for (index, value) in SplitAmounts.even(total, count: splits.count).enumerated() {
+            splits[index].amount = Money.editable(value)
         }
     }
 

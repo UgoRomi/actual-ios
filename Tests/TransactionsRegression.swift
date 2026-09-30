@@ -77,6 +77,15 @@ import SQLite3
         precondition(marked.map(\.0) == ["none", "split"] && marked.map(\.1) == [1, 1], "\(marked)")
         print("PASS: the register marks missing categories, except on transfers, reconciliation adjustments, and off-budget accounts")
 
+        // Split Evenly shares every cent, extra cents first; Use Remaining completes the total.
+        precondition(SplitAmounts.even(1000, count: 3) == [334, 333, 333])
+        precondition(SplitAmounts.even(1001, count: 3) == [334, 334, 333])
+        precondition(SplitAmounts.even(900, count: 3) == [300, 300, 300])
+        precondition(SplitAmounts.even(2, count: 3) == [1, 1, 0] && SplitAmounts.even(500, count: 0).isEmpty)
+        precondition(SplitAmounts.remaining(1000, others: [250, 400]) == 350)
+        precondition(SplitAmounts.remaining(1000, others: []) == 1000 && SplitAmounts.remaining(1000, others: [1200]) == -200)
+        print("PASS: split parts share the total evenly or take what is left")
+
         // The budget's number and date formats, as Actual's settings choose them.
         Money.configure(BudgetFormat(numberFormat: "dot-comma", hideFraction: false))
         precondition(Money.formatted(123_456) == "1.234,56", Money.formatted(123_456))
