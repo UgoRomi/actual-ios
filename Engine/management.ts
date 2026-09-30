@@ -203,6 +203,8 @@ export async function manage(method: string, args: Obj): Promise<unknown> {
         firstDayOfWeekIdx: ["0", "1", "2", "3", "4", "5", "6"],
         // How far ahead registers list upcoming scheduled transactions.
         upcomingScheduledTransactionLength: ["1", "7", "14", "oneMonth", "currentMonth"],
+        // Category learning, from Actual's payees page.
+        "learn-categories": ["true", "false"],
       };
       const id = text(args.id);
       const value = text(args.value);
@@ -258,12 +260,20 @@ export async function manage(method: string, args: Obj): Promise<unknown> {
           name: p.name,
           ruleCount: (counts as Record<string, number>)[p.id] ?? 0,
           unused: unused.has(p.id),
+          learnCategories: learnsFor(p),
         }))
         .sort((a, b) => a.name.localeCompare(b.name));
     }
     case "renamePayee": {
       const payee = await ordinaryPayee(args.id);
       await lib.send("payees-batch-change", { updated: [{ id: payee.id, name: name(args.name, "payee") }] });
+      return {};
+    }
+    case "setPayeeLearning": {
+      // As Actual's payee menu: whether categorizing this payee's transactions updates its category rule.
+      const payee = await ordinaryPayee(args.id);
+      if (typeof args.learn !== "boolean") throw new Error("Choose whether to learn categories for this payee.");
+      await lib.send("payees-batch-change", { updated: [{ id: payee.id, learn_categories: args.learn }] });
       return {};
     }
     case "deletePayees": {
@@ -302,6 +312,16 @@ async function findTag(id: unknown) {
   return tag;
 }
 
+// Actual learns categories unless the budget's setting turns it off.
+export async function learnsCategories(): Promise<boolean> {
+  const preferences = await lib.send("preferences/get");
+  return String(preferences["learn-categories"] ?? "true") === "true";
+}
+// Payees learn by default; the database stores the flag as 0 or 1.
+function learnsFor(payee: PayeeEntity): boolean {
+  return Number(payee.learn_categories ?? 1) !== 0;
+}
+
 // Transfer payees stand for accounts, which Actual never renames, merges, or deletes as payees.
 function ordinary(payees: PayeeEntity[], id: unknown): PayeeEntity {
   const payee = payees.find((p) => p.id === id);
@@ -322,5 +342,5 @@ export const managementMethods = [
   "createCategoryGroup", "updateCategoryGroup", "deleteCategoryGroup", "createCategory", "updateCategory",
   "deleteCategory", "moveCategory", "moveCategoryGroup", "saveNotes", "createAccount", "updateAccount",
   "closeAccount", "reopenAccount", "renamePayee", "deletePayees", "mergePayees", "savePreference",
-  "discoverTags", "createTag", "updateTag", "deleteTag",
+  "setPayeeLearning", "discoverTags", "createTag", "updateTag", "deleteTag",
 ];

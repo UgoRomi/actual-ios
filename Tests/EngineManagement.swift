@@ -141,7 +141,7 @@ extension EngineSmoke {
     check(try await !overview().accounts.contains { $0.id == loan })
 
     // Payees: rename, merge (moving transactions), and delete unused ones.
-    struct Listed: Decodable { let id: String; let name: String; let ruleCount: Int; let unused: Bool }
+    struct Listed: Decodable { let id: String; let name: String; let ruleCount: Int; let unused: Bool; let learnCategories: Bool }
     func payees() async throws -> [Listed] { try await engine.call("payees", as: [Listed].self) }
     let keep = try await created("createAccount", ["name": .string("Native Payee Account")])
     for (index, payee) in ["Native Cafe", "native café", "Native Unused"].enumerated() {
@@ -173,6 +173,36 @@ extension EngineSmoke {
     let transferPayee = try await engine.call("overview", as: BudgetOverview.self).accounts.first!.id
     try await expectFailure("mergePayees", ["targetId": .string(cafe.id), "mergeIds": .array([.string(transferPayee)])],
                             "no longer exists")
+    // Category learning: as in Actual, three of a payee's latest transactions in one category
+    // make a rule setting that category, unless the payee or the budget turns learning off.
+    guard let learned = try await budget().groups.first(where: { !$0.isIncome })?.categories.first?.id
+    else { throw EngineFailure("No expense category") }
+    func categorizeThree(_ payee: String) async throws -> Listed {
+      for day in 1...3 {
+        _ = try await engine.call("saveTransaction", arguments: [
+          "accountId": .string(keep), "date": .string("2026-09-0\(day)"), "amount": .number(-500),
+          "payeeName": .string(payee), "categoryId": .string(learned), "notes": .string(""), "cleared": .bool(false),
+        ])
+      }
+      guard let listed = try await payees().first(where: { $0.name == payee }) else { throw EngineFailure("\(payee) missing") }
+      return listed
+    }
+    check(try await overview().format?.learnCategories == true, "Learning is on unless turned off")
+    let grocer = try await categorizeThree("Native Grocer")
+    check(grocer.learnCategories && grocer.ruleCount == 1, "Learning adds a category rule: \(grocer)")
+    _ = try await engine.call("saveTransaction", arguments: [
+      "accountId": .string(keep), "date": .string("2026-09-04"), "amount": .number(-500),
+      "payeeName": .string("Native Baker"), "notes": .string(""), "cleared": .bool(false),
+    ])
+    guard let baker = try await payees().first(where: { $0.name == "Native Baker" }) else { throw EngineFailure("Baker missing") }
+    try await expectFailure("setPayeeLearning", ["id": .string(baker.id)], "Choose whether")
+    try await call("setPayeeLearning", ["id": .string(baker.id), "learn": .bool(false)])
+    let unlearned = try await categorizeThree("Native Baker")
+    check(!unlearned.learnCategories && unlearned.ruleCount == 0, "A payee can stop learning: \(unlearned)")
+    try await call("savePreference", ["id": .string("learn-categories"), "value": .string("false")])
+    check(try await overview().format?.learnCategories == false)
+    check(try await categorizeThree("Native Deli").ruleCount == 0, "The budget can stop learning")
+    try await call("savePreference", ["id": .string("learn-categories"), "value": .string("true")])
     // Tags: discovered from notes, colored, renamed in every note, hidden, and deleted.
     func tags() async throws -> [Tag] { try await engine.call("tags", as: [Tag].self) }
     _ = try await engine.call("saveTransaction", arguments: [

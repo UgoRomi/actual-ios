@@ -528,6 +528,8 @@ struct ManagedPayee: Decodable, Identifiable, Sendable, Hashable {
     let name: String
     let ruleCount: Int
     let unused: Bool
+    /// Whether categorizing this payee's transactions updates its category rule, as Actual's payee menu sets.
+    let learnCategories: Bool
 }
 
 /// An account being compared with a balance from the bank. As in Actual, it is not saved.
@@ -623,6 +625,8 @@ struct BudgetFormat: Decodable, Sendable, Equatable {
     var firstDayOfWeekIdx: Int?
     /// How far ahead registers list upcoming scheduled transactions: 1, 7, 14, oneMonth, or currentMonth.
     var upcomingLength: String? = nil
+    /// Actual's category learning: categorizing transactions updates each payee's category rule.
+    var learnCategories = true
 
     static let numberFormats: [(value: String, label: String)] = [
         ("comma-dot", "1,000.33"), ("dot-comma", "1.000,33"), ("space-comma", "1\u{202F}000,33"),

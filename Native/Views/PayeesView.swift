@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Actual's payees page: rename, merge, and delete payees, and clear out unused ones.
+/// Actual's payees page: rename, merge, and delete payees, clear out unused ones, and set category learning.
 struct PayeesView: View {
     @Environment(AppModel.self) private var model
     @State private var payees: [ManagedPayee] = []
@@ -15,10 +15,27 @@ struct PayeesView: View {
         }
     }
     private var unused: [ManagedPayee] { payees.filter(\.unused) }
+    private var learnsCategories: Bool { model.overview?.format?.learnCategories ?? true }
 
     var body: some View {
         ThemedList {
             if let error = model.errorMessage ?? loadError { Section { ErrorNotice(message: error) } }
+            Section {
+                Toggle("Category Learning", isOn: Binding(
+                    get: { learnsCategories },
+                    set: { learn in
+                        Task {
+                            await model.manage("savePreference", [
+                                "id": .string("learn-categories"), "value": .string(learn ? "true" : "false"),
+                            ])
+                        }
+                    }))
+                .disabled(model.isBusy)
+            } footer: {
+                Text(learnsCategories
+                     ? "As you categorize a payee’s transactions, Actual adds or updates a rule that sets the category it uses most. Turning this off keeps existing rules."
+                     : "Categorizing transactions doesn’t add or change rules. Existing rules still apply.")
+            }
             if !unused.isEmpty {
                 Section {
                     Toggle("Show only unused payees", isOn: $showsUnusedOnly)
@@ -36,6 +53,10 @@ struct PayeesView: View {
                             Text(payee.name)
                             Spacer()
                             if payee.unused { Text("Unused").font(.caption).foregroundStyle(.secondary) }
+                            if learnsCategories && !payee.learnCategories {
+                                Image(systemName: "lightbulb.slash").font(.caption).foregroundStyle(.secondary)
+                                    .accessibilityLabel("Category learning off")
+                            }
                             if payee.ruleCount > 0 {
                                 Text(payee.ruleCount == 1 ? "1 rule" : "\(payee.ruleCount) rules")
                                     .font(.caption).foregroundStyle(ActualTheme.accent)
@@ -69,7 +90,7 @@ struct PayeesView: View {
     }
 }
 
-/// One payee: rename, merge into another payee, or delete.
+/// One payee: rename, turn category learning on or off, merge into another payee, or delete.
 private struct PayeeDetail: View {
     let payeeID: String
     @Binding var payees: [ManagedPayee]
@@ -89,6 +110,22 @@ private struct PayeeDetail: View {
                     Button { renaming = true } label: { LabeledContent("Name", value: payee.name) }
                     LabeledContent("Rules", value: "\(payee.ruleCount)")
                     LabeledContent("Transactions", value: payee.unused ? "None" : "Yes")
+                }
+                // As in Actual, a payee's learning can be changed only while the budget learns categories.
+                if model.overview?.format?.learnCategories ?? true {
+                    Section {
+                        Toggle("Learn Categories", isOn: Binding(
+                            get: { payee.learnCategories },
+                            set: { learn in
+                                Task {
+                                    let saved = await model.manage("setPayeeLearning",
+                                                                   ["id": .string(payeeID), "learn": .bool(learn)])
+                                    if saved { await reload() }
+                                }
+                            }))
+                    } footer: {
+                        Text("Categorizing this payee’s transactions updates the rule that sets its category.")
+                    }
                 }
                 Section {
                     Button("Merge into Another Payee", systemImage: "arrow.triangle.merge") { merging = true }
