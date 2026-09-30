@@ -63,6 +63,7 @@ import Foundation
     try await importing(data: data.appendingPathComponent("budget"), resources: resources)
     try await budgetDeletion(data: data.appendingPathComponent("deletion"), resources: resources)
     try await reports(data: data.appendingPathComponent("reports"), resources: resources)
+    try await reportEditing(data: data.appendingPathComponent("report-editing"), resources: resources)
     print(
       "PASS: actual engine demo, add, edit, budget allocation, offline reopen, exact balances, delete"
     )

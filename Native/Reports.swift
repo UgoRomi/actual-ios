@@ -37,10 +37,17 @@ struct ReportWidget: Decodable, Sendable, Identifiable, Hashable {
         }
     }
 
-    /// Actual's default names.
+    /// Widgets whose saved settings this app edits.
+    var isEditable: Bool { kind != .other }
+
     var title: String {
         if let name, !name.isEmpty { return name }
-        return switch type {
+        return Self.defaultTitle(type)
+    }
+
+    /// Actual's default names.
+    static func defaultTitle(_ type: String) -> String {
+        switch type {
         case "net-worth-card": "Net Worth"
         case "cash-flow-card": "Cash Flow"
         case "spending-card": "Monthly Spending"
@@ -60,12 +67,28 @@ struct ReportWidget: Decodable, Sendable, Identifiable, Hashable {
 }
 
 /// A saved or chosen range, evaluated by the engine as Actual's `calculateTimeRange` does.
-struct ReportTimeFrame: Hashable, Sendable {
+struct ReportTimeFrame: Hashable, Sendable, Decodable {
     var start: String
     var end: String
     var mode: String
 
     var json: JSONValue { .object(["start": .string(start), "end": .string(end), "mode": .string(mode)]) }
+
+    /// Months rather than days at both ends.
+    var isMonthly: Bool { start.count == 7 && end.count == 7 }
+
+    /// The quick-select preset that saves this range, if one does.
+    func preset(earliestMonth: String, oneMonth: Bool, today: Date = Date()) -> ReportRangePreset? {
+        ReportRangePreset.available(oneMonth: oneMonth).first { preset in
+            let frame = preset.timeFrame(earliestMonth: earliestMonth, today: today)
+            switch frame.mode {
+            case "sliding-window": return frame == self
+            // All time keeps its first month; only the mode says where it ends.
+            case "full": return mode == "full" && String(start.prefix(7)) == frame.start
+            default: return frame.mode == mode
+            }
+        }
+    }
 }
 
 /// Actual's quick-select date ranges for reports (dateRangePresets.ts).
@@ -190,9 +213,20 @@ struct SpendingReport: Decodable, Sendable {
             }
         }
     }
-    struct AverageRange: Decodable, Sendable {
-        let mode: String
-        let months: Int?
+    struct AverageRange: Decodable, Sendable, Hashable {
+        var mode: String
+        var months: Int? = nil
+
+        /// spendingAverageRange.ts options.
+        static let options = [
+            AverageRange(mode: "last-n-months", months: 3), AverageRange(mode: "last-n-months", months: 6),
+            AverageRange(mode: "last-n-months", months: 12), AverageRange(mode: "year-to-date"), AverageRange(mode: "all-time"),
+        ]
+        var json: JSONValue {
+            var fields: [String: JSONValue] = ["mode": .string(mode)]
+            if mode == "last-n-months" { fields["months"] = .number(months ?? 3) }
+            return .object(fields)
+        }
         /// spendingAverageRange.ts labels.
         var title: String {
             switch mode {
@@ -303,5 +337,155 @@ enum ReportDate {
     static func range(_ start: String, _ end: String) -> String {
         let first = month(start), last = month(end)
         return first == last ? month(end, style: .wide) : "\(first) – \(last)"
+    }
+
+    /// A `yyyy-MM` month moved by whole months.
+    static func month(_ month: String, adding offset: Int) -> String {
+        guard let start = date(String(month.prefix(7))),
+              let moved = calendar.date(byAdding: .month, value: offset, to: start) else { return month }
+        return BudgetDate.month(moved)
+    }
+
+    /// Whole months from one month or day to another's month.
+    static func months(from start: String, to end: String) -> Int {
+        guard let first = date(String(start.prefix(7))), let last = date(String(end.prefix(7))) else { return 0 }
+        return calendar.dateComponents([.month], from: first, to: last).month ?? 0
+    }
+
+    /// Every month from one to another, newest first.
+    static func months(between first: String, and last: String) -> [String] {
+        let count = months(from: first, to: last)
+        guard count >= 0 else { return [last] }
+        return (0...count).map { month(last, adding: -$0) }
+    }
+
+    /// A saved range that no preset describes, in words.
+    static func describe(_ frame: ReportTimeFrame) -> String {
+        func label(_ value: String) -> String {
+            guard value.count == 10, let day = date(value) else { return month(value) }
+            return day.formatted(date: .abbreviated, time: .omitted)
+        }
+        switch frame.mode {
+        case "full": return "Since \(month(frame.start, style: .wide))"
+        case "sliding-window":
+            // Day ranges keep their length and end today.
+            if !frame.isMonthly, let first = date(frame.start), let last = date(frame.end),
+               let days = calendar.dateComponents([.day], from: first, to: last).day {
+                return days == 0 ? "Today" : "Last \(days + 1) days"
+            }
+            return "\(label(frame.start)) – \(label(frame.end))"
+        default: return "\(label(frame.start)) – \(label(frame.end))"
+        }
+    }
+}
+
+/// The editor's range: one of Actual's presets, the last so many months, fixed months,
+/// or the range as saved when none of those describes it.
+struct ReportRangeDraft: Hashable, Sendable {
+    enum Kind: Hashable, Sendable { case saved, preset(ReportRangePreset), live, fixed }
+
+    var kind: Kind
+    /// For `live`: how many months, ending with the current one.
+    var liveMonths: Int
+    /// For `fixed`: the first and last months.
+    var start: String
+    var end: String
+
+    /// From a widget's range as the engine evaluated it today.
+    init(_ frame: ReportTimeFrame, earliestMonth: String, oneMonth: Bool, today: Date = Date()) {
+        let first = String(frame.start.prefix(7)), last = String(frame.end.prefix(7))
+        start = min(first, last)
+        end = max(first, last)
+        liveMonths = min(max(ReportDate.months(from: start, to: end) + 1, 1), 120)
+        if let preset = frame.preset(earliestMonth: earliestMonth, oneMonth: oneMonth, today: today) {
+            kind = .preset(preset)
+        } else if frame.isMonthly, first <= last, frame.mode == "sliding-window" {
+            kind = .live
+        } else if frame.isMonthly, first <= last, frame.mode == "static" {
+            kind = .fixed
+        } else {
+            kind = .saved
+        }
+    }
+
+    /// The range to save, or nil to keep the saved one.
+    func timeFrame(earliestMonth: String, today: Date = Date()) -> ReportTimeFrame? {
+        let current = BudgetDate.month(today)
+        switch kind {
+        case .saved: return nil
+        case .preset(let preset): return preset.timeFrame(earliestMonth: earliestMonth, today: today)
+        case .live:
+            return ReportTimeFrame(start: ReportDate.month(current, adding: 1 - liveMonths), end: current, mode: "sliding-window")
+        case .fixed: return ReportTimeFrame(start: min(start, end), end: max(start, end), mode: "static")
+        }
+    }
+}
+
+/// A widget's saved settings with Actual's defaults filled in, as the editor opens with them.
+/// Each kind of widget has only its own settings.
+struct ReportWidgetSettings: Decodable, Sendable, Equatable {
+    let id: String
+    let type: String
+    var name: String
+    /// Filters, as Actual's filter menu saves them.
+    var conditions: [RuleItem]
+    var conditionsOp: String
+    /// Evaluated today: a live range ends this month.
+    var timeFrame: ReportTimeFrame? = nil
+    // Net worth
+    var interval: String? = nil
+    var graphMode: String? = nil
+    // Cash flow
+    var showBalance: Bool? = nil
+    // Spending. Without a month, the current month; without one to compare with, the month before.
+    var compare: String? = nil
+    var compareTo: String? = nil
+    var spendingMode: SpendingReport.Mode? = nil
+    var averageRange: SpendingReport.AverageRange? = nil
+    // Summary
+    var summaryType: String? = nil
+    var divisorConditions: [RuleItem]? = nil
+    var divisorConditionsOp: String? = nil
+    var divisorAllTimeDateRange: Bool? = nil
+    // Text
+    var content: String? = nil
+    var textAlign: String? = nil
+
+    /// Summary.tsx's choices.
+    static let summaryTypes: [(id: String, title: String)] = [
+        ("sum", "Sum"), ("avgPerMonth", "Average per month"), ("avgPerYear", "Average per year"),
+        ("avgPerTransact", "Average per transaction"), ("percentage", "Percentage"),
+    ]
+
+    /// Only what differs from the saved settings, so saving leaves everything else as it is.
+    /// `timeFrame` is a newly chosen range, if any.
+    func changes(from saved: ReportWidgetSettings, timeFrame: ReportTimeFrame? = nil) -> [String: JSONValue] {
+        var changes: [String: JSONValue] = [:]
+        func filters(_ items: [RuleItem]) -> JSONValue { .array(items.map { .object($0.raw) }) }
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed != saved.name { changes["name"] = .string(trimmed) }
+        if conditions != saved.conditions { changes["conditions"] = filters(conditions) }
+        if conditionsOp != saved.conditionsOp { changes["conditionsOp"] = .string(conditionsOp) }
+        if let timeFrame { changes["timeFrame"] = timeFrame.json }
+        if let interval, interval != saved.interval { changes["interval"] = .string(interval) }
+        if let graphMode, graphMode != saved.graphMode { changes["graphMode"] = .string(graphMode) }
+        if let showBalance, showBalance != saved.showBalance { changes["showBalance"] = .bool(showBalance) }
+        if compare != saved.compare { changes["compare"] = compare.map { .string($0) } ?? .null }
+        if compareTo != saved.compareTo { changes["compareTo"] = compareTo.map { .string($0) } ?? .null }
+        if let spendingMode, spendingMode != saved.spendingMode { changes["spendingMode"] = .string(spendingMode.rawValue) }
+        if let averageRange, averageRange != saved.averageRange { changes["averageRange"] = averageRange.json }
+        if let summaryType, summaryType != saved.summaryType { changes["summaryType"] = .string(summaryType) }
+        if let divisorConditions, divisorConditions != saved.divisorConditions {
+            changes["divisorConditions"] = filters(divisorConditions)
+        }
+        if let divisorConditionsOp, divisorConditionsOp != saved.divisorConditionsOp {
+            changes["divisorConditionsOp"] = .string(divisorConditionsOp)
+        }
+        if let divisorAllTimeDateRange, divisorAllTimeDateRange != saved.divisorAllTimeDateRange {
+            changes["divisorAllTimeDateRange"] = .bool(divisorAllTimeDateRange)
+        }
+        if let content, content != saved.content { changes["content"] = .string(content) }
+        if let textAlign, textAlign != saved.textAlign { changes["textAlign"] = .string(textAlign) }
+        return changes
     }
 }

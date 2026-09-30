@@ -15,7 +15,7 @@ mkdir -p .build
 xcrun swiftc -parse-as-library \
   Native/Models.swift Native/Schedules.swift Native/Rules.swift Native/Importing.swift Native/Targets.swift Native/Reports.swift Native/Core/*.swift Tests/Support/BudgetSnapshot.swift \
   Tests/EngineSmoke.swift Tests/EngineReconciliation.swift Tests/EngineTransfers.swift Tests/EngineBudgetDeletion.swift \
-  Tests/EngineTargets.swift Tests/EngineReports.swift Tests/EngineBudgetActions.swift Tests/EngineManagement.swift Tests/EngineSplits.swift Tests/EngineSchedules.swift Tests/EngineRules.swift Tests/EngineImport.swift \
+  Tests/EngineTargets.swift Tests/EngineReports.swift Tests/EngineReportEditing.swift Tests/EngineBudgetActions.swift Tests/EngineManagement.swift Tests/EngineSplits.swift Tests/EngineSchedules.swift Tests/EngineRules.swift Tests/EngineImport.swift \
   -module-cache-path "${project_root}/.build/ModuleCache" \
   -lsqlite3 -o .build/engine-smoke
 .build/engine-smoke "${project_root}/Native/Resources"

@@ -59,11 +59,15 @@ struct RuleItem: Decodable, Sendable, Equatable, Identifiable {
     /// Condition fields Actual's editor offers; amount also has inflow and outflow variants.
     static let conditionFields = ["imported_payee", "payee", "account", "category", "date", "notes", "amount", "cleared"]
     static let actionFields = ["category", "payee", "payee_name", "notes", "cleared", "account", "date", "amount"]
+    /// Fields Actual's filter menu offers for reports (FiltersMenu.tsx); its category filter also matches by group.
+    static let filterFields = ["date", "account", "payee", "notes", "category", "category_group", "amount",
+                               "cleared", "reconciled", "transfer"]
 
     /// Actual's valid operators for a condition field (shared/rules.ts), less tags.
     static func ops(for field: String) -> [String] {
         switch field {
-        case "payee", "category", "imported_payee": ["is", "contains", "matches", "oneOf", "isNot", "doesNotContain", "notOneOf"]
+        case "payee", "category", "category_group", "imported_payee":
+            ["is", "contains", "matches", "oneOf", "isNot", "doesNotContain", "notOneOf"]
         case "account": ["is", "contains", "matches", "oneOf", "isNot", "doesNotContain", "notOneOf", "onBudget", "offBudget"]
         case "notes": ["is", "contains", "matches", "isNot", "doesNotContain", "hasTags", "hasAnyTag"]
         case "amount": ["is", "isapprox", "isbetween", "gt", "gte", "lt", "lte"]
@@ -137,6 +141,21 @@ struct RuleItem: Decodable, Sendable, Equatable, Identifiable {
         return field != "date"
     }
 
+    /// A named condition, such as Actual's "Selected transactions". Actual shows its name and does not apply it in reports.
+    var customName: String? { if case .string(let name) = raw["customName"] { name } else { nil } }
+
+    /// Whether this app's editor offers every part of a report filter.
+    var isEditableFilter: Bool {
+        guard customName == nil, Self.filterFields.contains(field), Self.ops(for: field).contains(op) else { return false }
+        // Month and year dates, and other options, are edited in Actual.
+        if options.keys.contains(where: { !["inflow", "outflow"].contains($0) }) { return false }
+        if field == "date" {
+            if case .string(let day) = value { return day.count == 10 }
+            return false
+        }
+        return true
+    }
+
     var isEditableAction: Bool {
         // Split actions and templated values are edited in Actual.
         if case .number(let split) = options["splitIndex"], split != 0 { return false }
@@ -155,6 +174,7 @@ struct RuleDescriber {
     var accounts: [String: String]
     var categories: [String: String]
     var currency: String
+    var groups: [String: String] = [:]
 
     static let opNames: [String: String] = [
         "is": "is", "isNot": "is not", "contains": "contains", "doesNotContain": "does not contain",
@@ -183,7 +203,8 @@ struct RuleDescriber {
         case .number(let number): return String(number)
         case .double(let number): return String(number)
         case .string(let text):
-            let names = field == "payee" ? payees : field == "account" ? accounts : field == "category" ? categories : [:]
+            let names = field == "payee" ? payees : field == "account" ? accounts : field == "category" ? categories
+                : field == "category_group" ? groups : [:]
             if let name = names[text] { return name }
             return text.isEmpty ? "nothing" : "“\(text)”"
         case .array(let items): return items.map { self.value($0, field: field) }.joined(separator: ", ")

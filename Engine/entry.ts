@@ -29,6 +29,7 @@ import {
   unlockTransaction,
 } from "./reconcile";
 import { dashboard, report, reportTransactions } from "./reports";
+import { reportSettings, reportWrites, saveReportWidget } from "./report-editing";
 import { applyTargets, categoryTargets, previewTargets, saveTargets } from "./targets";
 import { integer, month as checkMonth, object, text, uuid, type Obj } from "./args";
 
@@ -405,6 +406,7 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       "saveTransaction", "deleteTransaction", "budget", "sync", "syncAccounts", "setCleared",
       "unlockTransaction", "createReconciliationTransaction", "finishReconciliation", "saveTargets",
       "applyTargets", "budgetAction", "saveSplit", "commitImport", ...managementMethods, ...scheduleWrites, ...ruleWrites,
+      ...reportWrites,
     ].includes(method)
   ) {
     const warning = syncWarning();
@@ -446,6 +448,8 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       return runMutator(() => report(text(args.id), object(args.options ?? {})));
     case "reportTransactions":
       return runMutator(() => reportTransactions(text(args.id), text(args.date)));
+    case "reportSettings":
+      return runMutator(() => reportSettings(text(args.id)));
     case "acknowledgeSyncWarning": {
       // Actual only warns when another device's changes are discarded; this
       // device may then show different values for them. Once the user accepts
@@ -742,6 +746,10 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       if ([...ruleWrites, "ruleMatches"].includes(method)) {
         requireBudget();
         return ruleCommand(method, args);
+      }
+      if (reportWrites.includes(method)) {
+        requireBudget();
+        return saveReportWidget(args);
       }
       if ([...scheduleWrites, "upcomingDates", "scheduleTransactions"].includes(method)) {
         requireBudget();

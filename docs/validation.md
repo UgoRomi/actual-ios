@@ -337,3 +337,24 @@ Not verified end to end: the widget on a home screen, background refresh as sche
 Changes from a design review, checked against Actual's `DESIGN.md` and its mobile components at the pinned revision. Registers, category transactions, schedule links, and the import preview show spending in the text color and income in green, as `TransactionListItem.tsx` does; upcoming amounts are secondary. The leading direction badge is gone; transfers and splits keep a small glyph beside the category. The cleared toggle is a body-size glyph, green when cleared, as Actual marks it. Account rows drop the icon tile and the "Current balance" filler, and section headers show totals, with **All accounts** for open accounts, matching `AccountsPage.tsx`. `ActualTheme.purple` and the asset accent use Actual's dark-theme `purple400` (#9446ED) in dark appearance.
 
 The app built for an iPhone 17 Pro / iOS 26.5 simulator, and `testDemoBudgetNavigationAndTransactionEditor` (run first on a fresh install) and `testDemoReconciliation` passed. Screenshots of Accounts and Transactions in light, and Budget in dark, were inspected; the account totals add up to the Net Worth report's total. `docs/screenshots/03-accounts.png` and `04-transactions.png` show the new layout.
+
+## Editing report widgets (2026-09-30)
+
+Widget editing follows Actual's report pages and card menus at the pinned revision (`reports/reports/*.tsx`, `ReportCard.tsx`, `MarkdownCard.tsx`, `filters/FiltersMenu.tsx`, `dateRangePresets.ts`), which save a widget's meta with loot-core's `dashboard-update-widget`. `Engine/report-editing.ts` returns a widget's settings with Actual's defaults and saves only the settings that changed, merged into the widget as it is then.
+
+`./scripts/test-engine.sh` and `node Engine/typecheck.mjs` passed. `Tests/EngineReportEditing.swift` edits the demo budget's default dashboard and reads each widget's stored meta directly, then its report:
+- Net worth: opens with Actual's defaults; saves a name, a one-year range, weekly interval, stacked graph, and an account filter, and the report then shows them. A cleared name becomes `Net Worth`. The last four months save as a live range and reopen as one.
+- Cash flow: saves fixed months and the balance line, and nothing else.
+- Spending: the default widget keeps following the current month when only its comparison changes; a chosen month pins it, and **Current month** unpins it.
+- Summary: a percentage with divisor filters and an all-time divisor keeps the default dashboard's font size in its content, its filters, and its range; **All time** starts at the first month with transactions.
+- Calendar: a range of days, a filter on a month, a named condition, and a setting this app does not know all survive a save that changes only the filters.
+- Text: Markdown and position.
+- Refused, with nothing saved: another kind of widget's setting, an unknown interval, a fixed range that ends before it starts, an invalid average or month, a filter Actual cannot run (named by its position), and widgets edited in Actual.
+
+`./scripts/test-sync.sh` passed with a widget's name and interval saved offline: after syncing, Actual's own API reads them from the server's copy.
+
+`./scripts/test-auto-sync.sh` and `./scripts/test-openid.sh` passed. Their compile lists had fallen behind the files `AppModel` needs, so neither built; they now list the same models as `test-bank-sync.sh`.
+
+The UI test `testDemoReportEditing` passed on a new iPhone 17 Pro / iOS 27 simulator, followed by `testDemoReports` on the same budget. It opens a spending widget's editor and cancels; renames a summary, tries fixed months, sets one year, switches to a percentage and back, and adds a transfer filter; saves a range from the report's page with **Save to Widget** and sees it in the editor; and edits the text widget. Screenshots of the editor, the filter editor, the page with **Save to Widget**, and the edited dashboard were inspected.
+
+Not verified end to end: edited widgets as shown in Actual web (their stored meta and sync are checked instead), a percentage summary's divisor filters and the spending month pickers on screen beyond opening them, editing on a dashboard with several pages, dark appearance, and VoiceOver.

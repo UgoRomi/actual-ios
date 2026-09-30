@@ -34,4 +34,6 @@ Each widget's saved filters, time frame, and options apply. The engine reads the
 
 ## Delivered behavior
 
+Widgets have since become editable; see `2026-09-30-report-widget-editing-design.md`.
+
 As designed. The engine returns every widget's data with Actual's calculations, checked against direct SQL on the demo's default dashboard, and the app reloads reports after edits, syncs, and bank refreshes. `ReportDate.range` labels ranges like `DateRange.tsx`. Detail pages also let net worth switch between daily, weekly, monthly, and yearly intervals, as its page in Actual does. See `../validation.md`.

@@ -156,7 +156,20 @@ private struct Fixture: Decodable {
                                     "value": .string(category), "options": .object(["splitIndex": .number(0)])])]),
       ])
       _ = try await call("savePreference", ["id": .string("numberFormat"), "value": .string("dot-comma")])
-      print("PASS: budget moves, categories, notes, a split with a transfer part, a payee, a schedule, a rule, and a setting saved offline")
+      // A dashboard widget's name and interval.
+      struct Board: Decodable {
+        struct Page: Decodable { let widgets: [Widget] }
+        struct Widget: Decodable { let id: String; let type: String }
+        let pages: [Page]
+      }
+      let board = try JSONDecoder().decode(Board.self, from: try await call("reportsDashboard", [:]))
+      guard let netWorth = board.pages.first?.widgets.first(where: { $0.type == "net-worth-card" }) else {
+        throw EngineFailure("The default dashboard has a net worth widget")
+      }
+      _ = try await call("saveReportWidget", ["id": .string(netWorth.id), "changes": .object([
+        "name": .string("Native Sync Widget"), "interval": .string("Weekly"),
+      ])])
+      print("PASS: budget moves, categories, notes, a split with a transfer part, a payee, a schedule, a rule, a setting, and a dashboard widget saved offline")
     } else if phase == "sync" {
       _ = try await engine.call("sync")
       let snapshot = try await snapshot(engine)

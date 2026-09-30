@@ -718,6 +718,140 @@ final class ActualNativeUITests: XCTestCase {
         capture("reports-text")
     }
 
+    /// Edits the demo dashboard's widgets: a summary's name, range, and filters from its card,
+    /// a range saved from its page, a spending widget's comparison, and the text widget.
+    /// It edits widgets the other report test does not open, and keeps their names' beginnings.
+    @MainActor
+    func testDemoReportEditing() {
+        let app = XCUIApplication()
+        app.launch()
+        let demoButton = app.buttons["Explore a demo budget"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        let reportsTab = app.tabBars.buttons["Reports"]
+        XCTAssertTrue(reportsTab.waitForExistence(timeout: 60), "The demo budget should open")
+        reportsTab.tap()
+        func card(_ title: String) -> XCUIElement {
+            app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", title)).firstMatch
+        }
+        /// Rows show as one element with their value, so match the beginning of any label.
+        func row(_ label: String) -> XCUIElement {
+            app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", label)).firstMatch
+        }
+        /// A picker's row reads as its title and value; its section's header may share the title.
+        func picker(_ title: String) -> XCUIElement { card(title + ",") }
+        XCTAssertTrue(card("Total Income (YTD)").waitForExistence(timeout: 30), "The default dashboard should load")
+        let editor = app.navigationBars["Edit Widget"]
+        func edit(_ title: String) {
+            let widget = card(title)
+            scroll(app, to: widget)
+            widget.press(forDuration: 1.2)
+            let editWidget = app.buttons["Edit Widget"]
+            XCTAssertTrue(editWidget.waitForExistence(timeout: 10), "Touching and holding a card offers its editor")
+            editWidget.tap()
+            XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        }
+
+        // Spending: a month and what to compare it with. Nothing is saved on Cancel.
+        edit("Budget Overview")
+        XCTAssertTrue(picker("Compare to").waitForExistence(timeout: 20), "The widget's settings should load")
+        XCTAssertTrue(card("Month, Current month").exists, "The default widget follows the current month")
+        XCTAssertFalse(editor.buttons["Save"].isEnabled, "There is nothing to save until a setting changes")
+        picker("Compare to").tap()
+        app.buttons["Average"].tap()
+        XCTAssertTrue(picker("Average of").waitForExistence(timeout: 10), "An average offers Actual's ranges")
+        XCTAssertTrue(wait(for: editor.buttons["Save"], enabled: true))
+        capture("report-editor-spending")
+        editor.buttons["Cancel"].tap()
+        XCTAssertTrue(card("Budget Overview").waitForExistence(timeout: 10))
+
+        // A summary: its name, range, how it shows, and a filter.
+        let title = "Recent Net Worth Change"
+        edit(title)
+        let save = editor.buttons["Save"]
+        XCTAssertTrue(picker("Range").waitForExistence(timeout: 20))
+        let name = app.textFields["Name"]
+        name.tap()
+        name.typeText(" edited\n")
+        XCTAssertTrue(wait(for: save, enabled: true))
+        picker("Range").tap()
+        XCTAssertTrue(app.buttons["1 year"].waitForExistence(timeout: 10), "Actual's range presets are offered")
+        app.buttons["Fixed months…"].tap()
+        XCTAssertTrue(picker("From").waitForExistence(timeout: 10), "Fixed months choose a first and last month")
+        XCTAssertTrue(picker("To").exists)
+        picker("Range").tap()
+        app.buttons["1 year"].tap()
+        picker("Show as").tap()
+        app.buttons["Percentage"].tap()
+        let allTime = app.switches["All time divisor"]
+        scroll(app, to: allTime)
+        XCTAssertTrue(allTime.exists, "A percentage has filters and a range for what it divides by")
+        capture("report-editor-percentage")
+        for _ in 0..<4 where !picker("Show as").isHittable { app.swipeDown() }
+        picker("Show as").tap()
+        app.buttons["Sum"].tap()
+        // A filter: only transactions that are not transfers.
+        let addFilter = app.buttons["Add Filter"]
+        scroll(app, to: addFilter)
+        addFilter.tap()
+        let filter = row("Category is nothing")
+        XCTAssertTrue(filter.waitForExistence(timeout: 10), "A new filter starts on the category")
+        filter.tap()
+        XCTAssertTrue(app.navigationBars["Filter"].waitForExistence(timeout: 10))
+        picker("Field").tap()
+        app.buttons["Transfer"].tap()
+        XCTAssertTrue(app.switches["Transfer"].waitForExistence(timeout: 10), "Yes-or-no fields show a switch")
+        capture("report-editor-filter")
+        app.navigationBars["Filter"].buttons.firstMatch.tap()
+        XCTAssertTrue(row("Transfer is false").waitForExistence(timeout: 10))
+        capture("report-editor")
+        save.tap()
+        let renamed = card(title + " edited")
+        XCTAssertTrue(renamed.waitForExistence(timeout: 20), "The dashboard shows the new name")
+        capture("reports-dashboard-edited")
+
+        // A range tried on the report's page can be saved to the widget, as Actual's Save widget does.
+        scroll(app, to: renamed)
+        renamed.tap()
+        let page = app.navigationBars.matching(NSPredicate(format: "identifier BEGINSWITH %@", title + " edited")).firstMatch
+        XCTAssertTrue(page.waitForExistence(timeout: 10), "The page has the saved name")
+        let saveChoice = app.buttons["Save to Widget"]
+        XCTAssertTrue(app.buttons["Saved range"].waitForExistence(timeout: 20))
+        XCTAssertFalse(saveChoice.exists, "The page shows the saved widget until something is chosen")
+        app.buttons["Saved range"].tap()
+        app.buttons["3 months"].tap()
+        XCTAssertTrue(saveChoice.waitForExistence(timeout: 10))
+        capture("report-save-to-widget")
+        saveChoice.tap()
+        XCTAssertTrue(app.buttons["Saved range"].waitForExistence(timeout: 20), "Saved choices become the widget's own")
+        XCTAssertFalse(saveChoice.exists)
+        page.buttons["Edit"].tap()
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        XCTAssertTrue(card("Range, 3 months").waitForExistence(timeout: 20), "The editor opens with the saved range")
+        XCTAssertTrue(row("Transfer is false").exists, "The saved filter stays")
+        editor.buttons["Cancel"].tap()
+        page.buttons.firstMatch.tap()
+
+        // The text widget's Markdown.
+        let tips = app.staticTexts["Dashboard Tips"]
+        scroll(app, to: tips)
+        XCTAssertTrue(tips.waitForExistence(timeout: 10))
+        tips.press(forDuration: 1.2)
+        let editText = app.buttons["Edit Text"]
+        XCTAssertTrue(editText.waitForExistence(timeout: 10))
+        editText.tap()
+        XCTAssertTrue(app.navigationBars["Edit Text"].waitForExistence(timeout: 10))
+        let text = app.textViews["Text"]
+        XCTAssertTrue(text.waitForExistence(timeout: 20))
+        text.tap()
+        // The cursor starts before the heading, which stays a heading on its own line.
+        text.typeText("Edited on a phone.\n\n")
+        capture("report-text-editor")
+        app.navigationBars["Edit Text"].buttons["Save"].tap()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "Edited on a phone.")).firstMatch
+            .waitForExistence(timeout: 20), "The dashboard shows the edited text")
+        capture("reports-text-edited")
+    }
+
     /// Reconciles a demo account to zero: toggle cleared, adjust, lock, then review a locked transaction.
     @MainActor
     func testDemoReconciliation() {

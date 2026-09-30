@@ -340,7 +340,8 @@ final class AppModel {
         let switchesBudget = ["open", "download", "demo"].contains(method)
         let isEdit = ["saveTransaction", "deleteTransaction", "budget", "setCleared", "unlockTransaction",
                       "createReconciliationTransaction", "finishReconciliation", "saveTargets",
-                      "applyTargets", "budgetAction", "commitImport"].contains(method) || Self.managementMethods.contains(method)
+                      "applyTargets", "budgetAction", "commitImport", "saveReportWidget"].contains(method)
+            || Self.managementMethods.contains(method)
         if method == "sync" {
             guard let task = beginBudgetSync() else {
                 errorMessage = "This budget is local only. Open a synced budget to synchronize."
@@ -366,6 +367,8 @@ final class AppModel {
             let parts: Set<BudgetPart> = switch method {
             case "budget", "saveTargets", "applyTargets", "budgetAction": [.month]
             case "setCleared", "unlockTransaction", "finishReconciliation": [.overview, .register]
+            // A widget's settings change no budget data; reports reload with the new revision.
+            case "saveReportWidget": []
             default: BudgetPart.all
             }
             if parts == [.month] { budgetChanged = true }
@@ -464,6 +467,18 @@ final class AppModel {
         if let interval { options["interval"] = .string(interval) }
         return try await client().call("report", arguments: ["id": .string(widgetID), "options": .object(options)],
                                        as: ReportData.self)
+    }
+
+    /// A widget's saved settings, with Actual's defaults filled in, for its editor.
+    func reportSettings(_ widgetID: String) async throws -> ReportWidgetSettings {
+        try await client().call("reportSettings", arguments: ["id": .string(widgetID)], as: ReportWidgetSettings.self)
+    }
+
+    /// Saves the given settings to a dashboard widget, as "Save widget" does in Actual,
+    /// leaving its other settings as they are. Reports then reload.
+    @discardableResult
+    func saveReportWidget(_ widgetID: String, changes: [String: JSONValue]) async -> Bool {
+        await perform("saveReportWidget", arguments: ["id": .string(widgetID), "changes": .object(changes)])
     }
 
     /// The transactions a calendar widget counts on one day.

@@ -1,7 +1,8 @@
 import Charts
 import SwiftUI
 
-/// The budget's report dashboards, read-only and in one column, as in Actual's mobile web app.
+/// The budget's report dashboards in one column, as in Actual's mobile web app.
+/// Touching and holding a widget edits its saved settings.
 struct ReportsView: View {
     @Environment(AppModel.self) private var model
     @State private var dashboard: ReportsDashboard?
@@ -25,8 +26,11 @@ struct ReportsView: View {
                         ForEach(page.widgets) { widget in
                             ReportCard(widget: widget, earliestMonth: dashboard.earliestMonth)
                         }
-                        Text("Arrange dashboards and edit widgets in Actual web or desktop.")
-                            .font(.footnote).foregroundStyle(.secondary).frame(maxWidth: .infinity)
+                        if !page.widgets.isEmpty {
+                            Text("Touch and hold a widget to edit it. Add, remove, and arrange widgets in Actual web or desktop.")
+                                .font(.footnote).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                                .frame(maxWidth: .infinity)
+                        }
                     } else if error == nil {
                         ProgressView("Loading reports…").frame(maxWidth: .infinity, minHeight: 200)
                     }
@@ -76,15 +80,28 @@ struct ReportRoute: Hashable {
     let earliestMonth: String
 }
 
-/// One widget on the dashboard. Reports open their detail page.
+/// One widget on the dashboard. Reports open their detail page; touching and
+/// holding a widget offers its editor, as a card's menu does in Actual.
 struct ReportCard: View {
     let widget: ReportWidget
     let earliestMonth: String
     @Environment(AppModel.self) private var model
     @State private var data: ReportData?
     @State private var error: String?
+    @State private var isEditing = false
 
     var body: some View {
+        card
+            .contentShape(.contextMenuPreview, RoundedRectangle(cornerRadius: 22))
+            .contextMenu {
+                if widget.isEditable {
+                    Button(widget.editTitle, systemImage: "slider.horizontal.3") { isEditing = true }
+                }
+            }
+            .sheet(isPresented: $isEditing) { ReportWidgetEditor(widget: widget, earliestMonth: earliestMonth) }
+    }
+
+    @ViewBuilder private var card: some View {
         switch widget.kind {
         case .markdown:
             MarkdownBlocks(content: widget.content ?? "", alignment: widget.textAlign ?? "left")
