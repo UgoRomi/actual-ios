@@ -7,6 +7,7 @@ import { createPayee } from "@actual/source/server/accounts/payees.ts";
 import { runMutator } from "@actual/source/server/mutators.ts";
 import { makeChild, recalculateSplit } from "@actual/source/shared/transactions.ts";
 import { integer, text, uuid, type Obj } from "./args";
+import { learnsCategories } from "./management";
 
 type Row = Obj & { id: string };
 
@@ -157,5 +158,11 @@ export async function saveSplit(args: Obj): Promise<void> {
   const remaining = new Set(children.map((child) => child.id));
   const deleted = childrenBefore.filter((row) => !remaining.has(row.id)).map((row) => ({ id: row.id }));
   if (added.length || updated.length || deleted.length)
-    await lib.send("transactions-batch-update", { added, updated, deleted } as never);
+    await lib.send("transactions-batch-update", {
+      added,
+      updated,
+      deleted,
+      // As Actual's desktop register, categorized parts update their payees' category rules.
+      learnCategories: await learnsCategories(),
+    } as never);
 }

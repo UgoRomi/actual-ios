@@ -16,7 +16,7 @@ import { native } from "./native";
 import { uploadSnapshotIfDue } from "./adapters/cloud-storage";
 import { canSyncBank, syncBankAccounts } from "./bank-sync";
 import { budgetAction, categoryAverage, envelopeSummary } from "./budget-actions";
-import { manage, managementMethods } from "./management";
+import { learnsCategories, manage, managementMethods } from "./management";
 import { ruleCommand, rulesList, ruleWrites } from "./rules";
 import { commitImport, prepareImport } from "./importing";
 import { saveSplit } from "./splits";
@@ -219,6 +219,8 @@ async function overview() {
       dateFormat: preferences.dateFormat || null,
       firstDayOfWeekIdx: preferences.firstDayOfWeekIdx ? Number(preferences.firstDayOfWeekIdx) : null,
       upcomingLength: preferences.upcomingScheduledTransactionLength || "7",
+      // Whether categorizing transactions updates payees' category rules, as Actual's setting.
+      learnCategories: String(preferences["learn-categories"] ?? "true") === "true",
     },
     accounts,
     payees: payees.filter((p) => !p.transfer_acct).map((p) => ({ id: p.id, name: p.name })),
@@ -642,8 +644,12 @@ async function perform(method: string, args: Obj): Promise<unknown> {
         );
         // Like Actual's desktop editor, moving a transaction to another account unlocks it.
         if (existing.reconciled && "account" in changes) Object.assign(changes, { reconciled: false });
+        // Like Actual's desktop register, a new category updates the payee's category rule.
         if (Object.keys(changes).length)
-          await lib.send("transactions-batch-update", { updated: [{ id, ...changes }] });
+          await lib.send("transactions-batch-update", {
+            updated: [{ id, ...changes }],
+            learnCategories: await learnsCategories(),
+          });
       } else {
         // Like Actual's mobile editor, run rules on the new transaction but keep
         // what the user entered: rules fill empty fields and may extend notes.
@@ -680,8 +686,15 @@ async function perform(method: string, args: Obj): Promise<unknown> {
               makeChild(transaction, { ...child, sort_order: 0 - index }),
             ),
           });
-          await lib.send("transactions-batch-update", { added: [parent, ...subtransactions] });
-        } else await lib.send("transactions-batch-update", { added: [transaction] });
+          await lib.send("transactions-batch-update", {
+            added: [parent, ...subtransactions],
+            learnCategories: await learnsCategories(),
+          });
+        } else
+          await lib.send("transactions-batch-update", {
+            added: [transaction],
+            learnCategories: await learnsCategories(),
+          });
       }
       return {};
     }
