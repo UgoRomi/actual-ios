@@ -967,6 +967,43 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Capital One Checking"].waitForExistence(timeout: 10))
     }
 
+    /// Adds a transaction without a category beside a reconciliation adjustment: only the first needs one.
+    @MainActor
+    func testDemoUncategorizedBadge() {
+        let app = XCUIApplication()
+        app.launch()
+        let demoButton = app.buttons["Explore a demo budget"]
+        let accountsTab = app.tabBars.buttons["Accounts"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        XCTAssertTrue(accountsTab.waitForExistence(timeout: 60), "The demo budget should open")
+        accountsTab.tap()
+        app.staticTexts["Capital One Checking"].tap()
+        let checking = app.navigationBars["Capital One Checking"]
+        XCTAssertTrue(checking.waitForExistence(timeout: 10))
+        checking.buttons["Add transaction"].tap()
+        XCTAssertTrue(app.navigationBars["New transaction"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Clear"].waitForExistence(timeout: 5), "The amount should be focused")
+        tapKeys(app, "12")
+        app.navigationBars["New transaction"].buttons["Save"].tap()
+        XCTAssertTrue(wait(forAbsence: app.navigationBars["New transaction"]), "The transaction should save")
+        let uncategorized = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "No payee", "Uncategorized")).firstMatch
+        XCTAssertTrue(uncategorized.waitForExistence(timeout: 10), "A transaction without a category says so")
+
+        // An earlier run may have left the account reconciled to this balance.
+        checking.buttons["Reconcile"].tap()
+        XCTAssertTrue(app.navigationBars["Reconcile"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Clear"].waitForExistence(timeout: 5))
+        app.buttons["Clear"].tap()
+        tapKeys(app, "7")
+        app.navigationBars["Reconcile"].buttons["Reconcile"].tap()
+        let create = app.buttons["Create reconciliation transaction"]
+        if create.waitForExistence(timeout: 10) { create.tap() }
+        XCTAssertTrue(app.buttons["Lock transactions"].waitForExistence(timeout: 10), "The adjustment should balance the account")
+        XCTAssertTrue(app.staticTexts["Reconciliation balance adjustment"].firstMatch.waitForExistence(timeout: 10))
+        capture("register-uncategorized")
+    }
+
     /// Transfers from one demo account to another, then deletes the transfer from the other side.
     @MainActor
     func testDemoTransfer() {
