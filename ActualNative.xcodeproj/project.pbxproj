@@ -37,6 +37,7 @@
 		809F71A2A5B047F39C676F68 /* ReportComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D5D76757B1F406481F8379E /* ReportComponents.swift */; };
 		92EE72845177356783DEA960 /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 203FCBAC6256D607C727A9CE /* WidgetSnapshot.swift */; };
 		9750BCB19B18BC9E2218101D /* Targets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D9944038F13D5EE416AC7AF /* Targets.swift */; };
+		2DB483C95A254EDA91E28784 /* GoalDescription.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BCCC14C986A49D39DDE270A /* GoalDescription.swift */; };
 		A43402011D74D5734C7D96ED /* ActualNativeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D988CE8A4343CC9ED0D4F0 /* ActualNativeUITests.swift */; };
 		A7E3C1D95B2F4E8061C4D2A1 /* ReconcileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8F4D2EA6C305F9172D5E3B2 /* ReconcileView.swift */; };
 		AB1BDB58B28CF1FDFFC17C52 /* BudgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83416C8B7281940A2D331143 /* BudgetView.swift */; };
@@ -116,6 +117,7 @@
 		7A1E5C3B9D2F48A6B0C4E6F3 /* ThemeSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ThemeSettingsView.swift; sourceTree = "<group>"; };
 		3D1C8D9F0C3BC17165ACEE19 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Theme.swift; sourceTree = "<group>"; };
 		3D9944038F13D5EE416AC7AF /* Targets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Targets.swift; sourceTree = "<group>"; };
+		8BCCC14C986A49D39DDE270A /* GoalDescription.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/GoalDescription.swift; sourceTree = "<group>"; };
 		3F6D4459327E4E6FB05D7E0F /* TagsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/TagsView.swift; sourceTree = "<group>"; };
 		400697EE7D76E3928CCC977C /* ActualNativeWidget.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = ActualNativeWidget.entitlements; path = Widget/ActualNativeWidget.entitlements; sourceTree = "<group>"; };
 		4125543F935A49B49486C33E /* RulesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/RulesView.swift; sourceTree = "<group>"; };
@@ -203,6 +205,7 @@
 				6F51DF911B0314245CE3C35C /* SQLiteHost.swift */,
 				66177DE593ACD3F7FBE818F7 /* Models.swift */,
 				3D9944038F13D5EE416AC7AF /* Targets.swift */,
+				8BCCC14C986A49D39DDE270A /* GoalDescription.swift */,
 				6D5D76757B1F406481F8379E /* ReportComponents.swift */,
 				2465D96E6AC740AD9BCDF926 /* ReportDetails.swift */,
 				7A1C0E5D2F3B4A6C8D9E0F12 /* ReportWidgetEditor.swift */,
@@ -421,6 +424,7 @@
 				3724999EFF609E935F4E5519 /* SQLiteHost.swift in Sources */,
 				0AED486DC5028236E648FC8C /* Models.swift in Sources */,
 				9750BCB19B18BC9E2218101D /* Targets.swift in Sources */,
+				2DB483C95A254EDA91E28784 /* GoalDescription.swift in Sources */,
 				809F71A2A5B047F39C676F68 /* ReportComponents.swift in Sources */,
 				098355D42E8947DDB81495CD /* ReportDetails.swift in Sources */,
 				7A1C0E5D2F3B4A6C8D9E0F11 /* ReportWidgetEditor.swift in Sources */,

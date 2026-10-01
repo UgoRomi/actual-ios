@@ -288,6 +288,23 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(wait(for: save, enabled: true),"A valid target should be savable once previewed")
         capture("targets-list")
 
+        // With Apple Intelligence, a description becomes targets to review before adding.
+        let describe = app.buttons["Describe Targets"]
+        if describe.waitForExistence(timeout: 3) {
+            describe.tap()
+            let field = app.textFields.firstMatch.waitForExistence(timeout: 5) ? app.textFields.firstMatch : app.textViews.firstMatch
+            XCTAssertTrue(field.waitForExistence(timeout: 10), "The sheet should ask for a description")
+            field.tap()
+            field.typeText("Put 50 a month into this category")
+            app.buttons["Create Targets"].tap()
+            let described = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Budget 50")).firstMatch
+            XCTAssertTrue(described.waitForExistence(timeout: 90), "Apple Intelligence should describe a fixed amount")
+            XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS %@", "#template")).firstMatch
+                .waitForExistence(timeout: 10), "The sheet should show the source lines")
+            capture("targets-describe")
+            app.navigationBars["Describe Targets"].buttons["Cancel"].tap()
+        }
+
         // Source shows the same targets in Actual's notes syntax and reads edits back.
         app.buttons["Source"].tap()
         let source = app.textViews.firstMatch
