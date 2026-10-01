@@ -287,6 +287,22 @@ final class ActualNativeUITests: XCTestCase {
         let save = app.navigationBars["Targets"].buttons["Save"]
         XCTAssertTrue(wait(for: save, enabled: true),"A valid target should be savable once previewed")
         capture("targets-list")
+
+        // Source shows the same targets in Actual's notes syntax and reads edits back.
+        app.buttons["Source"].tap()
+        let source = app.textViews.firstMatch
+        XCTAssertTrue(source.waitForExistence(timeout: 10), "Source should show the targets as text")
+        XCTAssertTrue((source.value as? String)?.contains("#template-1 100 repeat every 1 months") == true, "\(source.value ?? "")")
+        // Below the text, so typing continues at the end.
+        source.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.9)).tap()
+        source.typeText("\n#goal 500")
+        let goal = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "Long-term goal of")).firstMatch
+        XCTAssertTrue(goal.waitForExistence(timeout: 10), "Source should read the new goal")
+        capture("targets-source")
+        app.buttons["Form"].tap()
+        XCTAssertTrue(app.buttons["Add Automation"].waitForExistence(timeout: 10))
+        XCTAssertTrue(goal.exists, "The form should list the goal written in the source")
+        XCTAssertTrue(wait(for: save, enabled: true))
         save.tap()
 
         let apply = app.buttons["Apply Target"]

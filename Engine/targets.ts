@@ -151,21 +151,25 @@ function fromNative(value: unknown, places: number): Template {
   }
 }
 
-// template-notes.ts getCategoriesWithTemplates, without storing the result:
-// the web editor does, but opening a category here must not change it.
-async function noteTemplates(categoryId: string): Promise<{ note: string; templates: Template[] }> {
-  const [category] = await getCategoriesWithTemplateNotes([categoryId]);
-  if (!category?.note) return { note: "", templates: [] };
+type ParsedLine = { line: number; text: string; message: string };
+
+// template-notes.ts getCategoriesWithTemplates for one text: non-directive
+// lines directly above a template become its description. Also returns the
+// lines that make up the templates, as Actual reads them.
+function parseText(text: string): { templates: Template[]; source: string[]; errors: ParsedLine[] } {
   const templates: Template[] = [];
+  const source: string[] = [];
+  const errors: ParsedLine[] = [];
   let descriptionLines: string[] = [];
-  for (const line of category.note.split("\n")) {
+  text.split("\n").forEach((line, index) => {
     const trimmed = line.substring(line.indexOf("#")).trim();
     if (!trimmed.startsWith("#template") && !trimmed.startsWith("#goal")) {
       if (line.trim() === "" || trimmed.startsWith("#cleanup")) descriptionLines = [];
       else descriptionLines.push(line.trimEnd());
-      continue;
+      return;
     }
     const description = descriptionLines.length ? descriptionLines.join("\n") : undefined;
+    source.push(...descriptionLines, line.trim());
     descriptionLines = [];
     let template: Template;
     try {
@@ -180,11 +184,26 @@ async function noteTemplates(categoryId: string): Promise<{ note: string; templa
           `Invalid adjustment percentage (${template.adjustment}%). Must be between -100% and 1000%`,
         );
     } catch (error) {
-      template = { type: "error", directive: "error", line, error: (error as Error).message };
+      const message = (error as Error).message;
+      template = { type: "error", directive: "error", line, error: message };
+      // Like Actual's template check, explain only adjustment errors.
+      errors.push({
+        line: index + 1,
+        text: line.trim(),
+        message: message.includes("adjustment") ? message : "Actual can’t read this line.",
+      });
     }
     templates.push(description ? { ...template, description } : template);
-  }
-  return { note: category.note, templates };
+  });
+  return { templates, source, errors };
+}
+
+// Reading notes stores nothing: the web editor does, but opening a category
+// here must not change it.
+async function noteTemplates(categoryId: string) {
+  const [category] = await getCategoriesWithTemplateNotes([categoryId]);
+  if (!category?.note) return { note: "", templates: [] as Template[], source: [] as string[] };
+  return { note: category.note, ...parseText(category.note) };
 }
 
 // migrateTemplatesToAutomations: the web editor's form of legacy templates.
@@ -351,6 +370,26 @@ async function preview(month: string, categoryId: string, templates: Template[],
   };
 }
 
+// The web editor's form of stored or parsed templates.
+function editorForm(stored: Template[], ctx: Context): Template[] {
+  return migrate(stored, ctx.schedules).map((t) => {
+    // Notes name a percentage's income category; the editor uses its id.
+    if (t.type !== "percentage" || specialSources.includes(t.category)) return t;
+    const match = ctx.income.find((c) => c.name.toLowerCase() === t.category.toLowerCase());
+    return match ? { ...t, category: match.id } : t;
+  });
+}
+
+// UnmigrateBudgetAutomationsModal: notes address income categories by name.
+async function render(list: Template[], ctx: Context): Promise<string> {
+  const named = list.map((t) => {
+    if (t.type !== "percentage") return t;
+    const match = ctx.income.find((c) => c.id === t.category);
+    return match ? { ...t, category: match.name } : t;
+  });
+  return lib.send("budget/render-note-templates", named);
+}
+
 // A category's targets as the web editor shows them.
 export async function categoryTargets(categoryId: string, month: string) {
   checkMonth(month);
@@ -358,23 +397,19 @@ export async function categoryTargets(categoryId: string, month: string) {
   const ctx = await context();
   const places = await decimalPlaces();
   const source = category.template_settings?.source === "ui" ? "ui" : "notes";
-  const notes = source === "notes" ? await noteTemplates(categoryId) : { note: "", templates: [] };
+  const notes = source === "notes" ? await noteTemplates(categoryId) : { note: "", templates: [], source: [] };
   const stored: Template[] =
     source === "ui" ? (category.goal_def ? JSON.parse(category.goal_def) : []) : notes.templates;
   const unsupported = stored.flatMap((t) => (t.type === "error" ? [t.line.trim()] : []));
-  const templates = unsupported.length
-    ? []
-    : migrate(stored, ctx.schedules).map((t) => {
-        // Notes name a percentage's income category; the editor uses its id.
-        if (t.type !== "percentage" || specialSources.includes(t.category)) return t;
-        const match = ctx.income.find((c) => c.name.toLowerCase() === t.category.toLowerCase());
-        return match ? { ...t, category: match.id } : t;
-      });
+  const templates = unsupported.length ? [] : editorForm(stored, ctx);
   return {
     source,
     // Notes lines the editor will replace, as the web editor lists them.
     noteLines: notes.note.split("\n").filter((line) => /^\s*#(template|goal|cleanup)\b/.test(line)).map((l) => l.trim()),
     unsupported,
+    // The targets in Actual's notes syntax: the notes lines themselves, or
+    // what Actual writes when moving the editor's targets back to notes.
+    sourceText: source === "notes" ? notes.source.join("\n") : await render(stored, ctx),
     templates: templates.map((t) => toNative(t, places)),
     schedules: ctx.schedules,
     incomeCategories: ctx.income,
@@ -392,6 +427,29 @@ export async function previewTargets(categoryId: string, month: string, value: u
   checkMonth(month);
   await expenseCategory(categoryId);
   return preview(month, categoryId, templates(value, await decimalPlaces()), await context());
+}
+
+// Unsaved targets in Actual's notes syntax.
+export async function renderTargets(value: unknown) {
+  return { text: await render(templates(value, await decimalPlaces()), await context()) };
+}
+
+// Reads targets written in Actual's notes syntax, with what they would budget.
+export async function parseTargets(categoryId: string, month: string, text: string) {
+  checkMonth(month);
+  await expenseCategory(categoryId);
+  const parsed = parseText(text);
+  if (parsed.errors.length) return { templates: [], errors: parsed.errors, preview: null };
+  const ctx = await context();
+  const places = await decimalPlaces();
+  const native = editorForm(parsed.templates, ctx).map((t) => toNative(t, places));
+  let list: Template[];
+  try {
+    list = templates(native, places);
+  } catch (error) {
+    return { templates: [], errors: [{ line: 0, text: "", message: (error as Error).message }], preview: null };
+  }
+  return { templates: native, errors: [], preview: await preview(month, categoryId, list, ctx) };
 }
 
 export async function saveTargets(categoryId: string, value: unknown) {

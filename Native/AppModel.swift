@@ -510,6 +510,21 @@ final class AppModel {
         ], as: TargetPreview.self)
     }
 
+    /// Unsaved targets in Actual's notes syntax.
+    func targetSource(templates: [TargetTemplate]) async throws -> String {
+        struct Source: Decodable { let text: String }
+        return try await client().call("renderTargets", arguments: [
+            "templates": .array(templates.map(\.json)),
+        ], as: Source.self).text
+    }
+
+    /// Reads targets written in Actual's notes syntax, with what they would budget for the month.
+    func parseTargets(categoryID: String, month: String, text: String) async throws -> ParsedTargets {
+        try await client().call("parseTargets", arguments: [
+            "categoryId": .string(categoryID), "month": .string(month), "text": .string(text),
+        ], as: ParsedTargets.self)
+    }
+
     func saveTargets(categoryID: String, templates: [TargetTemplate]) async -> Bool {
         await perform("saveTargets", arguments: [
             "categoryId": .string(categoryID), "templates": .array(templates.map(\.json)),
