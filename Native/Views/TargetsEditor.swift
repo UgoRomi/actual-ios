@@ -4,7 +4,10 @@ import SwiftUI
 struct TargetsRoute: Hashable {}
 
 /// A category's targets, like Actual's budget automations editor.
+/// Source edits the same targets in Actual's notes syntax, such as `#template 50`.
 struct TargetsEditor: View {
+    enum Mode: Hashable { case form, source }
+
     let category: BudgetCategory
     let month: String
     @Binding var path: NavigationPath
@@ -18,14 +21,31 @@ struct TargetsEditor: View {
     @State private var previewed: [TargetTemplate]?
     @State private var previewError: String?
     @State private var confirmDiscard = false
+    @State private var mode = Mode.form
+    @State private var sourceText = ""
+    /// The source as it opened, and the targets it stands for until edited.
+    @State private var sourceStart = ""
+    @State private var sourceBase: [TargetTemplate] = []
+    /// What Actual read from `parsedText`.
+    @State private var parsed: ParsedTargets?
+    @State private var parsedText: String?
+    @State private var switching = false
+    @State private var showSourceIssues = false
 
-    private var hasChanges: Bool { templates.map(\.fields) != original.map(\.fields) }
+    private var hasChanges: Bool {
+        templates.map(\.fields) != original.map(\.fields) || (mode == .source && sourceText != sourceStart)
+    }
     /// Saving targets imported from notes moves them to the editor, as in Actual.
     private var migrates: Bool { loaded?.source == .notes && !templates.isEmpty }
     private var currentPreview: TargetPreview? { previewed == templates ? preview : nil }
+    /// Lines Actual cannot read in the source, once it has read the latest text.
+    private var sourceIssues: [ParsedTargets.Issue]? { parsedText == sourceText ? parsed?.errors : nil }
     private var canSave: Bool {
-        guard let loaded, loaded.unsupported.isEmpty, hasChanges || migrates, previewError == nil,
-              let currentPreview else { return false }
+        guard let loaded, hasChanges || migrates, previewError == nil, let currentPreview else { return false }
+        switch mode {
+        case .form: guard loaded.unsupported.isEmpty else { return false }
+        case .source: guard sourceIssues?.isEmpty == true else { return false }
+        }
         return currentPreview.canSave && !model.isBusy
     }
 
@@ -55,6 +75,11 @@ struct TargetsEditor: View {
         .confirmationDialog("Discard your changes to these targets?", isPresented: $confirmDiscard, titleVisibility: .visible) {
             Button("Discard Changes", role: .destructive) { path.removeLast() }
         }
+        .alert("Fix the source first", isPresented: $showSourceIssues) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("The form can show the targets once Actual can read every line.")
+        }
         .navigationDestination(for: UUID.self) { id in
             if let loaded {
                 TargetDetail(
@@ -66,87 +91,132 @@ struct TargetsEditor: View {
         }
         .task { if loaded == nil { await load() } }
         .task(id: templates) { await refreshPreview() }
+        .task(id: mode == .source ? sourceText : nil) { await parseSource() }
     }
 
     @ViewBuilder private func content(_ loaded: CategoryTargets) -> some View {
-        if !loaded.unsupported.isEmpty {
-            Section {
-                Label("Fix these targets in Actual first", systemImage: "exclamationmark.triangle")
-                    .font(.headline)
-                Text("Actual could not read these lines in the notes for \(category.name):")
-                    .foregroundStyle(.secondary)
-                ForEach(loaded.unsupported, id: \.self) { Text($0).font(.caption.monospaced()) }
+        Section {
+            Picker("Editor", selection: Binding(get: { mode }, set: { new in Task { await switchMode(to: new) } })) {
+                Text("Form").tag(Mode.form)
+                Text("Source").tag(Mode.source)
             }
-        } else {
-            Section {
-                LabeledContent("Projected for \(TargetTemplate.monthLabel(month))") {
-                    if let currentPreview { MoneyText(value: currentPreview.budgeted, currency: model.currency) }
-                    else { ProgressView() }
-                }
-                if let previewError { Text(previewError).foregroundStyle(ActualTheme.negative) }
-            } footer: {
-                if loaded.source == .notes, !loaded.noteLines.isEmpty {
-                    Text("Imported from the category’s notes. Review and save to manage these targets here; Actual then ignores the #template lines in its notes.")
-                }
+            .pickerStyle(.segmented)
+            .disabled(switching)
+        }
+        Section {
+            LabeledContent("Projected for \(TargetTemplate.monthLabel(month))") {
+                if mode == .source, sourceIssues?.isEmpty == false { Text("—").foregroundStyle(.secondary) }
+                else if let currentPreview, mode == .form || sourceIssues != nil {
+                    MoneyText(value: currentPreview.budgeted, currency: model.currency)
+                } else { ProgressView() }
             }
+            if let previewError { Text(previewError).foregroundStyle(ActualTheme.negative) }
+        } footer: {
             if loaded.source == .notes, !loaded.noteLines.isEmpty {
-                Section {
-                    DisclosureGroup("Notes lines") {
-                        ForEach(loaded.noteLines, id: \.self) { Text($0).font(.caption.monospaced()) }
-                    }
-                }
+                Text("Imported from the category’s notes. Review and save to manage these targets here; Actual then ignores the #template lines in its notes.")
             }
-            if let conflicts = currentPreview?.conflicts, !conflicts.isEmpty {
-                Section {
-                    ForEach(conflicts, id: \.self) { conflict in
-                        Label(conflict, systemImage: "exclamationmark.circle").foregroundStyle(ActualTheme.negative)
-                    }
-                }
-            }
+        }
+        if mode == .form, loaded.source == .notes, !loaded.noteLines.isEmpty {
             Section {
-                ForEach(templates.filter { !$0.isOption }) { row($0, loaded) }
-                    .onDelete { offsets in
-                        let automations = templates.filter { !$0.isOption }
-                        let ids = Set(offsets.map { automations[$0].id })
-                        templates.removeAll { ids.contains($0.id) }
+                DisclosureGroup("Notes lines") {
+                    ForEach(loaded.noteLines, id: \.self) { Text($0).font(.caption.monospaced()) }
+                }
+            }
+        }
+        if let conflicts = currentPreview?.conflicts, !conflicts.isEmpty {
+            Section {
+                ForEach(conflicts, id: \.self) { conflict in
+                    Label(conflict, systemImage: "exclamationmark.circle").foregroundStyle(ActualTheme.negative)
+                }
+            }
+        }
+        switch mode {
+        case .form: form(loaded)
+        case .source: source(loaded)
+        }
+        if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
+    }
+
+    @ViewBuilder private func form(_ loaded: CategoryTargets) -> some View {
+        Section {
+            ForEach(templates.filter { !$0.isOption }) { row($0, loaded) }
+                .onDelete { offsets in
+                    let automations = templates.filter { !$0.isOption }
+                    let ids = Set(offsets.map { automations[$0].id })
+                    templates.removeAll { ids.contains($0.id) }
+                }
+            // Like Actual's editor: start with a fixed amount, then choose its type.
+            Button("Add Automation", systemImage: "plus") { add(.fixed) }
+        } header: {
+            Text("Automations")
+        } footer: {
+            Text("Automations budget this category when you apply targets. Lower priorities are budgeted first.")
+        }
+        Section("Options") {
+            ForEach(templates.filter(\.isOption)) { row($0, loaded) }
+            if !templates.contains(where: { $0.kind == .limit }) {
+                Button("Add Balance Cap", systemImage: "plus") { add(.limit) }
+            }
+            if !templates.contains(where: { $0.kind == .goal }) {
+                Button("Add Long-Term Goal", systemImage: "plus") { add(.goal) }
+            }
+        }
+    }
+
+    /// Actual's notes syntax, read as you type. Saving stores the targets as the form does.
+    @ViewBuilder private func source(_ loaded: CategoryTargets) -> some View {
+        Section {
+            TextEditor(text: $sourceText)
+                .font(.callout.monospaced())
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+                .frame(minHeight: 160)
+        } header: {
+            Text("Source")
+        } footer: {
+            Text("One target per line, as in Actual’s notes, such as `#template 50` or `#goal 500`. Text directly above a line becomes its note. [Syntax reference](https://actualbudget.org/docs/experimental/goal-templates)")
+        }
+        if let issues = sourceIssues, !issues.isEmpty {
+            Section {
+                ForEach(issues, id: \.self) { issue in
+                    Label {
+                        VStack(alignment: .leading, spacing: 2) {
+                            if issue.line > 0 { Text("Line \(issue.line)").font(.subheadline.weight(.semibold)) }
+                            if !issue.text.isEmpty { Text(issue.text).font(.caption.monospaced()) }
+                            Text(issue.message).font(.caption)
+                        }
+                    } icon: {
+                        Image(systemName: "exclamationmark.circle")
                     }
-                // Like Actual's editor: start with a fixed amount, then choose its type.
-                Button("Add Automation", systemImage: "plus") { add(.fixed) }
-            } header: {
-                Text("Automations")
-            } footer: {
-                Text("Automations budget this category when you apply targets. Lower priorities are budgeted first.")
-            }
-            Section("Options") {
-                ForEach(templates.filter(\.isOption)) { row($0, loaded) }
-                if !templates.contains(where: { $0.kind == .limit }) {
-                    Button("Add Balance Cap", systemImage: "plus") { add(.limit) }
-                }
-                if !templates.contains(where: { $0.kind == .goal }) {
-                    Button("Add Long-Term Goal", systemImage: "plus") { add(.goal) }
+                    .foregroundStyle(ActualTheme.negative)
                 }
             }
-            if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
+        } else if sourceIssues != nil, !templates.isEmpty {
+            Section("Targets") {
+                ForEach(templates) { summary($0, loaded) }
+            }
         }
     }
 
     private func row(_ template: TargetTemplate, _ loaded: CategoryTargets) -> some View {
-        NavigationLink(value: template.id) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .firstTextBaseline) {
-                    Label(template.kind?.title ?? "Target", systemImage: template.kind?.systemImage ?? "target")
-                        .font(.subheadline.weight(.semibold))
-                    Spacer(minLength: 8)
-                    if let amount = contribution(template.id) {
-                        Text(amount > 0 ? "+" + Money.formatted(amount, currency: model.currency) : "—")
-                            .font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
-                    }
+        NavigationLink(value: template.id) { summary(template, loaded) }
+    }
+
+    private func summary(_ template: TargetTemplate, _ loaded: CategoryTargets) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(alignment: .firstTextBaseline) {
+                Label(template.kind?.title ?? "Target", systemImage: template.kind?.systemImage ?? "target")
+                    .font(.subheadline.weight(.semibold))
+                Spacer(minLength: 8)
+                if let amount = contribution(template.id) {
+                    Text(amount > 0 ? "+" + Money.formatted(amount, currency: model.currency) : "—")
+                        .font(.subheadline).monospacedDigit().foregroundStyle(.secondary)
                 }
-                Text(template.summary(currency: model.currency, income: loaded.incomeCategories))
-                    .font(.subheadline).foregroundStyle(.secondary)
-                if let problem = problem(template.id) {
-                    Label(problem, systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(ActualTheme.negative)
-                }
+            }
+            Text(template.summary(currency: model.currency, income: loaded.incomeCategories))
+                .font(.subheadline).foregroundStyle(.secondary)
+            if let problem = problem(template.id) {
+                Label(problem, systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(ActualTheme.negative)
             }
         }
     }
@@ -190,11 +260,68 @@ struct TargetsEditor: View {
             preview = targets.preview
             previewed = targets.templates
             loaded = targets
+            // Lines Actual cannot read can be fixed only in the source.
+            if !targets.unsupported.isEmpty { openSource(targets.sourceText) }
         } catch { loadError = error.localizedDescription }
     }
 
+    private func switchMode(to new: Mode) async {
+        guard new != mode, !switching, let loaded else { return }
+        switch new {
+        case .source:
+            // Unchanged targets show as stored, keeping notes lines as written.
+            if templates.map(\.fields) == original.map(\.fields) {
+                openSource(loaded.sourceText)
+                return
+            }
+            switching = true
+            defer { switching = false }
+            do { openSource(try await model.targetSource(templates: templates)) }
+            catch { previewError = error.localizedDescription }
+        case .form:
+            guard sourceIssues?.isEmpty == true else { showSourceIssues = true; return }
+            mode = .form
+        }
+    }
+
+    private func openSource(_ text: String) {
+        sourceText = text
+        sourceStart = text
+        sourceBase = templates
+        parsed = nil
+        parsedText = nil
+        mode = .source
+    }
+
+    private func parseSource() async {
+        guard mode == .source, parsedText != sourceText else { return }
+        let text = sourceText
+        try? await Task.sleep(for: .milliseconds(300))
+        guard !Task.isCancelled else { return }
+        do {
+            let result = try await model.parseTargets(categoryID: category.id, month: month, text: text)
+            guard !Task.isCancelled else { return }
+            if result.errors.isEmpty {
+                if text == sourceStart {
+                    // The untouched source stands for the targets it opened with, whose preview may already be current.
+                    if templates.map(\.fields) != sourceBase.map(\.fields) { templates = sourceBase }
+                } else if result.templates.map(\.fields) != templates.map(\.fields) || result.preview != currentPreview {
+                    preview = result.preview
+                    previewed = result.templates
+                    templates = result.templates
+                }
+            }
+            parsed = result
+            parsedText = text
+            previewError = nil
+        } catch {
+            guard !Task.isCancelled else { return }
+            previewError = error.localizedDescription
+        }
+    }
+
     private func refreshPreview() async {
-        guard loaded?.unsupported.isEmpty == true, previewed != templates else { return }
+        guard loaded?.unsupported.isEmpty == true || mode == .source, previewed != templates else { return }
         let snapshot = templates
         try? await Task.sleep(for: .milliseconds(200))
         guard !Task.isCancelled else { return }
@@ -213,6 +340,7 @@ struct TargetsEditor: View {
     private func save() async {
         if await model.saveTargets(categoryID: category.id, templates: templates) {
             original = templates
+            sourceStart = sourceText
             path.removeLast()
         }
     }

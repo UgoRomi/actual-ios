@@ -12,6 +12,8 @@ struct CategoryTargets: Decodable, Sendable {
     let noteLines: [String]
     /// Notes lines Actual could not read. Fix them in Actual first.
     let unsupported: [String]
+    /// The targets in Actual's notes syntax, as its web app writes them.
+    let sourceText: String
     let templates: [TargetTemplate]
     let schedules: [TargetSchedule]
     let incomeCategories: [IncomeCategory]
@@ -31,6 +33,15 @@ struct TargetPreview: Decodable, Sendable, Equatable {
     let conflicts: [String]
 
     var canSave: Bool { problems.allSatisfy { $0 == nil } && conflicts.isEmpty }
+}
+
+/// Targets read from Actual's notes syntax, such as `#template 50`.
+struct ParsedTargets: Decodable, Sendable {
+    /// A line Actual cannot read. Line 0 is a problem with the targets as a whole.
+    struct Issue: Decodable, Sendable, Hashable { let line: Int; let text: String; let message: String }
+    let templates: [TargetTemplate]
+    let errors: [Issue]
+    let preview: TargetPreview?
 }
 
 struct TargetsApplied: Decodable, Sendable { let message: String }

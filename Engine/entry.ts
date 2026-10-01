@@ -30,7 +30,7 @@ import {
 } from "./reconcile";
 import { dashboard, report, reportTransactions } from "./reports";
 import { reportSettings, reportWrites, saveReportWidget } from "./report-editing";
-import { applyTargets, categoryTargets, previewTargets, saveTargets } from "./targets";
+import { applyTargets, categoryTargets, parseTargets, previewTargets, renderTargets, saveTargets } from "./targets";
 import { integer, month as checkMonth, object, text, uuid, type Obj } from "./args";
 
 declare function _reply(id: string, ok: boolean, payload: string): void;
@@ -590,6 +590,10 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       return runMutator(() => categoryTargets(text(args.categoryId), text(args.month)));
     case "previewTargets":
       return runMutator(() => previewTargets(text(args.categoryId), text(args.month), args.templates));
+    case "renderTargets":
+      return runMutator(() => renderTargets(args.templates));
+    case "parseTargets":
+      return runMutator(() => parseTargets(text(args.categoryId), text(args.month), text(args.text)));
     case "saveTargets":
       await saveTargets(text(args.categoryId), args.templates);
       return {};

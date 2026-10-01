@@ -130,11 +130,16 @@ extension EngineSmoke {
     check(fromNotes.templates.map(\.type) == ["periodic", "goal"], "\(fromNotes.templates.map(\.type))")
     check(fromNotes.templates.map(\.amount) == [5_000, 30_000])
     check(fromNotes.templates[0].note == "Monthly bills")
+    check(fromNotes.sourceText == "Monthly bills\n#template 50\n#goal 300", fromNotes.sourceText)
     check(try sql("SELECT goal_def FROM categories WHERE id = ?", [noted.id]).first?["goal_def"] is NSNull)
     check(try await category(noted.id).hasTargets)
     let unreadable = try await targets(broken.id)
     check(unreadable.unsupported == ["#template this is not a target"] && unreadable.templates.isEmpty)
     check(unreadable.preview == nil)
+    // Lines Actual cannot read are fixed in the source.
+    check(unreadable.sourceText == "#template this is not a target")
+    let fixedSource = try await parse(broken.id, "#template 20")
+    check(fixedSource.errors.isEmpty && fixedSource.templates.map(\.amount) == [2_000])
 
     // Saving moves notes targets to the editor and keeps the notes themselves.
     try await save(noted.id, fromNotes.templates)
@@ -151,6 +156,45 @@ extension EngineSmoke {
     _ = try await apply()
     check(try await category(noted.id).budgeted == 777)
     check(try await category(edited.id).budgeted == 12_345)
-    print("PASS: category targets preview, validation, save, apply, goals, and notes")
+
+    // The source editor shows targets in Actual's notes syntax and reads them back.
+    func parse(_ id: String, _ text: String) async throws -> ParsedTargets {
+      try await engine.call(
+        "parseTargets", arguments: ["categoryId": .string(id), "month": .string(month), "text": .string(text)],
+        as: ParsedTargets.self)
+    }
+    func render(_ templates: [TargetTemplate]) async throws -> String {
+      struct Source: Decodable { let text: String }
+      return try await engine.call(
+        "renderTargets", arguments: ["templates": .array(templates.map(\.json))], as: Source.self
+      ).text
+    }
+    let saved = try await targets(edited.id)
+    let lines = saved.sourceText.components(separatedBy: "\n")
+    check(lines.count == 3 && lines[0].hasPrefix("#template-1 123.45 repeat every 1 months starting "), saved.sourceText)
+    check(lines[1] == "#template 0 up to 100000" && lines[2] == "#goal 1000", saved.sourceText)
+    check(try await render(saved.templates) == saved.sourceText)
+    let reparsed = try await parse(edited.id, saved.sourceText)
+    check(reparsed.errors.isEmpty && reparsed.templates.map(\.type) == ["periodic", "limit", "goal"], "\(reparsed)")
+    check(reparsed.templates.map(\.amount) == [12_345, 10_000_000, 100_000])
+    check(reparsed.preview?.budgeted == 12_345 && reparsed.preview?.canSave == true, "\(String(describing: reparsed.preview))")
+    // Text directly above a line becomes its note; a refill merges into the cap's line, as Actual writes it.
+    let edits = try await parse(edited.id, "Rent\n#template-2 20 repeat every 2 weeks starting \(month)-01\n\n#template-3 up to 50 hold")
+    check(edits.errors.isEmpty && edits.templates.map(\.type) == ["periodic", "limit", "refill"], "\(edits)")
+    check(edits.templates[0].note == "Rent" && edits.templates[0].periodUnit == "week" && edits.templates[0].periodCount == 2)
+    check(edits.templates[1].bool("hold") && edits.templates[2].priority == 3)
+    check(try await render(edits.templates).hasSuffix("#template-3 up to 50 hold"))
+    if let income = try await snapshot(engine, month: month).categories.first(where: \.isIncome) {
+      let share = try await parse(edited.id, "#template 10% of \(income.name)")
+      check(share.templates.first?.string("category") == income.id, "\(share)")
+      check(try await render(share.templates) == "#template 10% of \(income.name)")
+    }
+    let invalid = try await parse(edited.id, "#template 50\n#template nonsense\n#template average 3 months [decrease 150%]")
+    check(invalid.templates.isEmpty && invalid.preview == nil)
+    check(invalid.errors.map(\.line) == [2, 3] && invalid.errors[0].text == "#template nonsense", "\(invalid.errors)")
+    check(invalid.errors[1].message.contains("adjustment"), invalid.errors[1].message)
+    // Problems are reported as the form reports them.
+    check(try await parse(edited.id, "#template schedule Missing").preview?.problems == ["No schedule named “Missing”"])
+    print("PASS: category targets preview, validation, save, apply, goals, notes, and source")
   }
 }
