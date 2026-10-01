@@ -31,6 +31,9 @@ struct TargetsEditor: View {
     @State private var parsedText: String?
     @State private var switching = false
     @State private var showSourceIssues = false
+    @State private var describing = false
+    /// Apple Intelligence can turn a description into targets on this device.
+    @State private var canDescribe = false
 
     private var hasChanges: Bool {
         templates.map(\.fields) != original.map(\.fields) || (mode == .source && sourceText != sourceStart)
@@ -89,7 +92,18 @@ struct TargetsEditor: View {
                     addCap: { add(.limit) })
             }
         }
-        .task { if loaded == nil { await load() } }
+        .sheet(isPresented: $describing) {
+            if let loaded {
+                DescribeTargetsSheet(context: GoalDescription.Context(
+                    month: month, currency: model.currency, schedules: loaded.schedules,
+                    incomeCategories: loaded.incomeCategories)
+                ) { described in templates.append(contentsOf: described) }
+            }
+        }
+        .task {
+            canDescribe = GoalDescription.isAvailable
+            if loaded == nil { await load() }
+        }
         .task(id: templates) { await refreshPreview() }
         .task(id: mode == .source ? sourceText : nil) { await parseSource() }
     }
@@ -102,6 +116,9 @@ struct TargetsEditor: View {
             }
             .pickerStyle(.segmented)
             .disabled(switching)
+            if mode == .form, canDescribe {
+                Button("Describe Targets", systemImage: "sparkles") { describing = true }
+            }
         }
         Section {
             LabeledContent("Projected for \(TargetTemplate.monthLabel(month))") {
@@ -627,5 +644,86 @@ private struct MonthPicker: View {
         var months = (-24...120).map { TargetTemplate.month(now, adding: $0) }
         if BudgetDate.date(month + "-01") != nil, !months.contains(month) { months.append(month); months.sort() }
         return months
+    }
+}
+
+/// Targets described in plain words. Apple's on-device model fills in the targets,
+/// shown with the syntax Actual would write, to review before they join the editor.
+private struct DescribeTargetsSheet: View {
+    let context: GoalDescription.Context
+    let add: ([TargetTemplate]) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var model
+    @State private var text = ""
+    @State private var generating = false
+    @State private var result: [TargetTemplate]?
+    @State private var source = ""
+    @State private var error: String?
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        NavigationStack {
+            ThemedForm {
+                Section {
+                    TextField("For example: 150 for the insurance every January", text: $text, axis: .vertical)
+                        .lineLimit(3...6)
+                        .focused($focused)
+                } header: {
+                    Text("Describe the target")
+                } footer: {
+                    Text("Say how much, how often or by when, and what it is for. Apple Intelligence reads it on this device; nothing is sent anywhere.")
+                }
+                Section {
+                    Button("Create Targets", systemImage: "sparkles") { Task { await generate() } }
+                        .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || generating)
+                    if generating { ProgressView().frame(maxWidth: .infinity) }
+                }
+                if let error { Section { ErrorNotice(message: error) } }
+                if let result {
+                    Section {
+                        ForEach(result) { template in
+                            VStack(alignment: .leading, spacing: 4) {
+                                Label(template.kind?.title ?? "Target", systemImage: template.kind?.systemImage ?? "target")
+                                    .font(.subheadline.weight(.semibold))
+                                Text(template.summary(currency: context.currency, income: context.incomeCategories))
+                                    .font(.subheadline).foregroundStyle(.secondary)
+                            }
+                        }
+                    } header: {
+                        Text("Targets")
+                    } footer: {
+                        Text("Add them to the editor to adjust, preview, and save.")
+                    }
+                    if !source.isEmpty {
+                        Section("Source") { Text(source).font(.caption.monospaced()) }
+                    }
+                }
+            }
+            .navigationTitle("Describe Targets")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Add") { if let result { add(result); dismiss() } }
+                        .bold().disabled(result == nil || generating)
+                }
+            }
+            .onAppear { focused = true }
+        }
+    }
+
+    private func generate() async {
+        guard !generating else { return }
+        generating = true
+        defer { generating = false }
+        error = nil
+        do {
+            let templates = try await GoalDescription.describe(text, context: context)
+            result = templates
+            source = (try? await model.targetSource(templates: templates)) ?? ""
+        } catch {
+            self.error = error.localizedDescription
+            result = nil
+        }
     }
 }
