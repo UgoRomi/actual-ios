@@ -489,6 +489,23 @@ enum TransactionChange: Sendable {
 
 struct Payee: Decodable, Identifiable, Sendable { let id: String; let name: String }
 
+/// What rules make of a new transaction being entered, as Actual's mobile editor
+/// prefills it. Only the fields named in `changed` differ from the draft.
+struct RulePreview: Decodable, Sendable {
+    /// Actual's field names: account, date, payee, category, amount, notes, cleared.
+    let changed: [String]
+    let accountId: String
+    let date: String
+    let payeeId: String?
+    let payeeName: String?
+    /// Set when the rule's payee stands for another account, making a transfer.
+    let transferAccountId: String?
+    let categoryId: String?
+    let amount: Int
+    let notes: String
+    let cleared: Bool
+}
+
 /// A tag for #tags in notes, as Actual's tags page lists them.
 struct Tag: Decodable, Identifiable, Sendable, Hashable {
     let id: String

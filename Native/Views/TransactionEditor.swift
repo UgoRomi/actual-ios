@@ -21,6 +21,10 @@ struct TransactionEditor: View {
     @State private var initialized = false
     /// A split's parts, in the transaction's direction. Empty for an ordinary transaction.
     @State private var splits: [SplitDraft] = []
+    /// The running rule preview for a new transaction; a later change replaces it.
+    @State private var rulePreview: Task<Void, Never>?
+    /// The draft as the last rule preview left it, so applying a preview does not run rules again.
+    @State private var previewedDraft: RuleDraft?
 
     private var editable: Bool { transaction?.canEdit ?? true }
     /// The latest load: this transaction, or a transfer's linked transaction,
@@ -166,7 +170,72 @@ struct TransactionEditor: View {
                 Button("Cancel", role: .cancel) { }
             } message: { Text(saveMessage) }
             .onAppear { initialize() }
+            // As in Actual's mobile editor, rules run after each change to a new
+            // transaction, so choosing a payee shows its category before saving.
+            .onChange(of: payee) { previewRules(changed: "payee") }
+            .onChange(of: transferAccount) { previewRules(changed: "payee") }
+            .onChange(of: account) { previewRules(changed: "account") }
+            .onChange(of: date) { previewRules(changed: "date") }
+            .onChange(of: amount) { previewRules(changed: "amount") }
+            .onChange(of: isOutflow) { previewRules(changed: "amount") }
+            .onChange(of: notes) { previewRules(changed: "notes") }
+            .onChange(of: cleared) { previewRules(changed: "cleared") }
         }
+    }
+
+    /// The new transaction as the engine's rules see it.
+    private var ruleDraft: RuleDraft {
+        let parsed = Money.parse(amount) ?? 0
+        return RuleDraft(account: account, date: BudgetDate.day(date),
+                         payee: payee.trimmingCharacters(in: .whitespacesAndNewlines), transferAccount: transferAccount,
+                         category: isOffBudget || isBudgetTransfer ? "" : category, amount: isOutflow ? -parsed : parsed,
+                         notes: notes, cleared: cleared)
+    }
+
+    /// Runs rules on a new transaction's draft and shows what they fill in, as
+    /// Actual's mobile editor does after each change. A chosen payee applies at
+    /// once; typing is previewed after a short pause.
+    private func previewRules(changed: String) {
+        rulePreview?.cancel()
+        guard transaction == nil, initialized, splits.isEmpty, !account.isEmpty else { return }
+        let draft = ruleDraft
+        // The last preview's result is already ruled.
+        guard draft != previewedDraft else { return }
+        var arguments: [String: JSONValue] = [
+            "accountId": .string(draft.account), "date": .string(draft.date), "amount": .number(draft.amount),
+            "notes": .string(draft.notes), "cleared": .bool(draft.cleared), "changed": .string(changed),
+            "categoryId": draft.category.isEmpty ? .null : .string(draft.category),
+        ]
+        if !draft.transferAccount.isEmpty { arguments["transferAccountId"] = .string(draft.transferAccount) }
+        else { arguments["payeeName"] = .string(draft.payee) }
+        let request = arguments
+        rulePreview = Task {
+            if changed != "payee" { try? await Task.sleep(for: .milliseconds(300)) }
+            guard !Task.isCancelled, let preview = try? await model.previewRules(request), !Task.isCancelled
+            else { return }
+            apply(preview)
+        }
+    }
+
+    /// Takes the fields a rule changed into the editor.
+    private func apply(_ preview: RulePreview) {
+        for field in preview.changed {
+            switch field {
+            case "account": account = preview.accountId
+            case "date": date = BudgetDate.date(preview.date) ?? date
+            case "payee":
+                transferAccount = preview.transferAccountId ?? ""
+                payee = transferAccount.isEmpty ? preview.payeeName ?? "" : ""
+            case "category": category = preview.categoryId ?? ""
+            case "amount":
+                amount = Money.editable(abs(preview.amount))
+                if preview.amount != 0 { isOutflow = preview.amount < 0 }
+            case "notes": notes = preview.notes
+            case "cleared": cleared = preview.cleared
+            default: break
+            }
+        }
+        previewedDraft = ruleDraft
     }
 
     /// The total less the parts, in the transaction's direction; nil when an amount is invalid.
@@ -316,7 +385,8 @@ struct TransactionEditor: View {
         guard !initialized else { return }
         initialized = true
         account = transaction?.accountId ?? accountID ?? model.overview?.openAccounts.first?.id ?? ""
-        guard let transaction else { return }
+        // Rules run once something is entered, not for the empty draft.
+        guard let transaction else { previewedDraft = ruleDraft; return }
         amount = Money.editable(abs(transaction.amount))
         isOutflow = transaction.amount < 0
         date = BudgetDate.date(transaction.date) ?? Date()
@@ -433,6 +503,18 @@ struct TransactionEditor: View {
             transferId: sameTransfer ? existing?.transferId : nil,
             transferReconciled: sameTransfer ? existing?.transferReconciled : nil)
     }
+}
+
+/// A new transaction's fields as rules see them, in the engine's terms.
+struct RuleDraft: Equatable {
+    var account: String
+    var date: String
+    var payee: String
+    var transferAccount: String
+    var category: String
+    var amount: Int
+    var notes: String
+    var cleared: Bool
 }
 
 /// A split part being edited. Existing parts keep their ID, so saving updates them.

@@ -181,7 +181,35 @@ import Foundation
     precondition(chosen.payeeId == payee.id, "A rule's payee must apply, as when choosing a payee in Actual")
     let empty = try await save("Rule check", amount: -504)
     precondition(empty.categoryId == expenses[1].id && empty.payeeId == payee.id, "A rule did not fill empty fields")
-    print("PASS: case-insensitive payee reuse, future-dated balances, rules fill but never replace user entries")
+
+    // The editor previews the same rules while a new transaction is entered.
+    func preview(_ notes: String, changed: String, payeeName: String = "", category: String = "") async throws -> RulePreview {
+      try await engine.call(
+        "previewRules",
+        arguments: [
+          "accountId": .string(account.id), "date": .string("2026-09-20"), "payeeName": .string(payeeName),
+          "categoryId": category.isEmpty ? .null : .string(category), "amount": .number(-505),
+          "notes": .string(notes), "cleared": .bool(false), "changed": .string(changed),
+        ], as: RulePreview.self)
+    }
+    let beforePreviews = try await snapshot(engine)
+    let filled = try await preview("Rule check", changed: "notes")
+    precondition(filled.changed.sorted() == ["category", "payee"], "A preview names what rules changed: \(filled.changed)")
+    precondition(filled.categoryId == expenses[1].id && filled.payeeId == payee.id && filled.payeeName == payee.name,
+                 "A preview fills empty fields: \(filled)")
+    precondition(filled.transferAccountId == nil && filled.amount == -505 && filled.notes == "Rule check")
+    let kept = try await preview("Rule check", changed: "notes", category: expenses[0].id)
+    precondition(kept.changed == ["payee"] && kept.categoryId == expenses[0].id, "A preview keeps a chosen category: \(kept)")
+    // Choosing a payee prefills the rest from it, as in Actual's mobile editor.
+    let chosenPayee = try await preview("Rule check", changed: "payee", payeeName: payee.name.uppercased(), category: expenses[0].id)
+    precondition(chosenPayee.changed == ["category"] && chosenPayee.categoryId == expenses[1].id,
+                 "Choosing a payee applies its rules: \(chosenPayee)")
+    let unmatched = try await preview("No rule", changed: "payee", payeeName: "Nobody yet")
+    precondition(unmatched.changed.isEmpty && unmatched.payeeId == nil, "An unknown payee matches nothing: \(unmatched)")
+    let afterPreviews = try await snapshot(engine)
+    precondition(afterPreviews.transactions.count == beforePreviews.transactions.count, "A preview saved a transaction")
+    precondition(afterPreviews.payees.count == beforePreviews.payees.count, "A preview added a payee")
+    print("PASS: case-insensitive payee reuse, future-dated balances, rules fill but never replace user entries, rule previews")
   }
   static func trackingBudget(data: URL, resources: URL) async throws {
     let engine = try EngineClient(

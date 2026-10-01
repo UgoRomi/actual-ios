@@ -1048,6 +1048,79 @@ final class ActualNativeUITests: XCTestCase {
         capture("register-uncategorized")
     }
 
+    /// Categorizes three transactions for a new payee, so Actual learns its category,
+    /// then checks that choosing the payee fills the category in before saving.
+    @MainActor
+    func testDemoPayeeCategoryPrefill() {
+        let app = XCUIApplication()
+        app.launch()
+        let demoButton = app.buttons["Explore a demo budget"]
+        let accountsTab = app.tabBars.buttons["Accounts"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        XCTAssertTrue(accountsTab.waitForExistence(timeout: 60), "The demo budget should open")
+        accountsTab.tap()
+        app.staticTexts["Capital One Checking"].tap()
+        let checking = app.navigationBars["Capital One Checking"]
+        XCTAssertTrue(checking.waitForExistence(timeout: 10))
+        let editor = app.navigationBars["New transaction"]
+        let payeeRow = app.buttons["payee-row"]
+        let categoryRow = app.buttons["category-row"]
+
+        func choosePayee() {
+            payeeRow.tap()
+            XCTAssertTrue(app.navigationBars["Payee"].waitForExistence(timeout: 10))
+            let search = app.searchFields.firstMatch
+            XCTAssertTrue(search.waitForExistence(timeout: 5))
+            search.tap()
+            search.typeText("Prefill Grocer")
+            // An earlier run may have added the payee already.
+            let add = app.buttons["Add “Prefill Grocer”"]
+            let existing = app.buttons["Prefill Grocer"].firstMatch
+            XCTAssertTrue(add.waitForExistence(timeout: 5) || existing.waitForExistence(timeout: 5))
+            (add.exists ? add : existing).tap()
+            XCTAssertTrue(editor.waitForExistence(timeout: 10))
+            XCTAssertTrue(describes(payeeRow, "Prefill Grocer"))
+        }
+
+        // Three transactions in one category make a rule for the payee, as Actual learns.
+        for _ in 1...3 {
+            checking.buttons["Add transaction"].tap()
+            XCTAssertTrue(editor.waitForExistence(timeout: 10))
+            XCTAssertTrue(app.buttons["Clear"].waitForExistence(timeout: 5), "The amount should be focused")
+            tapKeys(app, "5")
+            choosePayee()
+            if !describes(categoryRow, "Food") {
+                categoryRow.tap()
+                XCTAssertTrue(app.navigationBars["Category"].waitForExistence(timeout: 10))
+                let search = app.searchFields.firstMatch
+                search.tap()
+                search.typeText("Food")
+                let food = app.buttons["Food"].firstMatch
+                XCTAssertTrue(food.waitForExistence(timeout: 5), "Category search should find Food")
+                food.tap()
+                XCTAssertTrue(editor.waitForExistence(timeout: 10))
+            }
+            XCTAssertTrue(describes(categoryRow, "Food"))
+            editor.buttons["Save"].tap()
+            XCTAssertTrue(wait(forAbsence: editor), "The transaction should save")
+        }
+
+        // Choosing the payee now shows its category, as Actual's editors prefill it.
+        checking.buttons["Add transaction"].tap()
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Clear"].waitForExistence(timeout: 5))
+        tapKeys(app, "5")
+        XCTAssertTrue(describes(categoryRow, "Uncategorized"), "A new transaction starts without a category")
+        choosePayee()
+        let prefilled = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", "Food", "Food"), object: categoryRow)
+        XCTAssertEqual(XCTWaiter.wait(for: [prefilled], timeout: 10), .completed,
+                       "Choosing a payee with a category rule should fill the category in")
+        capture("payee-category-prefill")
+        editor.buttons["Cancel"].tap()
+        XCTAssertTrue(wait(forAbsence: editor))
+    }
+
     /// Transfers from one demo account to another, then deletes the transfer from the other side.
     @MainActor
     func testDemoTransfer() {

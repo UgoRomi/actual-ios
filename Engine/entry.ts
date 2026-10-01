@@ -402,6 +402,81 @@ async function editable(id: string, allowReconciled: boolean, allowReconciledTra
     );
   return row;
 }
+// The editor's fields as Actual stores them. A typed payee name becomes a
+// payee only when saving; otherwise it is the existing payee of that name, if any.
+async function transactionFields(args: Obj, existing: Obj | null, createsPayee: boolean) {
+  const accountId = text(args.accountId),
+    date = text(args.date);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Choose a valid date.");
+  const accounts = await lib.send("accounts-get");
+  const account = accounts.find((a) => a.id === accountId);
+  if (!account) throw new Error("This account no longer exists. Choose another account.");
+  const payees = await lib.send("api/payees-get");
+  let payee = text(args.payeeId) || null;
+  const name = text(args.payeeName).trim();
+  const transferAccountId = text(args.transferAccountId);
+  if (transferAccountId) {
+    // As in Actual, the other account's payee makes this a transfer.
+    payee = payees.find((p) => p.transfer_acct === transferAccountId)?.id ?? null;
+    if (!payee) throw new Error("The account to transfer with no longer exists. Choose another account.");
+  } else if (!payee && name) {
+    // Like Actual, reuse an existing payee whose name differs only in case.
+    payee = createsPayee
+      ? await runMutator(() => createPayee(name))
+      : (payees.find((p) => !p.transfer_acct && p.name.toLowerCase() === name.toLowerCase())?.id ?? null);
+  }
+  const transferTarget = payees.find((p) => p.id === payee)?.transfer_acct;
+  if (transferTarget === accountId) throw new Error("Choose two different accounts for a transfer.");
+  const other = accounts.find((a) => a.id === transferTarget);
+  return {
+    account: accountId,
+    date,
+    payee,
+    // Actual never categorizes off-budget transactions, or transfers
+    // between two on-budget accounts.
+    category: account.offbudget || (other && !other.offbudget) ? null : text(args.categoryId) || null,
+    amount: integer(args.amount),
+    notes: text(args.notes),
+    // A reconciled transaction stays cleared until it is unlocked.
+    cleared: existing?.reconciled ? Boolean(existing.cleared) : Boolean(args.cleared),
+  };
+}
+type TransactionFields = Awaited<ReturnType<typeof transactionFields>>;
+function draftTransaction(id: string, fields: TransactionFields) {
+  return {
+    id,
+    sort_order: Date.now(),
+    ...fields,
+    payee: fields.payee ?? undefined,
+    category: fields.category ?? undefined,
+  };
+}
+// Like Actual's mobile editor, run rules on a new transaction but keep what
+// the user entered: rules fill empty fields and may extend notes. A rule's
+// payee always applies, as when a payee is chosen in Actual. Once the payee
+// changes, every other rule result applies too, as Actual's mobile editor
+// prefills the rest from the chosen payee; notes still only extend, so
+// choosing payees in turn never stacks the same addition.
+async function applyRules(
+  draft: ReturnType<typeof draftTransaction>,
+  fields: TransactionFields,
+  changedField: string | null,
+) {
+  const ruled = await lib.send("rules-run", { transaction: draft });
+  const transaction = { ...draft };
+  const changed: string[] = [];
+  for (const field of Object.keys(fields) as Array<keyof TransactionFields>) {
+    if (ruled[field] === draft[field]) continue;
+    const applies =
+      field === "payee" ||
+      (changedField === "payee" && field !== "notes") ||
+      ruleMayChange(field, draft[field], ruled[field]);
+    if (!applies) continue;
+    Object.assign(transaction, { [field]: ruled[field] });
+    changed.push(field);
+  }
+  return { ruled, transaction, changed };
+}
 async function perform(method: string, args: Obj): Promise<unknown> {
   if (
     [
@@ -604,39 +679,7 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       const existing = id
         ? await editable(id, args.allowReconciled === true, args.allowReconciledTransfer === true)
         : null;
-      const accountId = text(args.accountId),
-        date = text(args.date);
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error("Choose a valid date.");
-      const accounts = await lib.send("accounts-get");
-      const account = accounts.find((a) => a.id === accountId);
-      if (!account) throw new Error("This account no longer exists. Choose another account.");
-      const payees = await lib.send("api/payees-get");
-      let payee = text(args.payeeId) || null;
-      const name = text(args.payeeName).trim();
-      const transferAccountId = text(args.transferAccountId);
-      if (transferAccountId) {
-        // As in Actual, the other account's payee makes this a transfer.
-        payee = payees.find((p) => p.transfer_acct === transferAccountId)?.id ?? null;
-        if (!payee) throw new Error("The account to transfer with no longer exists. Choose another account.");
-      } else if (!payee && name) {
-        // Like Actual, reuse an existing payee whose name differs only in case.
-        payee = await runMutator(() => createPayee(name));
-      }
-      const transferTarget = payees.find((p) => p.id === payee)?.transfer_acct;
-      if (transferTarget === accountId) throw new Error("Choose two different accounts for a transfer.");
-      const other = accounts.find((a) => a.id === transferTarget);
-      const fields = {
-        account: accountId,
-        date,
-        payee,
-        // Actual never categorizes off-budget transactions, or transfers
-        // between two on-budget accounts.
-        category: account.offbudget || (other && !other.offbudget) ? null : text(args.categoryId) || null,
-        amount: integer(args.amount),
-        notes: text(args.notes),
-        // A reconciled transaction stays cleared until it is unlocked.
-        cleared: existing?.reconciled ? Boolean(existing.cleared) : Boolean(args.cleared),
-      };
+      const fields = await transactionFields(args, existing, true);
       if (existing) {
         // Like Actual's editors, send only changed fields. Rewriting unchanged
         // columns would override other devices' edits that have not synced yet.
@@ -655,30 +698,16 @@ async function perform(method: string, args: Obj): Promise<unknown> {
             learnCategories: await learnsCategories(),
           });
       } else {
-        // Like Actual's mobile editor, run rules on the new transaction but keep
-        // what the user entered: rules fill empty fields and may extend notes.
-        // A rule's payee always applies, as when a payee is chosen in Actual.
         // The batch handler saves without running rules again.
         // The app may choose the ID, so it can show the transaction before it is saved.
         const newId = text(args.newId);
         if (newId && !uuid.test(newId))
           throw new Error("Invalid transaction ID");
-        const draft = {
-          id: newId || crypto.randomUUID(),
-          sort_order: Date.now(),
-          ...fields,
-          payee: fields.payee ?? undefined,
-          category: fields.category ?? undefined,
-        };
-        const ruled = await lib.send("rules-run", { transaction: draft });
-        const transaction = { ...draft };
-        for (const field of Object.keys(fields) as Array<keyof typeof fields>) {
-          if (
-            ruled[field] !== draft[field] &&
-            (field === "payee" || ruleMayChange(field, draft[field], ruled[field]))
-          )
-            Object.assign(transaction, { [field]: ruled[field] });
-        }
+        const { ruled, transaction } = await applyRules(
+          draftTransaction(newId || crypto.randomUUID(), fields),
+          fields,
+          null,
+        );
         const children = ruled.subtransactions ?? [];
         if (children.length) {
           // A split rule: store the parent and children as upstream imports do.
@@ -701,6 +730,30 @@ async function perform(method: string, args: Obj): Promise<unknown> {
           });
       }
       return {};
+    }
+    case "previewRules": {
+      // What rules would make of the editor's draft, as Actual's mobile editor
+      // shows after each change to a new transaction. Nothing is saved: a typed
+      // payee that does not exist yet stays unset, since no rule can name it.
+      const fields = await transactionFields(args, null, false);
+      const { transaction, changed } = await applyRules(
+        draftTransaction(crypto.randomUUID(), fields),
+        fields,
+        text(args.changed) || null,
+      );
+      const payee = (await lib.send("api/payees-get")).find((p) => p.id === transaction.payee);
+      return {
+        changed,
+        accountId: transaction.account,
+        date: transaction.date,
+        payeeId: payee?.id ?? null,
+        payeeName: payee?.name ?? null,
+        transferAccountId: payee?.transfer_acct ?? null,
+        categoryId: transaction.category ?? null,
+        amount: transaction.amount,
+        notes: transaction.notes ?? "",
+        cleared: Boolean(transaction.cleared),
+      };
     }
     case "saveSplit":
       await saveSplit(args);

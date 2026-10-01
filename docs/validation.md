@@ -389,3 +389,15 @@ Checked against upstream Actual 26.9.0 (the pinned revision): the mobile editor'
 The UI test `testDemoSplitTransaction` passed on a new iPhone 17 Pro / iOS 26.5 simulator. It now fills the second part with **Use Remaining**, checks that the buttons disappear once the split balances, then uses **Split Evenly** to set both parts to 15.00. The split-editor screenshot was inspected. The first run failed in the test itself: the form unloads off-screen rows, so it now finds the button by its amount rather than by its position.
 
 Not verified end to end: custom themes, dark appearance, and VoiceOver.
+
+## Rules while entering a transaction (2026-10-02)
+
+Checked against upstream Actual 26.9.0 (the pinned revision): the mobile editor's `onUpdate` runs `rules-run` after each change to a new transaction and applies the result to empty fields, or to every field once the payee changes; the desktop register's `onApplyRules` fills empty fields only. Before this, the native editor ran rules only when saving, so a payee's learned category appeared in the register but never in the editor.
+
+The engine's new `previewRules` runs the same rules on the editor's draft without saving. It shares the field handling and rule merging with `saveTransaction`; a typed payee that does not exist yet stays unset rather than being created. One difference from upstream mobile is kept on purpose: notes only ever extend, even after a payee change, since Actual's append-notes action would otherwise stack the same addition each time another payee is chosen. `./scripts/test-engine.sh` passed with new checks: a preview fills an empty category and payee and names what changed, keeps a chosen category after a notes change, replaces it after a payee change, matches nothing for an unknown payee, and saves neither a transaction nor a payee.
+
+The editor previews after each change to a new transaction: a chosen payee or transfer account at once, and the account, date, amount, direction, notes, and cleared state after a short pause, so typing does not run rules on every key. A later change cancels the running preview, and applying a preview does not run rules again. Splits and existing transactions are not previewed; saving still runs rules as before.
+
+The UI test `testDemoPayeeCategoryPrefill` passed on an iPhone 17 Pro / iOS 26 simulator. It categorizes three transactions for a new payee as Food, so Actual learns the category, then adds a fourth: its category row reads Uncategorized until the payee is chosen, and Food afterwards, without touching the category. The screenshot of the prefilled editor was inspected.
+
+Not verified end to end: rules that set the notes, amount, date, account, or cleared state on screen (the engine test covers them), previews on an off-budget account or a transfer, dark appearance, and VoiceOver.

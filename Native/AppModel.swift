@@ -571,6 +571,12 @@ final class AppModel {
         try await client().call("rules", as: [Rule].self)
     }
 
+    /// What rules would make of a new transaction's draft, as Actual's mobile
+    /// editor prefills after each change. Nothing is saved.
+    func previewRules(_ draft: [String: JSONValue]) async throws -> RulePreview {
+        try await client().call("previewRules", arguments: draft, as: RulePreview.self)
+    }
+
     /// How many transactions a rule's conditions match now.
     func ruleMatches(_ rule: Rule) async throws -> Int {
         struct Count: Decodable { let count: Int }
