@@ -169,10 +169,10 @@ private struct ThemePreview: View {
         let palette = ThemePalette(colors)
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Label("Available to budget", systemImage: "circle.dotted")
+                Label("Fully budgeted", systemImage: "checkmark.circle.fill")
                     .font(.subheadline.weight(.medium)).foregroundStyle(palette.onCard.opacity(0.8))
                 Spacer(minLength: 8)
-                Text(Money.formatted(125_000, currency: currency))
+                Text(Money.formatted(0, currency: currency))
                     .font(.system(.title3, design: .rounded, weight: .bold)).monospacedDigit()
                     .foregroundStyle(palette.onCard)
             }

@@ -14,6 +14,9 @@ enum ActualTheme {
     static var positive: Color { palette.positive }
     static var warning: Color { palette.warning }
     static var negative: Color { palette.negative }
+    /// The summary card when there is money left to budget, or too much budgeted, with white text.
+    static var positiveCard: AnyShapeStyle { palette.positiveCard }
+    static var negativeCard: AnyShapeStyle { palette.negativeCard }
 
     private static var palette: ThemePalette { ThemeStore.shared.palette }
 }
@@ -76,6 +79,8 @@ struct ThemePalette {
     let positive: Color
     let warning: Color
     let negative: Color
+    let positiveCard: AnyShapeStyle
+    let negativeCard: AnyShapeStyle
 
     init(_ theme: Theme) {
         self.init(light: theme.light, dark: theme.dark)
@@ -92,9 +97,17 @@ struct ThemePalette {
         var (light, dark) = (light, dark)
         light.cardEnd = light.cardEnd ?? light.card
         dark.cardEnd = dark.cardEnd ?? dark.card
-        func color(_ role: ThemeRole, else system: UIColor = .clear) -> Color {
+        func uiColor(_ role: ThemeRole, else system: UIColor = .clear) -> UIColor {
             let (light, dark) = (UIColor(hex: light[role]) ?? system, UIColor(hex: dark[role]) ?? system)
-            return Color(uiColor: UIColor { ($0.userInterfaceStyle == .dark ? dark : light).resolvedColor(with: $0) })
+            return UIColor { ($0.userInterfaceStyle == .dark ? dark : light).resolvedColor(with: $0) }
+        }
+        func color(_ role: ThemeRole, else system: UIColor = .clear) -> Color {
+            Color(uiColor: uiColor(role, else: system))
+        }
+        /// A state color as a card fill, darkened just enough for white text whatever color the theme picks.
+        func stateCard(_ role: ThemeRole, else system: UIColor) -> AnyShapeStyle {
+            let base = uiColor(role, else: system)
+            return AnyShapeStyle(Color(uiColor: UIColor { base.resolvedColor(with: $0).darkened(forWhiteText: ThemeColors.stateCardContrast) }).gradient)
         }
         func text(_ color: KeyPath<ThemeColors, RGB>) -> Color {
             let (light, dark) = (UIColor(light[keyPath: color]), UIColor(dark[keyPath: color]))
@@ -113,6 +126,8 @@ struct ThemePalette {
         positive = color(.positive, else: .systemGreen)
         warning = color(.warning, else: .systemOrange)
         negative = color(.negative, else: .systemRed)
+        positiveCard = stateCard(.positive, else: .systemGreen)
+        negativeCard = stateCard(.negative, else: .systemRed)
     }
 }
 
@@ -124,6 +139,14 @@ private extension UIColor {
 
     convenience init(_ rgb: RGB) {
         self.init(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1)
+    }
+
+    /// This color, darkened only as much as white text on it needs to reach the contrast ratio.
+    func darkened(forWhiteText ratio: Double) -> UIColor {
+        var (red, green, blue, alpha): (CGFloat, CGFloat, CGFloat, CGFloat) = (0, 0, 0, 0)
+        guard getRed(&red, green: &green, blue: &blue, alpha: &alpha) else { return self }
+        let rgb = RGB(red: min(max(red, 0), 1), green: min(max(green, 0), 1), blue: min(max(blue, 0), 1))
+        return UIColor(rgb.darkened(forWhiteText: ratio))
     }
 }
 

@@ -13,6 +13,12 @@ import Foundation
         expect(abs(RGB.white.contrast(with: .black) - 21) < 0.001, "black on white is 21:1")
         expect(RGB.text(on: [RGB(hex: "#1D2342")!]) == .white, "white text on navy")
         expect(RGB.text(on: [RGB(hex: "#EEF0F3")!, RGB(hex: "#A4AAB3")!]) == .black, "black text on silver")
+        // The summary card tinted positive or negative darkens only as much as white text needs.
+        for hex in ["#34C759", "#FF3B30", "#FFFF00", "#FFFFFF", "#1D2342", "#000000"] {
+            let color = RGB(hex: hex)!, card = color.darkened(forWhiteText: ThemeColors.stateCardContrast)
+            expect(RGB.white.contrast(with: card) >= ThemeColors.stateCardContrast, "white on \(hex) tinted card")
+            if RGB.white.contrast(with: color) >= ThemeColors.stateCardContrast { expect(card == color, "\(hex) kept as is") }
+        }
         print("PASS: colors")
 
         // Every preset keeps its colors legible where the app draws them.

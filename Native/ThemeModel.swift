@@ -41,6 +41,14 @@ struct RGB: Equatable, Sendable {
         return (lighter + 0.05) / (darker + 0.05)
     }
 
+    /// This color, darkened only as much as white text on it needs to reach the contrast ratio.
+    func darkened(forWhiteText ratio: Double) -> RGB {
+        var scale = 1.0
+        func scaled() -> RGB { RGB(red: red * scale, green: green * scale, blue: blue * scale) }
+        while scale > 0, RGB.white.contrast(with: scaled()) < ratio { scale -= 0.01 }
+        return scaled()
+    }
+
     /// White or black, whichever reads better on every one of these colors.
     static func text(on colors: [RGB]) -> RGB {
         func worst(_ text: RGB) -> Double { colors.map { text.contrast(with: $0) }.min() ?? 1 }
@@ -118,6 +126,8 @@ struct ThemeColors: Codable, Equatable, Sendable {
 
     /// White or black text for the summary card.
     var textOnCard: RGB { .text(on: [card, cardEnd ?? card].compactMap(RGB.init(hex:))) }
+    /// White text on the summary card tinted positive or negative reaches this, with room for its shading and dimmed labels.
+    static let stateCardContrast = 5.5
     /// White or black text for filled accent shapes, such as a selected filter.
     var textOnAccent: RGB { .text(on: [accent].compactMap(RGB.init(hex:))) }
 }

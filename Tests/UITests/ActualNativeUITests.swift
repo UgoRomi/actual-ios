@@ -164,7 +164,7 @@ final class ActualNativeUITests: XCTestCase {
 
         let budgetTab = app.tabBars.buttons["Budget"]
         XCTAssertTrue(budgetTab.waitForExistence(timeout: 60), "The demo budget should open")
-        XCTAssertTrue(app.staticTexts["Available to budget"].exists, "The native budget summary should load")
+        XCTAssertTrue(app.buttons["budget.summary"].exists, "The native budget summary should load")
         capture("02-budget")
 
         // The Overspent quick filter shows only overspent rows, or says there are none.
@@ -358,8 +358,9 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(zero.waitForExistence(timeout: 10), "Every category should be set to zero")
 
         // With nothing budgeted, To Budget has money to move.
-        let summary = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Available to budget")).firstMatch
+        let summary = app.buttons["budget.summary"]
         XCTAssertTrue(summary.waitForExistence(timeout: 10))
+        XCTAssertTrue(summary.label.hasPrefix("Available to budget"), summary.label)
         summary.tap()
         XCTAssertTrue(app.navigationBars["Budget Summary"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Available funds"].exists)
@@ -653,7 +654,7 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(numbers.label.contains("1.000,33"), numbers.label)
         capture("formatting")
         app.buttons["Done"].tap()
-        let summary = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Available to budget")).firstMatch
+        let summary = app.buttons["budget.summary"]
         XCTAssertTrue(summary.waitForExistence(timeout: 10))
         capture("budget-dot-comma")
     }
