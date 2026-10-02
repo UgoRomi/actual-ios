@@ -599,6 +599,31 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       return {};
     case "applyTargets":
       return applyTargets(text(args.month), text(args.categoryId) || null, args.overwrite === true);
+    case "previewRules": {
+      // As Actual's mobile editor: choosing a payee for a new transaction runs rules
+      // at once, so the editor shows the category and other fields they fill in.
+      requireBudget();
+      const draft = {
+        id: "preview",
+        account: text(args.accountId),
+        date: text(args.date),
+        payee: text(args.payeeId) || undefined,
+        category: text(args.categoryId) || undefined,
+        amount: integer(args.amount),
+        notes: text(args.notes),
+        cleared: Boolean(args.cleared),
+      };
+      const ruled = await lib.send("rules-run", { transaction: draft as never });
+      return {
+        accountId: ruled.account,
+        date: ruled.date,
+        payeeId: ruled.payee ?? null,
+        categoryId: ruled.category ?? null,
+        amount: ruled.amount,
+        notes: ruled.notes ?? "",
+        cleared: Boolean(ruled.cleared),
+      };
+    }
     case "saveTransaction": {
       const id = text(args.id);
       const existing = id

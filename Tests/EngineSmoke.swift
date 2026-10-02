@@ -175,13 +175,36 @@ import Foundation
       data: data, resources: resources, budget: budget,
       "INSERT INTO rules (id, stage, conditions, actions, conditions_op, tombstone) VALUES ('native-rule', 'post', ?, ?, 'and', 0)",
       [#"[{"field":"notes","op":"is","value":"Rule check"}]"#, actions])
+    // A payee's category rule, as category learning makes.
+    guard let learned = before.payees.first(where: { $0.id != payee.id }) else { throw EngineFailure("Demo fixture has one payee") }
+    _ = try query(
+      data: data, resources: resources, budget: budget,
+      "INSERT INTO rules (id, stage, conditions, actions, conditions_op, tombstone) VALUES ('native-payee-rule', NULL, ?, ?, 'and', 0)",
+      [#"[{"field":"payee","op":"is","value":"\#(learned.id)"}]"#,
+       #"[{"field":"category","op":"set","value":"\#(expenses[1].id)"}]"#])
     _ = try await engine.call("open", arguments: ["id": .string(budget)])
+    // Choosing a payee in the editor previews what its rules fill in, as Actual's mobile editor does.
+    func preview(_ payeeID: String, category: String) async throws -> RuledTransaction {
+      try await engine.call("previewRules", arguments: [
+        "accountId": .string(account.id), "date": .string("2026-09-20"), "payeeId": .string(payeeID),
+        "categoryId": .string(category), "amount": .number(-505), "notes": .string(""), "cleared": .bool(false),
+      ], as: RuledTransaction.self)
+    }
+    let ruled = try await preview(learned.id, category: "")
+    precondition(ruled.categoryId == expenses[1].id && ruled.payeeId == learned.id && ruled.amount == -505,
+                 "Choosing a payee did not preview its category rule: \(ruled)")
+    let replaced = try await preview(learned.id, category: expenses[0].id)
+    precondition(replaced.categoryId == expenses[1].id, "A payee's rule sets its category when the payee is chosen")
+    let kept = try await preview(payee.id, category: expenses[0].id)
+    precondition(kept.categoryId == expenses[0].id, "Another payee's rule changed the category")
+    let unsaved = try await snapshot(engine).transactions
+    precondition(!unsaved.contains { $0.amount == -505 }, "Previewing rules saved a transaction")
     let chosen = try await save("Rule check", amount: -503, payeeName: "Typed rule payee", category: expenses[0].id)
     precondition(chosen.categoryId == expenses[0].id, "A rule replaced the category the user chose")
     precondition(chosen.payeeId == payee.id, "A rule's payee must apply, as when choosing a payee in Actual")
     let empty = try await save("Rule check", amount: -504)
     precondition(empty.categoryId == expenses[1].id && empty.payeeId == payee.id, "A rule did not fill empty fields")
-    print("PASS: case-insensitive payee reuse, future-dated balances, rules fill but never replace user entries")
+    print("PASS: case-insensitive payee reuse, future-dated balances, rules fill but never replace user entries, choosing a payee previews its rules")
   }
   static func trackingBudget(data: URL, resources: URL) async throws {
     let engine = try EngineClient(
