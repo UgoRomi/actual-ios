@@ -496,6 +496,11 @@ final class AppModel {
         ], as: Average.self).amount
     }
 
+    /// A new transaction as Actual's rules would fill it in, for the editor to show before saving.
+    func previewRules(_ arguments: [String: JSONValue]) async throws -> RuledTransaction {
+        try await client().call("previewRules", arguments: arguments, as: RuledTransaction.self)
+    }
+
     /// A category's targets for the editor. Reading them changes nothing.
     func categoryTargets(categoryID: String, month: String) async throws -> CategoryTargets {
         try await client().call("categoryTargets", arguments: [

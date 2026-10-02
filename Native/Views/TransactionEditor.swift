@@ -21,6 +21,8 @@ struct TransactionEditor: View {
     @State private var initialized = false
     /// A split's parts, in the transaction's direction. Empty for an ordinary transaction.
     @State private var splits: [SplitDraft] = []
+    /// A payee a rule chose, which should not run rules again.
+    @State private var ruledPayee: String?
 
     private var editable: Bool { transaction?.canEdit ?? true }
     /// The latest load: this transaction, or a transfer's linked transaction,
@@ -166,6 +168,37 @@ struct TransactionEditor: View {
                 Button("Cancel", role: .cancel) { }
             } message: { Text(saveMessage) }
             .onAppear { initialize() }
+            .onChange(of: payee) { _, chosen in fillFromRules(payee: chosen) }
+        }
+    }
+
+    /// As Actual's mobile editor: choosing a payee for a new transaction runs rules at once,
+    /// and whatever they set, such as the payee's category, replaces the editor's value.
+    private func fillFromRules(payee chosen: String) {
+        if chosen == ruledPayee { ruledPayee = nil; return }
+        guard transaction == nil, transferAccount.isEmpty, splits.isEmpty,
+              let payeeID = model.overview?.payees.first(where: { $0.name == chosen })?.id else { return }
+        let sent = (account: account, date: BudgetDate.day(date), category: category, notes: notes, cleared: cleared,
+                    amount: Money.parse(amount).map { isOutflow ? -$0 : $0 } ?? 0)
+        Task {
+            guard let ruled = try? await model.previewRules([
+                "accountId": .string(sent.account), "date": .string(sent.date), "payeeId": .string(payeeID),
+                "categoryId": sent.category.isEmpty ? .null : .string(sent.category), "amount": .number(sent.amount),
+                "notes": .string(sent.notes), "cleared": .bool(sent.cleared),
+            ]), payee == chosen else { return }
+            if ruled.payeeId != payeeID, let renamed = model.overview?.payees.first(where: { $0.id == ruled.payeeId }) {
+                ruledPayee = renamed.name
+                payee = renamed.name
+            }
+            if ruled.accountId != sent.account, accounts.contains(where: { $0.id == ruled.accountId }) { account = ruled.accountId }
+            if ruled.date != sent.date, let ruledDate = BudgetDate.date(ruled.date) { date = ruledDate }
+            if (ruled.categoryId ?? "") != sent.category { category = ruled.categoryId ?? "" }
+            if ruled.amount != sent.amount {
+                amount = Money.editable(abs(ruled.amount))
+                if ruled.amount != 0 { isOutflow = ruled.amount < 0 }
+            }
+            if ruled.notes != sent.notes { notes = ruled.notes }
+            if ruled.cleared != sent.cleared { cleared = ruled.cleared }
         }
     }
 

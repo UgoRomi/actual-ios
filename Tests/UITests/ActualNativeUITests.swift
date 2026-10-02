@@ -1049,6 +1049,60 @@ final class ActualNativeUITests: XCTestCase {
         capture("register-uncategorized")
     }
 
+    /// As in Actual, categorizing a payee's transactions learns its category, and choosing
+    /// that payee for a new transaction fills the category in before saving.
+    @MainActor
+    func testDemoPayeeFillsLearnedCategory() {
+        let app = XCUIApplication()
+        app.launch()
+        let demoButton = app.buttons["Explore a demo budget"]
+        let accountsTab = app.tabBars.buttons["Accounts"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        XCTAssertTrue(accountsTab.waitForExistence(timeout: 60), "The demo budget should open")
+        accountsTab.tap()
+        app.staticTexts["Capital One Checking"].tap()
+        let checking = app.navigationBars["Capital One Checking"]
+        XCTAssertTrue(checking.waitForExistence(timeout: 10))
+        let payee = "Learn UI \(Int(Date().timeIntervalSince1970) % 100_000)"
+        let editor = app.navigationBars["New transaction"]
+        let categoryRow = app.buttons["category-row"]
+        func startTransaction(_ amount: String) {
+            checking.buttons["Add transaction"].tap()
+            XCTAssertTrue(editor.waitForExistence(timeout: 10))
+            XCTAssertTrue(app.buttons["Clear"].waitForExistence(timeout: 5), "The amount should be focused")
+            tapKeys(app, amount)
+            app.buttons["payee-row"].tap()
+            // The register behind the editor has its own search field.
+            let search = app.searchFields["Search or add a payee"]
+            XCTAssertTrue(search.waitForExistence(timeout: 5))
+            search.tap()
+            search.typeText(payee)
+            let add = app.buttons["Add “\(payee)”"]
+            if add.waitForExistence(timeout: 2) { add.tap() } else { app.buttons[payee].firstMatch.tap() }
+            XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        }
+        // Three transactions in Food teach the payee its category.
+        for amount in ["11", "12", "13"] {
+            startTransaction(amount)
+            categoryRow.tap()
+            let categorySearch = app.searchFields["Search categories"]
+            XCTAssertTrue(categorySearch.waitForExistence(timeout: 5))
+            categorySearch.tap()
+            categorySearch.typeText("Food")
+            app.buttons["Food"].firstMatch.tap()
+            XCTAssertTrue(editor.waitForExistence(timeout: 10))
+            XCTAssertTrue(describes(categoryRow, "Food"))
+            editor.buttons["Save"].tap()
+            XCTAssertTrue(wait(forAbsence: editor), "The transaction should save")
+        }
+
+        startTransaction("14")
+        let deadline = Date().addingTimeInterval(10)
+        while !describes(categoryRow, "Food") && Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.25)) }
+        XCTAssertTrue(describes(categoryRow, "Food"), "Choosing the payee should fill in its learned category: \(categoryRow.label)")
+        capture("payee-fills-category")
+    }
+
     /// Transfers from one demo account to another, then deletes the transfer from the other side.
     @MainActor
     func testDemoTransfer() {

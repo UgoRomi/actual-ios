@@ -532,6 +532,17 @@ struct ManagedPayee: Decodable, Identifiable, Sendable, Hashable {
     let learnCategories: Bool
 }
 
+/// A new transaction's fields after Actual's rules ran on it.
+struct RuledTransaction: Decodable, Sendable, Equatable {
+    let accountId: String
+    let date: String
+    let payeeId: String?
+    let categoryId: String?
+    let amount: Int
+    let notes: String
+    let cleared: Bool
+}
+
 /// An account being compared with a balance from the bank. As in Actual, it is not saved.
 struct Reconciliation: Equatable, Sendable {
     let accountID: String
