@@ -31,7 +31,8 @@ struct BudgetView: View {
                             Button { showsSummary = true } label: { summary(budget) }
                                 .buttonStyle(.plain).disabled(model.isBusy)
                                 .accessibilityHint("Show how To Budget adds up, and move money")
-                        } else { summary(budget) }
+                                .accessibilityIdentifier("budget.summary")
+                        } else { summary(budget).accessibilityIdentifier("budget.summary") }
                         BudgetBanners(budget: budget) { route = $0 }
                         if budget.groups.isEmpty {
                             ContentUnavailableView {
@@ -175,11 +176,18 @@ struct BudgetView: View {
 
     private func summary(_ budget: BudgetMonth) -> some View {
         let headline = SummaryHeadline(budget)
+        // A tinted card when the month needs attention, so it reads at a glance; the theme's card once it balances.
+        let (fill, text): (AnyShapeStyle, Color) = switch headline.state {
+        case .surplus: (ActualTheme.positiveCard, .white)
+        case .balanced: (ActualTheme.card, ActualTheme.onCard)
+        case .deficit: (ActualTheme.negativeCard, .white)
+        }
         let title = Label(headline.title, systemImage: headline.systemImage)
-            .font(.subheadline.weight(.medium)).foregroundStyle(ActualTheme.onCard.opacity(0.8))
-        let amount = Text(Money.formatted(headline.amount, currency: model.currency))
+            .font(.subheadline.weight(.medium)).foregroundStyle(text.opacity(0.85))
+            .contentTransition(.symbolEffect(.replace))
+        let amount = Text(headline.amountText(currency: model.currency))
             .font(.system(.title, design: .rounded, weight: .bold)).monospacedDigit()
-            .foregroundStyle(ActualTheme.onCard)
+            .foregroundStyle(text).contentTransition(.numericText(value: Double(headline.amount)))
         return VStack(alignment: .leading, spacing: 10) {
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) { title; Spacer(minLength: 0); amount }
@@ -187,24 +195,40 @@ struct BudgetView: View {
             }
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 16) {
-                    summaryValue("Budgeted", budget.totalBudgeted)
+                    summaryValue("Budgeted", budget.totalBudgeted, text)
                     Spacer(minLength: 0)
-                    summaryValue("Spent", budget.totalSpent)
+                    summaryValue("Spent", budget.totalSpent, text)
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    summaryValue("Budgeted", budget.totalBudgeted)
-                    summaryValue("Spent", budget.totalSpent)
+                    summaryValue("Budgeted", budget.totalBudgeted, text)
+                    summaryValue("Spent", budget.totalSpent, text)
                 }
+            }
+            if let hint = headline.hint {
+                Label(hint, systemImage: "chevron.right")
+                    .labelStyle(TrailingIconLabelStyle())
+                    .font(.footnote.weight(.semibold)).foregroundStyle(text.opacity(0.85))
             }
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
-        .background(ActualTheme.card, in: RoundedRectangle(cornerRadius: 22))
+        .background(fill, in: RoundedRectangle(cornerRadius: 22))
+        .animation(.snappy, value: headline.state)
+        .animation(.snappy, value: headline.amount)
+        // Felt when budgeting changes the state, not when moving between months.
+        .sensoryFeedback(trigger: [budget.month: headline.state]) { old, new in
+            guard old.keys == new.keys else { return nil }
+            return switch new[budget.month] {
+            case .balanced: .success
+            case .deficit: .warning
+            default: nil
+            }
+        }
     }
 
-    private func summaryValue(_ label: String, _ value: Int) -> some View {
+    private func summaryValue(_ label: String, _ value: Int, _ text: Color) -> some View {
         HStack(spacing: 6) {
-            Text(label).foregroundStyle(ActualTheme.onCard.opacity(0.7))
-            Text(Money.formatted(value, currency: model.currency)).fontWeight(.semibold).monospacedDigit().foregroundStyle(ActualTheme.onCard)
+            Text(label).foregroundStyle(text.opacity(0.75))
+            Text(Money.formatted(value, currency: model.currency)).fontWeight(.semibold).monospacedDigit().foregroundStyle(text)
         }.font(.subheadline).accessibilityElement(children: .combine)
     }
 
@@ -477,24 +501,52 @@ struct TargetStatus {
 
 /// Envelope budgets lead with money left to budget; tracking budgets with savings, as in Actual's mobile web app.
 private struct SummaryHeadline {
+    /// Money waiting for a job, every unit assigned, or more assigned than there is.
+    enum State { case surplus, balanced, deficit }
+
     let title: String
     let systemImage: String
     let amount: Int
+    let state: State
+    /// What tapping the card offers, when an envelope budget has money left.
+    let hint: String?
 
     init(_ budget: BudgetMonth) {
         amount = budget.headlineAmount
+        state = amount > 0 ? .surplus : amount < 0 ? .deficit : .balanced
         switch budget.budgetType {
         case .envelope:
-            title = amount < 0 ? "Over budget" : "Available to budget"
-            systemImage = amount < 0 ? "exclamationmark.circle" : "circle.dotted"
+            switch state {
+            case .surplus:
+                (title, systemImage, hint) = ("Available to budget", "tray.and.arrow.down.fill", "Assign it to categories")
+            case .balanced:
+                (title, systemImage, hint) = ("Fully budgeted", "checkmark.circle.fill", nil)
+            case .deficit:
+                // The overbudgeted banner below already offers to cover it.
+                (title, systemImage, hint) = ("Over budget", "exclamationmark.triangle.fill", nil)
+            }
         case .tracking:
-            systemImage = amount < 0 ? "exclamationmark.circle" : "banknote"
+            hint = nil
+            systemImage = amount < 0 ? "exclamationmark.triangle.fill" : "banknote"
             if budget.savedIsProjected {
                 title = "Projected savings"
             } else {
                 title = amount < 0 ? "Overspent" : "Saved"
             }
         }
+    }
+
+    /// Signed when not zero, so the state also reads without color.
+    func amountText(currency: String) -> String {
+        let formatted = Money.formatted(amount, currency: currency)
+        return amount > 0 ? "+" + formatted : formatted
+    }
+}
+
+/// The icon after the title, as a disclosure.
+private struct TrailingIconLabelStyle: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) { configuration.title; configuration.icon.imageScale(.small) }
     }
 }
 

@@ -389,3 +389,13 @@ Checked against upstream Actual 26.9.0 (the pinned revision): the mobile editor'
 The UI test `testDemoSplitTransaction` passed on a new iPhone 17 Pro / iOS 26.5 simulator. It now fills the second part with **Use Remaining**, checks that the buttons disappear once the split balances, then uses **Split Evenly** to set both parts to 15.00. The split-editor screenshot was inspected. The first run failed in the test itself: the form unloads off-screen rows, so it now finds the button by its amount rather than by its position.
 
 Not verified end to end: custom themes, dark appearance, and VoiceOver.
+
+## To Budget at a glance (2026-10-02)
+
+Checked against upstream Actual at the pinned revision: the mobile `ToBudget` in `desktop-client/src/components/mobile/budget/BudgetTable.tsx` colors the amount with `toBudgetPositive` above zero, `toBudgetNegative` below, and a neutral color at zero. The summary card does the same with the whole card: the theme's positive color when money is left to budget, its negative color when the month is overbudgeted, and the theme's card once every unit is assigned. Each state also has its own icon, title, and signed amount, so it reads without color. Tracking budgets use the same colors for saved and overspent.
+
+`./scripts/test-themes.sh` passed with a new check that the tinted card darkens a theme's positive or negative color only as far as white text needs to reach 5.5:1, including for white and yellow, and leaves colors that already reach it as they are.
+
+On a new iPhone 17 Pro / iOS 27 simulator, `testDemoBudgetNavigationAndTransactionEditor`, `testDemoBudgetActions` (now also checking the card says **Available to budget** after setting budgets to zero), and `testDemoPayeesRulesAndFormatting` passed, each on a freshly erased simulator. Screenshots of the three states in the light Actual theme were inspected.
+
+Not verified end to end: dark appearance, the Sterling and Payday themes on screen (their colors are checked by the contrast test instead), the haptics, and VoiceOver.
