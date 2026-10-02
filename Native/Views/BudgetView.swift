@@ -54,6 +54,8 @@ struct BudgetView: View {
             }
             .background(ActualTheme.background)
             .navigationTitle("Budget")
+            // Keeps the large title on the same row as the toolbar buttons.
+            .toolbarTitleDisplayMode(.inlineLarge)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) { monthMenu }
                 ToolbarItem(placement: .topBarTrailing) { SettingsButton() }
