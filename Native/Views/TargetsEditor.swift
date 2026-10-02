@@ -727,3 +727,129 @@ private struct DescribeTargetsSheet: View {
         }
     }
 }
+
+struct CleanupRoute: Hashable {}
+
+/// A category's End of month cleanup settings, like the cleanup pane of Actual's automations editor.
+struct CleanupEditor: View {
+    let category: BudgetCategory
+    @Binding var path: NavigationPath
+    @Environment(AppModel.self) private var model
+    @State private var loaded: CategoryCleanup?
+    @State private var loadError: String?
+    @State private var original = CleanupConfig()
+    @State private var config = CleanupConfig()
+    @State private var confirmDiscard = false
+    @State private var namingPool = false
+    @State private var poolName = ""
+
+    private var hasChanges: Bool { config != original }
+
+    var body: some View {
+        ThemedForm {
+            if let loadError {
+                Section { ErrorNotice(message: loadError) { Task { await load() } } }
+            } else if let loaded {
+                content(loaded)
+            } else {
+                Section { ProgressView().frame(maxWidth: .infinity) }
+            }
+        }
+        .navigationTitle("End of Month Cleanup")
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarBackButtonHidden(hasChanges)
+        .toolbar {
+            if hasChanges {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { confirmDiscard = true }.disabled(model.isBusy)
+                }
+            }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") {
+                    Task { if await model.saveCleanup(categoryID: category.id, config: config) { path.removeLast() } }
+                }.bold().disabled(!hasChanges || model.isBusy)
+            }
+        }
+        .confirmationDialog("Discard your changes to the cleanup settings?", isPresented: $confirmDiscard, titleVisibility: .visible) {
+            Button("Discard Changes", role: .destructive) { path.removeLast() }
+        }
+        .alert("New Pool", isPresented: $namingPool) {
+            TextField("Name", text: $poolName)
+            Button("Cancel", role: .cancel) {}
+            Button("Add") { addPool(poolName) }
+        } message: {
+            Text("Give other categories the same pool name to move leftover between them.")
+        }
+        .task { if loaded == nil { await load() } }
+    }
+
+    @ViewBuilder private func content(_ loaded: CategoryCleanup) -> some View {
+        Section {
+            Text("End of month cleanup moves leftover money in one step. Categories that send leftover return what they have left to a pool. Categories that receive leftover share that pool by weight. The pool is To Budget unless you add a named pool, which moves money only between its own categories.")
+                .font(.footnote).foregroundStyle(.secondary)
+        } footer: {
+            if loaded.source == .notes, !loaded.noteLines.isEmpty {
+                Text("Read from the category’s notes. Saving manages its targets and cleanup here; Actual then ignores the #template, #goal, and #cleanup lines in its notes.")
+            }
+        }
+        scope($config.global, title: "To Budget", send: "Send Leftover", take: "Receive Leftover")
+        ForEach($config.pools) { $pool in
+            scope($pool, title: "Pool: \(pool.pool ?? "")", send: "Send Leftover to Pool", take: "Receive Leftover from Pool")
+        }
+        // Like the web editor, one pool per category: with more, the result depends on category order.
+        if config.pools.isEmpty {
+            Section {
+                ForEach(loaded.pools, id: \.self) { name in
+                    Button("Add to “\(name)”", systemImage: "plus.circle") { addPool(name) }
+                }
+                Button("New Pool", systemImage: "plus") { poolName = ""; namingPool = true }
+            } header: { Text("Pool") } footer: {
+                Text("Run End of Month Cleanup from the Budget screen’s Month actions menu or the budget summary.")
+            }
+        }
+        if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
+    }
+
+    private func scope(_ scope: Binding<CleanupConfig.Scope>, title: String, send: String, take: String) -> some View {
+        let value = scope.wrappedValue
+        return Section {
+            Toggle(send, isOn: scope.send)
+            Toggle(take, isOn: scope.take)
+            if value.take {
+                if value.pool != nil {
+                    Toggle("Only Enough to Cover Overspending", isOn: scope.overspendOnly)
+                }
+                if !value.overspendOnly || value.pool == nil {
+                    Stepper("Weight: \(value.weight)", value: scope.weight, in: 1...max(999, value.weight))
+                }
+            }
+            if value.pool != nil {
+                Button("Remove Pool", systemImage: "trash", role: .destructive) {
+                    config.pools.removeAll { $0.id == value.id }
+                }
+            }
+        } header: { Text(title) } footer: {
+            if value.take, !value.overspendOnly || value.pool == nil {
+                Text("Categories share the leftover in proportion to their weights.")
+            }
+        }
+    }
+
+    private func addPool(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, config.pools.isEmpty else { return }
+        // Actual tells pools apart whatever the case; use the name other categories have.
+        let existing = loaded?.pools.first { $0.lowercased() == trimmed.lowercased() }
+        config.pools.append(CleanupConfig.Scope(pool: existing ?? trimmed))
+    }
+
+    private func load() async {
+        loadError = nil
+        do {
+            let cleanup = try await model.categoryCleanup(categoryID: category.id)
+            original = CleanupConfig(rows: cleanup.rows)
+            config = original
+            loaded = cleanup
+        } catch { loadError = error.localizedDescription }
+    }
+}

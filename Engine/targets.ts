@@ -200,7 +200,7 @@ function parseText(text: string): { templates: Template[]; source: string[]; err
 
 // Reading notes stores nothing: the web editor does, but opening a category
 // here must not change it.
-async function noteTemplates(categoryId: string) {
+export async function noteTemplates(categoryId: string) {
   const [category] = await getCategoriesWithTemplateNotes([categoryId]);
   if (!category?.note) return { note: "", templates: [] as Template[], source: [] as string[] };
   return { note: category.note, ...parseText(category.note) };
@@ -261,7 +261,7 @@ function migrate(templates: Template[], schedules: Schedule[]): Template[] {
 }
 
 type Context = { schedules: Schedule[]; income: { id: string; name: string }[] };
-async function context(): Promise<Context> {
+export async function context(): Promise<Context> {
   const schedules = (await getActiveSchedules())
     .filter((s) => s.name && !s.completed)
     .map((s) => ({ id: s.id, name: s.name ?? "" }))
@@ -346,7 +346,7 @@ function conflicts(templates: Template[]): string[] {
   return result;
 }
 
-async function expenseCategory(categoryId: string) {
+export async function expenseCategory(categoryId: string) {
   const { data } = await lib.send("query", lib.q("categories").filter({ id: categoryId }).select("*").serialize());
   const category = data[0];
   if (!category) throw new Error("This category no longer exists.");
@@ -371,7 +371,7 @@ async function preview(month: string, categoryId: string, templates: Template[],
 }
 
 // The web editor's form of stored or parsed templates.
-function editorForm(stored: Template[], ctx: Context): Template[] {
+export function editorForm(stored: Template[], ctx: Context): Template[] {
   return migrate(stored, ctx.schedules).map((t) => {
     // Notes name a percentage's income category; the editor uses its id.
     if (t.type !== "percentage" || specialSources.includes(t.category)) return t;

@@ -266,6 +266,19 @@ Screenshots of the target form, the targets list, and the funded budget row were
 
 Not verified end to end: schedule, percentage, history, weekly-cap, and early-spending forms on screen (their saved formats are validated by the engine); targets synced to Actual web and shown there; tracking budgets; and VoiceOver.
 
+
+## End of month cleanup (2026-10-02)
+
+Cleanup follows Actual's `budget/cleanup-goal-template` handler (`loot-core/src/server/budget/cleanup-template.ts`) and the cleanup pane of its automations editor (`desktop-client/src/components/budget/goals/cleanupModel.ts` and `editor/CleanupAutomation.tsx`). `Engine/cleanup.ts` reads a category's `cleanup_def`, or its `#cleanup` notes lines with Actual's grammar, and saves with `budget/set-category-automations` using the `ui` source, together with the category's targets, as the web editor does. Pools cross the bridge by name and are found or created with `budget/create-cleanup-group`. Reading stores nothing, unlike the web editor, which stores notes rules when it opens. Saving a category whose targets are still in notes moves those targets to the editor unchanged, and is refused while Actual cannot read one of them.
+
+Actual reports "All categories were up to date" whenever no category sent leftover, even after sharing out To Budget. The app then says how much left To Budget instead. Other messages are Actual's.
+
+`./scripts/test-engine.sh` checks on the demo budget that rules are stored in Actual's format with the `ui` source, that a pool is created once whatever the case of its name, that a weight below one is refused, that notes rules are read without writing `cleanup_def`, and that running cleanup returns a pool sender's balance to its receiver and leaves To Budget at exactly zero. Strict bridge type checking passed.
+
+The UI test `testDemoCleanup` passed on a new iPhone 17 Pro simulator (iOS 27): it marks a category to receive leftover, saves, reopens the saved setting, and runs cleanup from the budget summary after confirming. Screenshots of the editor, the summary, and the result were inspected.
+
+Not verified end to end: pools and overspending-only rules on screen (their saved format is checked by the engine test), the Month actions menu entry, rules synced to Actual web and shown there, and VoiceOver.
+
 ## Reports (2026-09-27)
 
 Reports follow Actual's `desktop-client/src/components/reports` at the pinned revision: `Overview.tsx` for the read-only, one-column mobile dashboard, `reportRanges.ts` and `dateRangePresets.ts` for ranges, the card and page components in `reports/`, and the calculations in `spreadsheets/`. `Engine/reports.ts` ports the net worth, cash flow, spending, summary, and calendar calculations, including net worth's alignment of transfer legs posted on different dates. It reads each widget's saved filters and time frame itself and returns integer minor units; upstream's fractional averages and daily budgets are rounded when returned, as Actual rounds them for display.

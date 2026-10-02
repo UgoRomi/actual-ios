@@ -34,8 +34,8 @@ final class AppModel {
     var bankSyncErrorMessage: String?
     var bankSyncAccountID: String?
     var reconciliation: Reconciliation?
-    /// The result of applying targets to the month.
-    var targetsMessage: String?
+    /// The result of applying targets or End of month cleanup to the month.
+    var budgetNotice: BudgetNotice?
     /// Changes whenever saved budget data may have changed, so reports reload.
     var dataRevision = 0
     /// The engine's latest register and accounts, before pending edits.
@@ -340,7 +340,7 @@ final class AppModel {
         let switchesBudget = ["open", "download", "demo"].contains(method)
         let isEdit = ["saveTransaction", "deleteTransaction", "budget", "setCleared", "unlockTransaction",
                       "createReconciliationTransaction", "finishReconciliation", "saveTargets",
-                      "applyTargets", "budgetAction", "commitImport", "saveReportWidget"].contains(method)
+                      "applyTargets", "saveCleanup", "cleanupMonth", "budgetAction", "commitImport", "saveReportWidget"].contains(method)
             || Self.managementMethods.contains(method)
         if method == "sync" {
             guard let task = beginBudgetSync() else {
@@ -365,7 +365,7 @@ final class AppModel {
             // states change only balances and the register. Other transaction
             // changes also affect the month and payees.
             let parts: Set<BudgetPart> = switch method {
-            case "budget", "saveTargets", "applyTargets", "budgetAction": [.month]
+            case "budget", "saveTargets", "applyTargets", "saveCleanup", "cleanupMonth", "budgetAction": [.month]
             case "setCleared", "unlockTransaction", "finishReconciliation": [.overview, .register]
             // A widget's settings change no budget data; reports reload with the new revision.
             case "saveReportWidget": []
@@ -541,8 +541,38 @@ final class AppModel {
         let applied = await perform("applyTargets", arguments: arguments) { data in
             message = (try? JSONDecoder().decode(TargetsApplied.self, from: data))?.message
         }
-        if applied, categoryID == nil { targetsMessage = message }
+        if applied, categoryID == nil, let message { budgetNotice = BudgetNotice(title: "Targets", message: message) }
         return applied
+    }
+
+    /// A category's End of month cleanup settings. Reading them changes nothing.
+    func categoryCleanup(categoryID: String) async throws -> CategoryCleanup {
+        try await client().call("categoryCleanup", arguments: ["categoryId": .string(categoryID)], as: CategoryCleanup.self)
+    }
+
+    func saveCleanup(categoryID: String, config: CleanupConfig) async -> Bool {
+        await perform("saveCleanup", arguments: [
+            "categoryId": .string(categoryID), "rows": .array(config.rows.map(\.json)),
+        ])
+    }
+
+    /// Actual's End of month cleanup: categories that send leftover return it, overspending
+    /// is covered, and what is left to budget is shared among the categories that receive it.
+    @discardableResult
+    func cleanupMonth(_ month: String) async -> Bool {
+        var outcome: CleanupResult?
+        let done = await perform("cleanupMonth", arguments: ["month": .string(month)]) { data in
+            outcome = try? JSONDecoder().decode(CleanupResult.self, from: data)
+        }
+        if done, let outcome {
+            // Actual counts only categories that sent leftover, so it calls a month
+            // whose To Budget was shared out "up to date".
+            let message = outcome.upToDate && outcome.assigned > 0
+                ? "Moved \(Money.formatted(outcome.assigned, currency: currency)) from To Budget into your categories."
+                : outcome.message
+            budgetNotice = BudgetNotice(title: "End of Month Cleanup", message: message)
+        }
+        return done
     }
 
     /// One of Actual's budget menu actions for a month, such as copying last

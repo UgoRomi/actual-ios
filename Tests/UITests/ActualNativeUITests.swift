@@ -333,6 +333,61 @@ final class ActualNativeUITests: XCTestCase {
         capture("targets-budget")
     }
 
+    /// Marks a category to receive leftover, then shares To Budget with End of month cleanup.
+    @MainActor
+    func testDemoCleanup() {
+        let app = XCUIApplication()
+        app.launch()
+        let demoButton = app.buttons["Explore a demo budget"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        XCTAssertTrue(app.tabBars.buttons["Budget"].waitForExistence(timeout: 60), "The demo budget should open")
+        app.tabBars.buttons["Budget"].tap()
+
+        let row = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Food")).firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.tap()
+        let cleanup = app.buttons["End of Month Cleanup"]
+        XCTAssertTrue(cleanup.waitForExistence(timeout: 10), "The budget editor should offer cleanup settings")
+        cleanup.tap()
+        let editor = app.navigationBars["End of Month Cleanup"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        let receive = app.switches["Receive Leftover"]
+        XCTAssertTrue(receive.waitForExistence(timeout: 10))
+        XCTAssertFalse(editor.buttons["Save"].isEnabled, "Nothing to save yet")
+        receive.switches.firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["Weight: 1"].waitForExistence(timeout: 5), "A receiving category has a weight")
+        XCTAssertTrue(app.buttons["New Pool"].exists)
+        capture("cleanup-editor")
+        XCTAssertTrue(wait(for: editor.buttons["Save"], enabled: true))
+        editor.buttons["Save"].tap()
+        XCTAssertTrue(app.buttons["Edit Category"].waitForExistence(timeout: 10), "Saving returns to the budget editor")
+        // Saved settings show when the editor opens again.
+        cleanup.tap()
+        XCTAssertTrue(app.staticTexts["Weight: 1"].waitForExistence(timeout: 10), "The saved setting should load")
+        editor.buttons.firstMatch.tap()
+        app.buttons["Cancel"].firstMatch.tap()
+
+        let summary = app.buttons.matching(NSPredicate(
+            format: "label BEGINSWITH %@ OR label BEGINSWITH %@", "Available to budget", "Over budget")).firstMatch
+        XCTAssertTrue(summary.waitForExistence(timeout: 10))
+        summary.tap()
+        XCTAssertTrue(app.navigationBars["Budget Summary"].waitForExistence(timeout: 10))
+        let run = app.buttons["End of Month Cleanup"]
+        scroll(app, to: run)
+        capture("cleanup-summary")
+        run.tap()
+        let confirm = app.buttons["Run Cleanup"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 10), "Cleanup asks before changing budgets")
+        confirm.tap()
+        let done = app.alerts["End of Month Cleanup"]
+        XCTAssertTrue(done.waitForExistence(timeout: 20), "Cleanup reports what it did")
+        capture("cleanup-result")
+        done.buttons["OK"].tap()
+        // The demo may have nothing left to budget; the engine test checks the amounts.
+        XCTAssertTrue(app.staticTexts["To Budget"].waitForExistence(timeout: 10))
+        app.buttons["Done"].tap()
+    }
+
     /// Runs a month action, moves money from the budget summary, and opens a category's budget and balance actions.
     @MainActor
     func testDemoBudgetActions() {

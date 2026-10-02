@@ -193,6 +193,7 @@ struct EnvelopeSummarySheet: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var path = NavigationPath()
+    @State private var confirmCleanup = false
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -245,6 +246,16 @@ struct EnvelopeSummarySheet: View {
                             Text("No actions available").foregroundStyle(.secondary)
                         }
                     }.disabled(model.isBusy)
+                    Section {
+                        if toBudget > 0 {
+                            Button("Apply Targets", systemImage: "wand.and.stars") {
+                                Task { await model.applyTargets(month: month) }
+                            }
+                        }
+                        Button("End of Month Cleanup", systemImage: "arrow.triangle.2.circlepath") { confirmCleanup = true }
+                    } header: { Text("Assign automatically") } footer: {
+                        Text("Apply Targets budgets what targets ask for in categories with nothing budgeted yet. End of Month Cleanup shares what is left among the categories set to receive leftover; choose them in each category’s budget editor.")
+                    }.disabled(model.isBusy)
                 }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
             }
@@ -253,6 +264,8 @@ struct EnvelopeSummarySheet: View {
             .navigationDestination(for: BudgetRoute.self) { route in
                 BudgetRouteView(route: route, month: month) { path = NavigationPath() }
             }
+            .cleanupConfirmation(isPresented: $confirmCleanup, month: month)
+            .budgetNotice()
         }
     }
 
@@ -376,4 +389,43 @@ struct BudgetBanners: View {
         .padding(14).frame(maxWidth: .infinity, alignment: .leading)
         .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 18))
     }
+}
+
+private struct CleanupConfirmation: ViewModifier {
+    @Binding var isPresented: Bool
+    let month: String
+    @Environment(AppModel.self) private var model
+
+    func body(content: Content) -> some View {
+        content.confirmationDialog("Run end of month cleanup?", isPresented: $isPresented, titleVisibility: .visible) {
+            Button("Run Cleanup") { Task { await model.cleanupMonth(month) } }
+        } message: {
+            Text("Categories that send leftover return it. Overspending without rollover is covered first, then what is left to budget is shared among the categories that receive leftover. This changes budgeted amounts.")
+        }
+    }
+}
+
+/// Shows what applying targets or End of month cleanup did.
+private struct BudgetNoticeAlert: ViewModifier {
+    var enabled = true
+    @Environment(AppModel.self) private var model
+
+    func body(content: Content) -> some View {
+        content.alert(
+            model.budgetNotice?.title ?? "",
+            isPresented: Binding(get: { enabled && model.budgetNotice != nil }, set: { if !$0 { model.budgetNotice = nil } })
+        ) {
+            Button("OK") {}
+        } message: {
+            Text(model.budgetNotice?.message ?? "")
+        }
+    }
+}
+
+extension View {
+    /// Confirms and runs Actual's End of month cleanup for a month.
+    func cleanupConfirmation(isPresented: Binding<Bool>, month: String) -> some View {
+        modifier(CleanupConfirmation(isPresented: isPresented, month: month))
+    }
+    func budgetNotice(enabled: Bool = true) -> some View { modifier(BudgetNoticeAlert(enabled: enabled)) }
 }

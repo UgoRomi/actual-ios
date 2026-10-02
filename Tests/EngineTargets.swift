@@ -198,3 +198,119 @@ extension EngineSmoke {
     print("PASS: category targets preview, validation, save, apply, goals, notes, and source")
   }
 }
+
+extension EngineSmoke {
+  /// Sets cleanup rules and runs End of month cleanup the way Actual's automations editor and budget menu do.
+  static func cleanup(data: URL, resources: URL) async throws {
+    var engine = try EngineClient(
+      dataDirectory: data, resourceDirectory: resources, useKeychain: false)
+    let budget = try await activeBudget(engine)
+    let month = BudgetDate.month(Date())
+    func check(_ condition: Bool, _ message: @autoclosure () -> String = "", line: UInt = #line) {
+      precondition(condition, message(), line: line)
+    }
+    func sql(_ statement: String, _ params: [Any] = []) throws -> [[String: Any]] {
+      try query(data: data, resources: resources, budget: budget, statement, params)
+    }
+    func settings(_ id: String) async throws -> CategoryCleanup {
+      try await engine.call("categoryCleanup", arguments: ["categoryId": .string(id)], as: CategoryCleanup.self)
+    }
+    func save(_ id: String, _ config: CleanupConfig) async throws {
+      _ = try await engine.call(
+        "saveCleanup", arguments: ["categoryId": .string(id), "rows": .array(config.rows.map(\.json))])
+    }
+    func setBudget(_ id: String, _ amount: Int) async throws {
+      _ = try await engine.call(
+        "budget", arguments: ["month": .string(month), "categoryId": .string(id), "amount": .number(amount)])
+    }
+    func category(_ id: String) async throws -> BudgetCategory {
+      guard let found = try await snapshot(engine, month: month).categories.first(where: { $0.id == id })
+      else { throw EngineFailure("Category \(id) is missing") }
+      return found
+    }
+
+    let expenses = try await snapshot(engine, month: month).categories.filter { !$0.isIncome }
+    guard expenses.count >= 8 else { throw EngineFailure("Demo fixture needs eight expense categories") }
+    // The targets test left the first three with targets; one of them sends its leftover.
+    let (migrated, big, small, sender, receiver, noted) =
+      (expenses[1], expenses[3], expenses[4], expenses[5], expenses[6], expenses[7])
+    let earlier = try await settings(migrated.id)
+    check(earlier.source == .ui && earlier.rows == [CleanupRow(role: .source, pool: nil, weight: 1)], "\(earlier)")
+
+    // A category without rules reads as empty, and the editor's model round-trips Actual's rows.
+    let empty = try await settings(big.id)
+    check(empty.source == .notes && empty.rows.isEmpty && empty.pools.isEmpty, "\(empty)")
+    var mixed = CleanupConfig()
+    mixed.global.send = true
+    mixed.global.take = true
+    mixed.global.weight = 4
+    mixed.pools = [CleanupConfig.Scope(pool: "Fun", send: true, take: true, weight: 2, overspendOnly: true)]
+    check(mixed.rows.map(\.role) == [.source, .sink, .source, .overspend] && mixed.rows[1].weight == 4)
+    check(CleanupConfig(rows: mixed.rows).rows == mixed.rows)
+
+    // Rules are stored as Actual's editor stores them, with pools found or created by name.
+    var share = CleanupConfig()
+    share.global.take = true
+    share.global.weight = 3
+    try await save(big.id, share)
+    share.global.weight = 1
+    try await save(small.id, share)
+    var sends = CleanupConfig()
+    sends.pools = [CleanupConfig.Scope(pool: "Fun", send: true)]
+    try await save(sender.id, sends)
+    var receives = CleanupConfig()
+    receives.pools = [CleanupConfig.Scope(pool: "fun", take: true)]
+    try await save(receiver.id, receives)
+    guard let stored = try sql("SELECT cleanup_def, template_settings, goal_def FROM categories WHERE id = ?", [big.id]).first
+    else { throw EngineFailure("Cleanup rules were not stored") }
+    check((stored["cleanup_def"] as? String) == #"[{"role":"sink","groupId":null,"weight":3}]"#, "\(stored)")
+    check((stored["template_settings"] as? String)?.contains("\"ui\"") == true && stored["goal_def"] is NSNull)
+    let groups = try sql("SELECT id, name FROM cleanup_groups WHERE tombstone = 0")
+    check(groups.count == 1 && (groups[0]["name"] as? String) == "Fun", "\(groups)")
+    let pooled = try await settings(receiver.id)
+    check(pooled.source == .ui && pooled.pools == ["Fun"], "\(pooled)")
+    check(pooled.rows == [CleanupRow(role: .sink, pool: "Fun", weight: 1)], "\(pooled.rows)")
+    let invalid: JSONValue = .object(["role": "sink", "pool": .null, "weight": .number(0)])
+    do {
+      _ = try await engine.call("saveCleanup", arguments: ["categoryId": .string(big.id), "rows": .array([invalid])])
+      check(false, "A weight of zero should be refused")
+    } catch { check(error.localizedDescription.contains("weight"), error.localizedDescription) }
+
+    // #cleanup notes lines are read without changing the category; saving moves them to the editor.
+    _ = try await engine.call("close")
+    _ = try sql(
+      "INSERT OR REPLACE INTO notes (id, note) VALUES (?, ?)",
+      [noted.id, "Spare\n#cleanup Fun sink 3\n#cleanup source\n#cleanup Fun"])
+    engine = try EngineClient(dataDirectory: data, resourceDirectory: resources, useKeychain: false)
+    _ = try await engine.call("open", arguments: ["id": .string(budget)])
+    let fromNotes = try await settings(noted.id)
+    check(fromNotes.source == .notes && fromNotes.noteLines.count == 3, "\(fromNotes)")
+    check(
+      fromNotes.rows == [
+        CleanupRow(role: .sink, pool: "Fun", weight: 3), CleanupRow(role: .source, pool: nil, weight: 1),
+        CleanupRow(role: .overspend, pool: "Fun", weight: 1),
+      ], "\(fromNotes.rows)")
+    check(try sql("SELECT cleanup_def FROM categories WHERE id = ?", [noted.id]).first?["cleanup_def"] is NSNull)
+    let editor = CleanupConfig(rows: fromNotes.rows)
+    check(editor.global.send && editor.pools.count == 1 && editor.pools[0].weight == 3 && !editor.pools[0].overspendOnly)
+    try await save(noted.id, CleanupConfig())
+    let cleared = try await settings(noted.id)
+    check(cleared.source == .ui && cleared.rows.isEmpty)
+
+    // Cleanup returns the pool sender's leftover to its receiver, then shares all of To Budget.
+    for expense in expenses { try await setBudget(expense.id, 0) }
+    let unfunded = try await category(sender.id)
+    try await setBudget(sender.id, 5_000 - unfunded.balance)
+    check(try await category(sender.id).balance == 5_000)
+    let before = try await snapshot(engine, month: month).toBudget ?? 0
+    guard before > 0 else { throw EngineFailure("Demo month has only \(before) to budget") }
+    let result = try await engine.call("cleanupMonth", arguments: ["month": .string(month)], as: CleanupResult.self)
+    check(!result.message.isEmpty && result.assigned == before, "\(result) before \(before)")
+    let after = try await snapshot(engine, month: month)
+    check(after.toBudget == 0, "\(String(describing: after.toBudget))")
+    check(try await category(sender.id).balance == 0)
+    check(try await category(receiver.id).budgeted >= 5_000)
+    check(after.categories.filter { !$0.isIncome && !$0.carryover }.allSatisfy { $0.balance >= 0 } || result.assigned == before)
+    print("PASS: cleanup rules save, pools, notes, and end of month cleanup (\(result.message.prefix(40)))")
+  }
+}

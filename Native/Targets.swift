@@ -46,6 +46,9 @@ struct ParsedTargets: Decodable, Sendable {
 
 struct TargetsApplied: Decodable, Sendable { let message: String }
 
+/// What a month-wide budget action reports once it is done.
+struct BudgetNotice: Equatable, Sendable { let title: String; let message: String }
+
 extension JSONValue: ExpressibleByStringLiteral {
     init(stringLiteral value: String) { self = .string(value) }
 }
@@ -316,4 +319,99 @@ struct TargetTemplate: Decodable, Identifiable, Sendable, Equatable {
         guard let date = BudgetDate.date(month + "-01") else { return "—" }
         return date.formatted(.dateTime.month(.abbreviated).year())
     }
+}
+
+/// A category's End of month cleanup settings, as Actual stores them.
+struct CategoryCleanup: Decodable, Sendable {
+    /// `#cleanup` lines in the category's notes, or Actual's editor. Saving moves notes settings to the editor.
+    let source: CategoryTargets.Source
+    let rows: [CleanupRow]
+    /// The notes lines Actual ignores once the settings are saved.
+    let noteLines: [String]
+    /// The names of the pools other categories use.
+    let pools: [String]
+}
+
+/// One cleanup rule: send leftover, receive a share of it, or receive only enough to cover overspending.
+struct CleanupRow: Decodable, Sendable, Equatable {
+    enum Role: String, Decodable, Sendable { case source, sink, overspend }
+    let role: Role
+    /// A named pool, or nil for To Budget.
+    let pool: String?
+    let weight: Int
+
+    var json: JSONValue {
+        .object(["role": .string(role.rawValue), "pool": pool.map(JSONValue.string) ?? .null, "weight": .number(weight)])
+    }
+}
+
+/// Cleanup settings as the web editor shows them: To Budget, then each pool.
+struct CleanupConfig: Equatable, Sendable {
+    struct Scope: Equatable, Sendable, Identifiable {
+        /// A named pool, or nil for To Budget.
+        var pool: String?
+        var send = false
+        var take = false
+        var weight = 1
+        /// Receive only enough to cover overspending. Pools only.
+        var overspendOnly = false
+        var id: String { pool?.lowercased() ?? "" }
+    }
+    var global = Scope()
+    var pools: [Scope] = []
+
+    init() {}
+
+    /// The web editor's `cleanupDefToEditor`.
+    init(rows: [CleanupRow]) {
+        for row in rows {
+            guard let pool = row.pool else {
+                switch row.role {
+                case .source: global.send = true
+                case .sink: global.take = true; global.weight = row.weight
+                case .overspend: break
+                }
+                continue
+            }
+            let index = pools.firstIndex { $0.id == pool.lowercased() } ?? {
+                pools.append(Scope(pool: pool))
+                return pools.count - 1
+            }()
+            switch row.role {
+            case .source: pools[index].send = true
+            case .sink:
+                // A share of the pool wins over covering overspending only.
+                pools[index].take = true
+                pools[index].weight = row.weight
+                pools[index].overspendOnly = false
+            case .overspend:
+                if !pools[index].take {
+                    pools[index].take = true
+                    pools[index].overspendOnly = true
+                }
+            }
+        }
+    }
+
+    /// The web editor's `editorToCleanupDef`.
+    var rows: [CleanupRow] {
+        ([global] + pools).flatMap { scope -> [CleanupRow] in
+            var rows: [CleanupRow] = []
+            if scope.send { rows.append(CleanupRow(role: .source, pool: scope.pool, weight: 1)) }
+            if scope.take {
+                rows.append(scope.overspendOnly && scope.pool != nil
+                    ? CleanupRow(role: .overspend, pool: scope.pool, weight: 1)
+                    : CleanupRow(role: .sink, pool: scope.pool, weight: scope.weight))
+            }
+            return rows
+        }
+    }
+}
+
+/// What End of month cleanup did, in Actual's words, and how much left To Budget.
+struct CleanupResult: Decodable, Sendable {
+    let message: String
+    /// Actual found no category sending leftover, and nothing else to report.
+    let upToDate: Bool
+    let assigned: Int
 }

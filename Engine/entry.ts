@@ -31,6 +31,7 @@ import {
 import { dashboard, report, reportTransactions } from "./reports";
 import { reportSettings, reportWrites, saveReportWidget } from "./report-editing";
 import { applyTargets, categoryTargets, parseTargets, previewTargets, renderTargets, saveTargets } from "./targets";
+import { categoryCleanup, cleanupMonth, saveCleanup } from "./cleanup";
 import { integer, month as checkMonth, object, text, uuid, type Obj } from "./args";
 
 declare function _reply(id: string, ok: boolean, payload: string): void;
@@ -407,7 +408,7 @@ async function perform(method: string, args: Obj): Promise<unknown> {
     [
       "saveTransaction", "deleteTransaction", "budget", "sync", "syncAccounts", "setCleared",
       "unlockTransaction", "createReconciliationTransaction", "finishReconciliation", "saveTargets",
-      "applyTargets", "budgetAction", "saveSplit", "commitImport", ...managementMethods, ...scheduleWrites, ...ruleWrites,
+      "applyTargets", "saveCleanup", "cleanupMonth", "budgetAction", "saveSplit", "commitImport", ...managementMethods, ...scheduleWrites, ...ruleWrites,
       ...reportWrites,
     ].includes(method)
   ) {
@@ -599,6 +600,13 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       return {};
     case "applyTargets":
       return applyTargets(text(args.month), text(args.categoryId) || null, args.overwrite === true);
+    case "categoryCleanup":
+      return runMutator(() => categoryCleanup(text(args.categoryId)));
+    case "saveCleanup":
+      await saveCleanup(text(args.categoryId), args.rows);
+      return {};
+    case "cleanupMonth":
+      return cleanupMonth(text(args.month));
     case "saveTransaction": {
       const id = text(args.id);
       const existing = id

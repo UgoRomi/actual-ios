@@ -5,6 +5,7 @@ struct BudgetView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var selectedCategory: BudgetCategory?
     @State private var confirmOverwrite = false
+    @State private var confirmCleanup = false
     @State private var pendingMonthAction: BudgetAction?
     @State private var showsSummary = false
     @State private var route: BudgetRoute?
@@ -89,11 +90,9 @@ struct BudgetView: View {
             } message: {
                 Text("Every category with targets gets the amount they ask for, replacing what is budgeted now.")
             }
-            .alert("Targets", isPresented: Binding(get: { model.targetsMessage != nil }, set: { if !$0 { model.targetsMessage = nil } })) {
-                Button("OK") {}
-            } message: {
-                Text(model.targetsMessage ?? "")
-            }
+            .cleanupConfirmation(isPresented: $confirmCleanup, month: model.month)
+            // The summary sheet shows the notice itself while it is open.
+            .budgetNotice(enabled: !showsSummary)
         }
     }
 
@@ -153,6 +152,12 @@ struct BudgetView: View {
             Button(role: .destructive) { confirmOverwrite = true } label: {
                 Label("Overwrite with Targets", systemImage: "arrow.clockwise")
                 Text("Replace what every category with targets has budgeted")
+            }
+            if model.budget?.budgetType == .envelope {
+                Button { confirmCleanup = true } label: {
+                    Label("End of Month Cleanup", systemImage: "arrow.triangle.2.circlepath")
+                    Text("Share what is left among categories that receive leftover")
+                }
             }
     }
 
@@ -531,6 +536,11 @@ struct BudgetEditor: View {
                     NavigationLink(value: TargetsRoute()) {
                         Label(current.hasTargets ? "Edit Targets" : "Add Targets", systemImage: "target")
                     }
+                    if model.budget?.budgetType == .envelope, !category.isIncome {
+                        NavigationLink(value: CleanupRoute()) {
+                            Label("End of Month Cleanup", systemImage: "arrow.triangle.2.circlepath")
+                        }
+                    }
                     if current.hasTargets {
                         Button("Apply Target", systemImage: "wand.and.stars") {
                             Task { if await model.applyTargets(month: month, categoryID: category.id) { dismiss() } }
@@ -601,6 +611,9 @@ struct BudgetEditor: View {
             }
             .navigationDestination(for: TargetsRoute.self) { _ in
                 TargetsEditor(category: current, month: month, path: $path)
+            }
+            .navigationDestination(for: CleanupRoute.self) { _ in
+                CleanupEditor(category: current, path: $path)
             }
             .navigationDestination(for: BudgetRoute.self) { route in
                 BudgetRouteView(route: route, month: month) { dismiss() }
