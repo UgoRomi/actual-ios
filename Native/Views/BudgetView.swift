@@ -301,6 +301,10 @@ struct BudgetView: View {
                         } label: { incomeRow(category) }
                             .buttonStyle(.plain).disabled(model.isBusy)
                             .opacity(category.hidden ? 0.5 : 1)
+                            .contextMenu {
+                                Button("Edit Category", systemImage: "pencil") { managedCategory = category.id }
+                                visibilityButton(category)
+                            }
                     }
                 }.background(ActualTheme.surface, in: RoundedRectangle(cornerRadius: 20))
             }.padding(.bottom, 12)
@@ -365,6 +369,15 @@ struct BudgetView: View {
             }
         }.contentShape(Rectangle()) }
         .buttonStyle(.plain).disabled(model.isBusy)
+        .contextMenu {
+            Button("Edit Group", systemImage: "pencil") { managedGroup = group.id }
+            // As in Actual, the income group cannot be hidden.
+            if !group.isIncome {
+                Button(group.hidden ? "Show" : "Hide", systemImage: group.hidden ? "eye" : "eye.slash") {
+                    Task { await model.manage("updateCategoryGroup", ["id": .string(group.id), "hidden": .bool(!group.hidden)]) }
+                }
+            }
+        }
         .padding(.horizontal, 16)
         .opacity(group.hidden ? 0.6 : 1)
         .accessibilityElement(children: .ignore)
@@ -389,9 +402,22 @@ struct BudgetView: View {
         .opacity(category.hidden ? 0.5 : 1)
         .contextMenu {
             Button("Edit Category", systemImage: "pencil") { managedCategory = category.id }
+            visibilityButton(category)
         }
         .accessibilityLabel(label.compactMap(\.self).joined(separator: ", "))
         .accessibilityHint("Edit budgeted amount")
+    }
+
+    /// Actual's Hide and Show category menu item, which a hidden group's categories do not offer.
+    /// Hidden categories keep their budgets and transactions.
+    @ViewBuilder
+    private func visibilityButton(_ category: BudgetCategory) -> some View {
+        let group = model.budget?.groups.first { $0.categories.contains { $0.id == category.id } }
+        if group?.hidden != true {
+            Button(category.hidden ? "Show" : "Hide", systemImage: category.hidden ? "eye" : "eye.slash") {
+                Task { await model.manage("updateCategory", ["id": .string(category.id), "hidden": .bool(!category.hidden)]) }
+            }
+        }
     }
 
     private func categoryRow(_ category: BudgetCategory, status: TargetStatus) -> some View {
