@@ -58,7 +58,63 @@ enum ChartAmount {
     }
 }
 
+/// A line in a chart's selection callout.
+struct ChartCalloutRow: Identifiable {
+    let label: String
+    let amount: Int
+    var color: Color? = nil
+    var emphasized = false
+    var id: String { label }
+}
+
+/// The values under a held finger, like the tooltips on Actual's report graphs.
+struct ChartCallout: View {
+    let title: String
+    let rows: [ChartCalloutRow]
+    let currency: String
+    var footnote: String? = nil
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.caption.weight(.semibold))
+            Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 2) {
+                ForEach(rows) { row in
+                    GridRow {
+                        HStack(spacing: 5) {
+                            if let color = row.color { Circle().fill(color).frame(width: 7, height: 7) }
+                            Text(row.label).foregroundStyle(.secondary).lineLimit(1)
+                        }
+                        Text(Money.formatted(row.amount, currency: currency))
+                            .fontWeight(row.emphasized ? .semibold : .regular)
+                            .monospacedDigit().gridColumnAlignment(.trailing)
+                    }
+                }
+            }
+            .font(.caption)
+            if let footnote { Text(footnote).font(.caption2).foregroundStyle(.secondary) }
+        }
+        .fixedSize()
+        .padding(.horizontal, 10).padding(.vertical, 8)
+        .background(ActualTheme.background, in: RoundedRectangle(cornerRadius: 10))
+        .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.secondary.opacity(0.2)))
+        .shadow(color: .black.opacity(0.12), radius: 4, y: 1)
+        .accessibilityElement(children: .combine)
+    }
+
+    /// Kept inside the chart.
+    static var overflow: AnnotationOverflowResolution { .init(x: .fit(to: .chart), y: .fit(to: .chart)) }
+
+    /// Beside the selection line, toward the chart's wider side, so the selected entry stays visible.
+    static func side(_ index: Int, of count: Int) -> AnnotationPosition { index * 2 >= count ? .leading : .trailing }
+}
+
 extension View {
+    /// Press and hold to select the entry under a finger; off for compact dashboard charts.
+    @ViewBuilder
+    func chartSelection<Value: Plottable>(_ selection: Binding<Value?>, enabled: Bool) -> some View {
+        if enabled { chartXSelection(value: selection) } else { self }
+    }
+
     /// Amount labels on a chart's vertical axis.
     func amountAxis(currency: String) -> some View {
         chartYAxis {

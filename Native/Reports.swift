@@ -333,6 +333,17 @@ enum ReportDate {
         return date.formatted(.dateTime.month(style).year())
     }
 
+    /// A net worth point's period by interval: a day, "Week of" a day, a month, or a year.
+    static func period(_ value: String, interval: String) -> String {
+        guard let date = date(value) else { return value }
+        switch interval {
+        case "Daily": return date.formatted(date: .abbreviated, time: .omitted)
+        case "Weekly": return "Week of " + date.formatted(date: .abbreviated, time: .omitted)
+        case "Yearly": return date.formatted(.dateTime.year())
+        default: return date.formatted(.dateTime.month(.wide).year())
+        }
+    }
+
     /// DateRange.tsx: one month, or first and last months.
     static func range(_ start: String, _ end: String) -> String {
         let first = month(start), last = month(end)

@@ -167,23 +167,13 @@ private struct NetWorthDetail: View {
                         if index > 0 { ChangeText(amount: point.total - report.points[index - 1].total, currency: currency) }
                     }
                 } label: {
-                    Text(label(point.date))
+                    Text(ReportDate.period(point.date, interval: report.interval))
                 }
                 if index > 0 { Divider() }
             }
         }
         Text("Net worth shows the balance of all accounts over time, including all of your investments. Your “net worth” is considered to be the amount you’d have if you sold all your assets and paid off as much debt as possible.")
             .font(.footnote).foregroundStyle(.secondary)
-    }
-
-    private func label(_ date: String) -> String {
-        guard let value = ReportDate.date(date) else { return date }
-        switch report.interval {
-        case "Daily": return value.formatted(date: .abbreviated, time: .omitted)
-        case "Weekly": return "Week of " + value.formatted(date: .abbreviated, time: .omitted)
-        case "Yearly": return value.formatted(.dateTime.year())
-        default: return value.formatted(.dateTime.month(.wide).year())
-        }
     }
 }
 
@@ -192,6 +182,7 @@ private struct CashFlowDetail: View {
     let currency: String
     /// Nil shows the widget's saved choice.
     @Binding var showBalance: Bool?
+    @State private var selectedDate: Date?
 
     var body: some View {
         let detail = report.detail
@@ -212,24 +203,40 @@ private struct CashFlowDetail: View {
         if let detail {
             DetailSection {
                 Toggle("Show balance", isOn: Binding(get: { balance }, set: { showBalance = $0 == report.showBalance ? nil : $0 }))
+                let unit: Calendar.Component = detail.isConcise ? .month : .day
+                let selected = selectedPoint(detail)
                 Chart {
                     ForEach(detail.points) { point in
                         let date = ReportDate.date(point.date) ?? .distantPast
-                        let unit: Calendar.Component = detail.isConcise ? .month : .day
+                        let opacity = selected == nil || selected?.id == point.id ? 1 : 0.4
                         BarMark(x: .value("Date", date, unit: unit), y: .value("Amount", ChartAmount.value(point.income)))
                             .foregroundStyle(by: .value("Kind", "Income"))
+                            .opacity(opacity)
                         BarMark(x: .value("Date", date, unit: unit), y: .value("Amount", ChartAmount.value(point.expense)))
                             .foregroundStyle(by: .value("Kind", "Expenses"))
+                            .opacity(opacity)
                         if point.transfers != 0 {
                             BarMark(x: .value("Date", date, unit: unit), y: .value("Amount", ChartAmount.value(point.transfers)))
                                 .foregroundStyle(by: .value("Kind", "Transfers"))
+                                .opacity(opacity)
                         }
                         if balance {
                             LineMark(x: .value("Date", date, unit: unit), y: .value("Balance", ChartAmount.value(point.balance)))
                                 .foregroundStyle(by: .value("Kind", "Balance"))
                         }
                     }
+                    if let selected {
+                        RuleMark(x: .value("Date", ReportDate.date(selected.date) ?? .distantPast, unit: unit))
+                            .foregroundStyle(Color.secondary.opacity(0.6))
+                            .annotation(position: ChartCallout.side(detail.points.firstIndex { $0.id == selected.id } ?? 0,
+                                                                    of: detail.points.count),
+                                        alignment: .top, spacing: 6, overflowResolution: ChartCallout.overflow) {
+                                callout(selected, isConcise: detail.isConcise)
+                            }
+                    }
                 }
+                .chartXSelection(value: $selectedDate)
+                .sensoryFeedback(.selection, trigger: selected?.id)
                 .chartForegroundStyleScale([
                     "Income": ReportColor.positive, "Expenses": ReportColor.negative,
                     "Transfers": ReportColor.comparison, "Balance": ActualTheme.accent,
@@ -241,6 +248,29 @@ private struct CashFlowDetail: View {
             Text(detail.isConcise ? "Shown by month." : "Shown by day, through today.")
                 .font(.footnote).foregroundStyle(.secondary)
         }
+    }
+
+    /// The bar under the finger: the last period starting at or before it.
+    private func selectedPoint(_ detail: CashFlowReport.Detail) -> CashFlowReport.Point? {
+        guard let selectedDate else { return nil }
+        return detail.points.last { (ReportDate.date($0.date) ?? .distantPast) <= selectedDate } ?? detail.points.first
+    }
+
+    /// CashFlowGraph.tsx tooltip.
+    private func callout(_ point: CashFlowReport.Point, isConcise: Bool) -> ChartCallout {
+        let date = ReportDate.date(point.date) ?? .distantPast
+        var rows = [
+            ChartCalloutRow(label: "Income", amount: point.income, color: ReportColor.positive),
+            ChartCalloutRow(label: "Expenses", amount: point.expense, color: ReportColor.negative),
+            ChartCalloutRow(label: "Change", amount: point.income + point.expense, emphasized: true),
+        ]
+        if point.transfers != 0 {
+            rows.append(ChartCalloutRow(label: "Transfers", amount: point.transfers, color: ReportColor.comparison))
+        }
+        rows.append(ChartCalloutRow(label: "Balance", amount: point.balance, color: ActualTheme.accent))
+        return ChartCallout(title: isConcise ? date.formatted(.dateTime.month(.wide).year())
+                                             : date.formatted(.dateTime.month(.wide).day().year()),
+                            rows: rows, currency: currency)
     }
 }
 
