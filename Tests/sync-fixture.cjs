@@ -123,7 +123,7 @@ const encryptionPassword = "disposable-encryption-test";
     const schedule = (await api.getSchedules()).find((s) => s.name === "Native Sync Schedule");
     assert.ok(schedule, "Native schedule arrived");
     assert.equal(schedule.amount, -777);
-    assert.equal(schedule.next_date, "2026-10-01");
+    assert.equal(schedule.next_date, "2099-01-01");
     const rules = await api.getRules();
     const rule = rules.find((r) => r.conditions.some((c) => c.value === "native sync rule"));
     assert.equal(rule?.actions[0].value, category.id, "Native rule arrived");

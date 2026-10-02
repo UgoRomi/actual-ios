@@ -190,6 +190,8 @@ import Foundation
         "categoryId": .string(category), "amount": .number(-505), "notes": .string(""), "cleared": .bool(false),
       ], as: RuledTransaction.self)
     }
+    // The demo's amounts are random, so compare the count instead of looking for the previewed amount.
+    let saved = try await snapshot(engine).transactions.count
     let ruled = try await preview(learned.id, category: "")
     precondition(ruled.categoryId == expenses[1].id && ruled.payeeId == learned.id && ruled.amount == -505,
                  "Choosing a payee did not preview its category rule: \(ruled)")
@@ -197,8 +199,8 @@ import Foundation
     precondition(replaced.categoryId == expenses[1].id, "A payee's rule sets its category when the payee is chosen")
     let kept = try await preview(payee.id, category: expenses[0].id)
     precondition(kept.categoryId == expenses[0].id, "Another payee's rule changed the category")
-    let unsaved = try await snapshot(engine).transactions
-    precondition(!unsaved.contains { $0.amount == -505 }, "Previewing rules saved a transaction")
+    let unsaved = try await snapshot(engine).transactions.count
+    precondition(unsaved == saved, "Previewing rules saved a transaction")
     let chosen = try await save("Rule check", amount: -503, payeeName: "Typed rule payee", category: expenses[0].id)
     precondition(chosen.categoryId == expenses[0].id, "A rule replaced the category the user chose")
     precondition(chosen.payeeId == payee.id, "A rule's payee must apply, as when choosing a payee in Actual")
