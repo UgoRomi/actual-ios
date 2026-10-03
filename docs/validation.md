@@ -399,3 +399,11 @@ Checked against upstream Actual at the pinned revision: the mobile `ToBudget` in
 On a new iPhone 17 Pro / iOS 27 simulator, `testDemoBudgetNavigationAndTransactionEditor`, `testDemoBudgetActions` (now also checking the card says **Available to budget** after setting budgets to zero), and `testDemoPayeesRulesAndFormatting` passed, each on a freshly erased simulator. Screenshots of the three states in the light Actual theme were inspected.
 
 Not verified end to end: dark appearance, the Sterling and Payday themes on screen (their colors are checked by the contrast test instead), the haptics, and VoiceOver.
+
+## Values under a held finger on report charts (2026-10-02)
+
+The callouts follow the tooltips of Actual's `reports/graphs` at the pinned revision: `NetWorthGraph.tsx` (assets, debt, net worth, and change; each account when stacked), `CashFlowGraph.tsx` (income, expenses, change, transfers when not zero, and balance), and `SpendingGraph.tsx` (each month's spending to the day, the comparison, and the difference, with days after the 28th as "28+"). Selection uses Swift Charts' `chartXSelection`, which starts with a long press inside the detail page's scroll view, so the page still scrolls. A net worth selection snaps to the nearest point, a cash flow selection to the bar under the finger, and a spending selection to its day. The compact charts on dashboard cards stay tappable and have no selection.
+
+`testDemoReports` now presses, slides, and holds on the net worth, cash flow, and spending charts, and checks that the page neither scrolled nor navigated. It passed on a new iPhone 17 Pro / iOS 27 simulator. Simulator screenshots taken during each hold were inspected in the light Actual theme: the callout reads the selected entry's values and sits beside the selection line, away from the selected point.
+
+Not verified end to end: stacked net worth, dark appearance, other themes, the selection haptic, and VoiceOver.

@@ -283,10 +283,14 @@ struct NetWorthChart: View {
     let report: NetWorthReport
     let currency: String
     var compact = false
+    @State private var selectedDate: Date?
+
+    private var stacked: Bool { report.mode == "stacked" && !compact }
 
     var body: some View {
+        let selected = selectedIndex
         Chart {
-            if report.mode == "stacked" && !compact {
+            if stacked {
                 ForEach(report.accounts) { account in
                     ForEach(report.points) { point in
                         AreaMark(x: .value("Date", ReportDate.date(point.date) ?? .distantPast),
@@ -307,12 +311,64 @@ struct NetWorthChart: View {
                     .interpolationMethod(.monotone)
                 }
             }
+            if let selected {
+                let point = report.points[selected]
+                let date = ReportDate.date(point.date) ?? .distantPast
+                if !stacked {
+                    PointMark(x: .value("Date", date), y: .value("Net worth", ChartAmount.value(point.total)))
+                        .foregroundStyle(ActualTheme.accent)
+                }
+                RuleMark(x: .value("Date", date))
+                    .foregroundStyle(Color.secondary.opacity(0.6))
+                    .annotation(position: ChartCallout.side(selected, of: report.points.count), alignment: .top,
+                                spacing: 6, overflowResolution: ChartCallout.overflow) {
+                        callout(selected)
+                    }
+            }
         }
         .chartLegend(compact ? .hidden : .automatic)
         .chartXAxis(compact ? .hidden : .automatic)
         .amountAxis(currency: currency)
         .chartYAxis(compact ? .hidden : .automatic)
+        .chartSelection($selectedDate, enabled: !compact)
+        .sensoryFeedback(.selection, trigger: selected)
         .accessibilityLabel("Net worth chart")
+    }
+
+    /// The point nearest the finger.
+    private var selectedIndex: Int? {
+        guard let selectedDate else { return nil }
+        return report.points.indices.min { a, b in
+            distance(report.points[a], selectedDate) < distance(report.points[b], selectedDate)
+        }
+    }
+
+    private func distance(_ point: NetWorthReport.Point, _ date: Date) -> TimeInterval {
+        abs((ReportDate.date(point.date) ?? .distantPast).timeIntervalSince(date))
+    }
+
+    /// NetWorthGraph.tsx tooltips: assets, debt, net worth, and change; or each account when stacked.
+    private func callout(_ index: Int) -> ChartCallout {
+        let point = report.points[index]
+        let title = ReportDate.period(point.date, interval: report.interval)
+        if stacked {
+            let balances = report.accounts
+                .compactMap { account in point.balances[account.id].map { (name: account.name, amount: $0) } }
+                .filter { $0.amount != 0 }
+                .sorted { $0.amount > $1.amount }
+            let shown = 6, hidden = balances.count - shown
+            let rows = balances.prefix(shown).map { ChartCalloutRow(label: $0.name, amount: $0.amount) }
+                + [ChartCalloutRow(label: "Net worth", amount: point.total, emphasized: true)]
+            return ChartCallout(title: title, rows: rows, currency: currency,
+                                footnote: hidden > 0 ? "\(hidden) more account\(hidden == 1 ? "" : "s")" : nil)
+        }
+        var rows = [
+            ChartCalloutRow(label: "Assets", amount: point.assets),
+            ChartCalloutRow(label: "Debt", amount: point.debt),
+            ChartCalloutRow(label: "Net worth", amount: point.total, emphasized: true),
+        ]
+        if index > 0 { rows.append(ChartCalloutRow(label: "Change", amount: point.total - report.points[index - 1].total)) }
+        return ChartCallout(title: title, rows: rows, currency: currency)
     }
 }
 
@@ -322,10 +378,12 @@ struct SpendingChart: View {
     let mode: SpendingReport.Mode
     let currency: String
     var compact = false
+    @State private var selectedDay: Int?
 
     var body: some View {
         let compareName = ReportDate.month(report.compare)
         let otherName = SpendingText.comparisonName(report, mode: mode)
+        let selected = selectedDay.flatMap { day in report.days.first { $0.day == min(max(day, 1), 28) } }
         Chart {
             ForEach(report.days) { day in
                 if let value = day.value(mode) {
@@ -342,6 +400,22 @@ struct SpendingChart: View {
                     .lineStyle(StrokeStyle(lineWidth: 3))
                 }
             }
+            if let selected {
+                if let value = selected.value(mode) {
+                    PointMark(x: .value("Day", selected.day), y: .value("Spent", ChartAmount.value(-value)))
+                        .foregroundStyle(ReportColor.comparison)
+                }
+                if let value = selected.compare {
+                    PointMark(x: .value("Day", selected.day), y: .value("Spent", ChartAmount.value(-value)))
+                        .foregroundStyle(ActualTheme.accent)
+                }
+                RuleMark(x: .value("Day", selected.day))
+                    .foregroundStyle(Color.secondary.opacity(0.6))
+                    .annotation(position: ChartCallout.side(selected.day - 1, of: 28), alignment: .top,
+                                spacing: 6, overflowResolution: ChartCallout.overflow) {
+                        callout(selected, compareName: compareName, otherName: otherName)
+                    }
+            }
         }
         .chartForegroundStyleScale([compareName: ActualTheme.accent, otherName: ReportColor.comparison])
         .chartXScale(domain: 1...28)
@@ -349,6 +423,23 @@ struct SpendingChart: View {
         .chartXAxis(compact ? .hidden : .automatic)
         .amountAxis(currency: currency)
         .chartYAxis(compact ? .hidden : .automatic)
+        .chartSelection($selectedDay, enabled: !compact)
+        .sensoryFeedback(.selection, trigger: selected?.day)
         .accessibilityLabel("Spending chart")
+    }
+
+    /// SpendingGraph.tsx tooltip: spending through the day in each month, and the difference.
+    private func callout(_ day: SpendingReport.Day, compareName: String, otherName: String) -> ChartCallout {
+        let compare = day.compare.map { -$0 }, other = day.value(mode).map { -$0 }
+        var rows: [ChartCalloutRow] = []
+        if let compare { rows.append(ChartCalloutRow(label: compareName, amount: compare, color: ActualTheme.accent)) }
+        if let other { rows.append(ChartCalloutRow(label: otherName, amount: other, color: ReportColor.comparison)) }
+        if let compare, let other {
+            // More spent than the comparison shows in red, as on the card.
+            let difference = compare - other
+            rows.append(ChartCalloutRow(label: difference > 0 ? "Spent more" : difference < 0 ? "Spent less" : "Difference",
+                                        amount: abs(difference), emphasized: true))
+        }
+        return ChartCallout(title: day.day >= 28 ? "Day 28+" : "Day \(day.day)", rows: rows, currency: currency)
     }
 }

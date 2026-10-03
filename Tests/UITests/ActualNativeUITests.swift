@@ -784,6 +784,16 @@ final class ActualNativeUITests: XCTestCase {
             capture("reports-" + title.lowercased().replacingOccurrences(of: " ", with: "-"))
             app.navigationBars[title].buttons.firstMatch.tap()
         }
+        /// Holds a finger on a chart and slides it across, which selects entries instead of scrolling the page.
+        func hold(_ chartLabel: String, on title: String) {
+            let chart = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@", chartLabel)).firstMatch
+            XCTAssertTrue(chart.waitForExistence(timeout: 10), "\(chartLabel) should show")
+            chart.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.5))
+                .press(forDuration: 0.8, thenDragTo: chart.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)),
+                       withVelocity: .slow, thenHoldForDuration: 2)
+            XCTAssertTrue(chart.isHittable, "Selecting should not scroll the chart away")
+            XCTAssertTrue(app.navigationBars[title].exists)
+        }
         // In dashboard order, so each card is reached by scrolling down.
         open("Avg Per Month") {
             XCTAssertTrue(shows("Months"), "Averages show how they divide")
@@ -793,15 +803,18 @@ final class ActualNativeUITests: XCTestCase {
             app.buttons["Saved range"].tap()
             app.buttons["1 year"].tap()
             XCTAssertTrue(app.buttons["1 year"].waitForExistence(timeout: 10), "The chosen range should show")
+            hold("Net worth chart", on: "Net Worth")
         }
         open("Cash Flow") {
             XCTAssertTrue(shows("Income"))
             XCTAssertTrue(app.switches["Show balance"].exists)
+            hold("Cash flow chart", on: "Cash Flow")
         }
         open("This Month") {
             XCTAssertTrue(app.buttons["Average"].waitForExistence(timeout: 20))
             app.buttons["Budgeted"].tap()
             XCTAssertTrue(shows("Budgeted to date"))
+            hold("Spending chart", on: "This Month")
         }
         open("Transaction Calendar") {
             let day = app.buttons.matching(NSPredicate(format: "label CONTAINS %@", "spending")).firstMatch
