@@ -407,3 +407,13 @@ The callouts follow the tooltips of Actual's `reports/graphs` at the pinned revi
 `testDemoReports` now presses, slides, and holds on the net worth, cash flow, and spending charts, and checks that the page neither scrolled nor navigated. It passed on a new iPhone 17 Pro / iOS 27 simulator. Simulator screenshots taken during each hold were inspected in the light Actual theme: the callout reads the selected entry's values and sits beside the selection line, away from the selected point.
 
 Not verified end to end: stacked net worth, dark appearance, other themes, the selection haptic, and VoiceOver.
+
+## Actual 26.10.0 (2026-10-02)
+
+The pinned revision moved from an Actual `master` commit of 2026-09-16 (`5bb7d6f6fdae21cb35425a3d444f83bcc74a2eef`) to the 26.10.0 release, `2bebdbaae0b701120a8cad9d56aafd64fa04c577`. Between the two, upstream added no budget migrations and changed neither the sync message format nor the server endpoints this app uses. The engine gains upstream's work for large budgets: rules run only when needed, the running balance is read only for rules that use it, and saving transaction edits makes fewer reads. No adapter needed changing.
+
+Against a dedicated 26.10.0 checkout with core, API, and sync server built: `./scripts/test-engine.sh`, `node Engine/typecheck.mjs`, `./scripts/test-sync.sh`, `./scripts/test-auto-sync.sh`, `./scripts/test-bank-sync.sh`, and `./scripts/test-openid.sh` passed, and `./scripts/build.sh` built the app for the simulator.
+
+Two checks failed for reasons unrelated to the upgrade and were corrected. The rules preview check looked for a transaction with the previewed amount, which the demo budget's random amounts sometimes contain; it now compares the number of transactions. The sync check expected a monthly schedule starting 2026-10-01 to be next due that day, which stopped being true once the date passed; the schedule now starts in 2099.
+
+Not verified end to end: the simulator UI tests and a physical device.

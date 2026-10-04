@@ -144,7 +144,7 @@ private struct Fixture: Decodable {
       _ = try await call("saveSchedule", [
         "name": .string("Native Sync Schedule"), "accountId": .string(fixture.accountId),
         "amount": .number(-777), "amountOp": .string("is"), "postsTransaction": .bool(false),
-        "date": .object(["start": .string("2026-10-01"), "frequency": .string("monthly"), "interval": .number(1),
+        "date": .object(["start": .string("2099-01-01"), "frequency": .string("monthly"), "interval": .number(1),
                          "patterns": .array([]), "skipWeekend": .bool(false), "weekendSolveMode": .string("after"),
                          "endMode": .string("never"), "endOccurrences": .number(1)]),
       ])
