@@ -9,3 +9,4 @@ Native/Resources/default-db.sqlite
 Native/Resources/migrations/
 .superpowers/
 .xcode.env.local
+.claude/worktrees

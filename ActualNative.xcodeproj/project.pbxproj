@@ -7,52 +7,52 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		014B35C0E59A05E50245606A /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33B550F88C0FAFC47CAA9B5 /* SettingsView.swift */; };
-		02E6863D200C189845137667 /* TransactionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F19188F7225770AF6FD525C0 /* TransactionsView.swift */; };
-		050D7263F02742B6BF447F6D /* Rules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81255675588A43298DECAEB3 /* Rules.swift */; };
+		014B35C0E59A05E50245606A /* Native/Views/SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33B550F88C0FAFC47CAA9B5 /* Native/Views/SettingsView.swift */; };
+		02E6863D200C189845137667 /* Native/Views/TransactionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F19188F7225770AF6FD525C0 /* Native/Views/TransactionsView.swift */; };
+		050D7263F02742B6BF447F6D /* Native/Rules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81255675588A43298DECAEB3 /* Native/Rules.swift */; };
 		081A59EF9A79FBC45265C273 /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 203FCBAC6256D607C727A9CE /* WidgetSnapshot.swift */; };
-		095DE5EF907D462DBD3537A9 /* ManageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B5E55D034124E4FA7708A32 /* ManageViews.swift */; };
-		098355D42E8947DDB81495CD /* ReportDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2465D96E6AC740AD9BCDF926 /* ReportDetails.swift */; };
-		7A1C0E5D2F3B4A6C8D9E0F11 /* ReportWidgetEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1C0E5D2F3B4A6C8D9E0F12 /* ReportWidgetEditor.swift */; };
-		0AED486DC5028236E648FC8C /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66177DE593ACD3F7FBE818F7 /* Models.swift */; };
-		0D29242560594EF4BA07BFC1 /* PayeesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 729C3F507D21493BA3BB885A /* PayeesView.swift */; };
-		1EE747E8A7BA4902B438745D /* TagsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F6D4459327E4E6FB05D7E0F /* TagsView.swift */; };
-		2A6FB75C0E638CB7BA4B4263 /* TransactionEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35ADAC2A7B4B204230C2E4AE /* TransactionEditor.swift */; };
-		2ABE5A407256424C95B96350 /* Schedules.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7166B33BC754AD2B0247743 /* Schedules.swift */; };
-		2ACCE8679E7847AFB73B2225 /* Importing.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB9A221DDF49480E9A44C372 /* Importing.swift */; };
-		2EDA2189B4348994B63A09C1 /* EngineClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A2A897C9FC5F69A2DAC930 /* EngineClient.swift */; };
-		2F8FE7A1BB3C4F7184F1D7FF /* Reports.swift in Sources */ = {isa = PBXBuildFile; fileRef = 811B55025A214E8B9035B5F9 /* Reports.swift */; };
-		32AFA9370EEE8272B9DC4A78 /* Resources in Copy Engine Resources */ = {isa = PBXBuildFile; fileRef = 26AB470B66CA9603C9E53F67 /* Resources */; };
-		3724999EFF609E935F4E5519 /* SQLiteHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F51DF911B0314245CE3C35C /* SQLiteHost.swift */; };
-		451352A34D5C414DB91A638B /* BudgetActionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8ECE5380F8A47469DB342D8 /* BudgetActionsView.swift */; };
+		095DE5EF907D462DBD3537A9 /* Native/Views/ManageViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9B5E55D034124E4FA7708A32 /* Native/Views/ManageViews.swift */; };
+		098355D42E8947DDB81495CD /* Native/Views/ReportDetails.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2465D96E6AC740AD9BCDF926 /* Native/Views/ReportDetails.swift */; };
+		0AED486DC5028236E648FC8C /* Native/Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66177DE593ACD3F7FBE818F7 /* Native/Models.swift */; };
+		0D29242560594EF4BA07BFC1 /* Native/Views/PayeesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 729C3F507D21493BA3BB885A /* Native/Views/PayeesView.swift */; };
+		1EE747E8A7BA4902B438745D /* Native/Views/TagsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F6D4459327E4E6FB05D7E0F /* Native/Views/TagsView.swift */; };
+		2A6FB75C0E638CB7BA4B4263 /* Native/Views/TransactionEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35ADAC2A7B4B204230C2E4AE /* Native/Views/TransactionEditor.swift */; };
+		2ABE5A407256424C95B96350 /* Native/Schedules.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7166B33BC754AD2B0247743 /* Native/Schedules.swift */; };
+		2ACCE8679E7847AFB73B2225 /* Native/Importing.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB9A221DDF49480E9A44C372 /* Native/Importing.swift */; };
+		2DB483C95A254EDA91E28784 /* Native/GoalDescription.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BCCC14C986A49D39DDE270A /* Native/GoalDescription.swift */; };
+		2EDA2189B4348994B63A09C1 /* Native/Core/EngineClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A2A897C9FC5F69A2DAC930 /* Native/Core/EngineClient.swift */; };
+		2F8FE7A1BB3C4F7184F1D7FF /* Native/Reports.swift in Sources */ = {isa = PBXBuildFile; fileRef = 811B55025A214E8B9035B5F9 /* Native/Reports.swift */; };
+		32AFA9370EEE8272B9DC4A78 /* Native/Resources in Copy Engine Resources */ = {isa = PBXBuildFile; fileRef = 26AB470B66CA9603C9E53F67 /* Native/Resources */; };
+		3724999EFF609E935F4E5519 /* Native/Core/SQLiteHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F51DF911B0314245CE3C35C /* Native/Core/SQLiteHost.swift */; };
+		451352A34D5C414DB91A638B /* Native/Views/BudgetActionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8ECE5380F8A47469DB342D8 /* Native/Views/BudgetActionsView.swift */; };
 		48E952D828509F7F6604A5DB /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4BE2ABA870DD3012B1FCB4CE /* Foundation.framework */; };
-		5053EA6B4042432DA9A0EB90 /* ImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35E8712517604F4091EB62AC /* ImportView.swift */; };
+		5053EA6B4042432DA9A0EB90 /* Native/Views/ImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35E8712517604F4091EB62AC /* Native/Views/ImportView.swift */; };
 		54A2091B7FBAD00DDF959F31 /* ActualWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14762814060BC0D9E4BB90EF /* ActualWidget.swift */; };
-		5C1A7E0B9D2F4A6E8B3C1D20 /* AmountField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E4B2C7A1F6D3E8B5A0C4F21 /* AmountField.swift */; };
-		6292B24D93154C6A25CA48FB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0AAF66868F872CE43E775077 /* Assets.xcassets */; };
-		6773E3F2849B62EF2317BF27 /* ActualNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3D9589739A3279854188C92 /* ActualNativeApp.swift */; };
+		5C1A7E0B9D2F4A6E8B3C1D20 /* Native/Views/AmountField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E4B2C7A1F6D3E8B5A0C4F21 /* Native/Views/AmountField.swift */; };
+		6292B24D93154C6A25CA48FB /* Native/Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0AAF66868F872CE43E775077 /* Native/Assets.xcassets */; };
+		6773E3F2849B62EF2317BF27 /* Native/ActualNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3D9589739A3279854188C92 /* Native/ActualNativeApp.swift */; };
 		6E1558E6E4ED0F4EB6464BCC /* ActualNativeWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 88C2D1F425FD0D4B7ADC3B2E /* ActualNativeWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		6E1F6E9757C9755493C9A6A3 /* TargetsEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4E7BEFC3B3FF10A7AD58AF0 /* TargetsEditor.swift */; };
-		6E739054A39D46758AFA85A3 /* RulesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4125543F935A49B49486C33E /* RulesView.swift */; };
-		809F71A2A5B047F39C676F68 /* ReportComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D5D76757B1F406481F8379E /* ReportComponents.swift */; };
+		6E1F6E9757C9755493C9A6A3 /* Native/Views/TargetsEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4E7BEFC3B3FF10A7AD58AF0 /* Native/Views/TargetsEditor.swift */; };
+		6E739054A39D46758AFA85A3 /* Native/Views/RulesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4125543F935A49B49486C33E /* Native/Views/RulesView.swift */; };
+		7A1C0E5D2F3B4A6C8D9E0F11 /* Native/Views/ReportWidgetEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1C0E5D2F3B4A6C8D9E0F12 /* Native/Views/ReportWidgetEditor.swift */; };
+		7A1E5C3B9D2F48A6B0C4E6F2 /* Native/ThemeModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1E5C3B9D2F48A6B0C4E6F1 /* Native/ThemeModel.swift */; };
+		7A1E5C3B9D2F48A6B0C4E6F4 /* Native/Views/ThemeSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1E5C3B9D2F48A6B0C4E6F3 /* Native/Views/ThemeSettingsView.swift */; };
+		809F71A2A5B047F39C676F68 /* Native/Views/ReportComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D5D76757B1F406481F8379E /* Native/Views/ReportComponents.swift */; };
 		92EE72845177356783DEA960 /* WidgetSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 203FCBAC6256D607C727A9CE /* WidgetSnapshot.swift */; };
-		9750BCB19B18BC9E2218101D /* Targets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D9944038F13D5EE416AC7AF /* Targets.swift */; };
-		2DB483C95A254EDA91E28784 /* GoalDescription.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BCCC14C986A49D39DDE270A /* GoalDescription.swift */; };
-		A43402011D74D5734C7D96ED /* ActualNativeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D988CE8A4343CC9ED0D4F0 /* ActualNativeUITests.swift */; };
-		A7E3C1D95B2F4E8061C4D2A1 /* ReconcileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8F4D2EA6C305F9172D5E3B2 /* ReconcileView.swift */; };
-		AB1BDB58B28CF1FDFFC17C52 /* BudgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83416C8B7281940A2D331143 /* BudgetView.swift */; };
-		ACE6F83425944BF1A3750FDA /* CategoryTransactionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A70C3736FC9438A8E9E43FF /* CategoryTransactionsView.swift */; };
+		9750BCB19B18BC9E2218101D /* Native/Targets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D9944038F13D5EE416AC7AF /* Native/Targets.swift */; };
+		A43402011D74D5734C7D96ED /* Tests/UITests/ActualNativeUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06D988CE8A4343CC9ED0D4F0 /* Tests/UITests/ActualNativeUITests.swift */; };
+		A7E3C1D95B2F4E8061C4D2A1 /* Native/Views/ReconcileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B8F4D2EA6C305F9172D5E3B2 /* Native/Views/ReconcileView.swift */; };
+		AB1BDB58B28CF1FDFFC17C52 /* Native/Views/BudgetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83416C8B7281940A2D331143 /* Native/Views/BudgetView.swift */; };
+		ACE6F83425944BF1A3750FDA /* Native/Views/CategoryTransactionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A70C3736FC9438A8E9E43FF /* Native/Views/CategoryTransactionsView.swift */; };
 		AD6EF18B16C605CA8C3B9955 /* Intents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1BB505D4A3C7BD92A98DA78 /* Intents.swift */; };
-		AF716BBB3F56F5E55D747809 /* AccountsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443F99244216BE707150CE77 /* AccountsView.swift */; };
-		C08A978F6160C98BB61BF18C /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22F448B416504426D44ADE65 /* RootView.swift */; };
+		AF716BBB3F56F5E55D747809 /* Native/Views/AccountsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 443F99244216BE707150CE77 /* Native/Views/AccountsView.swift */; };
+		C08A978F6160C98BB61BF18C /* Native/Views/RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 22F448B416504426D44ADE65 /* Native/Views/RootView.swift */; };
 		C106B1CA3BCEB4813E913337 /* WidgetSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90A8172AA7B91566B2A3FB6A /* WidgetSupport.swift */; };
-		C5A7C19B2C7C46E0A8A55A02 /* ReportsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A24D3505F8B4997956B4A63 /* ReportsView.swift */; };
-		C7C805D8E081A4AD7DCDAEC9 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33E8BE36FC801D3CF8C5A001 /* AppModel.swift */; };
-		7A1E5C3B9D2F48A6B0C4E6F2 /* ThemeModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1E5C3B9D2F48A6B0C4E6F1 /* ThemeModel.swift */; };
-		7A1E5C3B9D2F48A6B0C4E6F4 /* ThemeSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A1E5C3B9D2F48A6B0C4E6F3 /* ThemeSettingsView.swift */; };
-		CA222D1BB6E2CDD8B11B84EC /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D1C8D9F0C3BC17165ACEE19 /* Theme.swift */; };
-		D8E0347376C8932445254001 /* NativeHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A35017A7DDD556AA595E322 /* NativeHost.swift */; };
-		F03ED1EC53B849B9A3EEFE78 /* SchedulesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50EE63C13CD64073B3C0A282 /* SchedulesView.swift */; };
+		C5A7C19B2C7C46E0A8A55A02 /* Native/Views/ReportsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A24D3505F8B4997956B4A63 /* Native/Views/ReportsView.swift */; };
+		C7C805D8E081A4AD7DCDAEC9 /* Native/AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 33E8BE36FC801D3CF8C5A001 /* Native/AppModel.swift */; };
+		CA222D1BB6E2CDD8B11B84EC /* Native/Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D1C8D9F0C3BC17165ACEE19 /* Native/Theme.swift */; };
+		D8E0347376C8932445254001 /* Native/Core/NativeHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A35017A7DDD556AA595E322 /* Native/Core/NativeHost.swift */; };
+		F03ED1EC53B849B9A3EEFE78 /* Native/Views/SchedulesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50EE63C13CD64073B3C0A282 /* Native/Views/SchedulesView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -79,7 +79,7 @@
 			dstPath = Engine;
 			dstSubfolderSpec = 7;
 			files = (
-				32AFA9370EEE8272B9DC4A78 /* Resources in Copy Engine Resources */,
+				32AFA9370EEE8272B9DC4A78 /* Native/Resources in Copy Engine Resources */,
 			);
 			name = "Copy Engine Resources";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -98,57 +98,57 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		06D988CE8A4343CC9ED0D4F0 /* ActualNativeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/UITests/ActualNativeUITests.swift; sourceTree = "<group>"; };
-		0AAF66868F872CE43E775077 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Native/Assets.xcassets; sourceTree = "<group>"; };
+		06D988CE8A4343CC9ED0D4F0 /* Tests/UITests/ActualNativeUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests/UITests/ActualNativeUITests.swift; sourceTree = "<group>"; };
+		0AAF66868F872CE43E775077 /* Native/Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Native/Assets.xcassets; sourceTree = "<group>"; };
 		14762814060BC0D9E4BB90EF /* ActualWidget.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ActualWidget.swift; path = Widget/ActualWidget.swift; sourceTree = "<group>"; };
-		1A35017A7DDD556AA595E322 /* NativeHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Core/NativeHost.swift; sourceTree = "<group>"; };
+		1A35017A7DDD556AA595E322 /* Native/Core/NativeHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Core/NativeHost.swift; sourceTree = "<group>"; };
 		203FCBAC6256D607C727A9CE /* WidgetSnapshot.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WidgetSnapshot.swift; path = Native/WidgetSnapshot.swift; sourceTree = "<group>"; };
-		22F448B416504426D44ADE65 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/RootView.swift; sourceTree = "<group>"; };
-		2465D96E6AC740AD9BCDF926 /* ReportDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ReportDetails.swift; sourceTree = "<group>"; };
-		7A1C0E5D2F3B4A6C8D9E0F12 /* ReportWidgetEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ReportWidgetEditor.swift; sourceTree = "<group>"; };
-		26AB470B66CA9603C9E53F67 /* Resources */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Native/Resources; sourceTree = "<group>"; };
+		22F448B416504426D44ADE65 /* Native/Views/RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/RootView.swift; sourceTree = "<group>"; };
+		2465D96E6AC740AD9BCDF926 /* Native/Views/ReportDetails.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ReportDetails.swift; sourceTree = "<group>"; };
+		26AB470B66CA9603C9E53F67 /* Native/Resources */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Native/Resources; sourceTree = "<group>"; };
 		2E635C1267B14E15F71F5D1A /* ActualNativeUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; path = ActualNativeUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		33E8BE36FC801D3CF8C5A001 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/AppModel.swift; sourceTree = "<group>"; };
-		35ADAC2A7B4B204230C2E4AE /* TransactionEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/TransactionEditor.swift; sourceTree = "<group>"; };
-		35E8712517604F4091EB62AC /* ImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ImportView.swift; sourceTree = "<group>"; };
+		33E8BE36FC801D3CF8C5A001 /* Native/AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/AppModel.swift; sourceTree = "<group>"; };
+		35ADAC2A7B4B204230C2E4AE /* Native/Views/TransactionEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/TransactionEditor.swift; sourceTree = "<group>"; };
+		35E8712517604F4091EB62AC /* Native/Views/ImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ImportView.swift; sourceTree = "<group>"; };
 		38A007151ABE87CC01A5B6E9 /* ActualNative.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; path = ActualNative.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3BCE365185F8F91EB2AEE48A /* ActualNative.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = ActualNative.entitlements; path = Native/ActualNative.entitlements; sourceTree = "<group>"; };
-		7A1E5C3B9D2F48A6B0C4E6F1 /* ThemeModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/ThemeModel.swift; sourceTree = "<group>"; };
-		7A1E5C3B9D2F48A6B0C4E6F3 /* ThemeSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ThemeSettingsView.swift; sourceTree = "<group>"; };
-		3D1C8D9F0C3BC17165ACEE19 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Theme.swift; sourceTree = "<group>"; };
-		3D9944038F13D5EE416AC7AF /* Targets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Targets.swift; sourceTree = "<group>"; };
-		8BCCC14C986A49D39DDE270A /* GoalDescription.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/GoalDescription.swift; sourceTree = "<group>"; };
-		3F6D4459327E4E6FB05D7E0F /* TagsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/TagsView.swift; sourceTree = "<group>"; };
+		3D1C8D9F0C3BC17165ACEE19 /* Native/Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Theme.swift; sourceTree = "<group>"; };
+		3D9944038F13D5EE416AC7AF /* Native/Targets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Targets.swift; sourceTree = "<group>"; };
+		3F6D4459327E4E6FB05D7E0F /* Native/Views/TagsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/TagsView.swift; sourceTree = "<group>"; };
 		400697EE7D76E3928CCC977C /* ActualNativeWidget.entitlements */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.entitlements; name = ActualNativeWidget.entitlements; path = Widget/ActualNativeWidget.entitlements; sourceTree = "<group>"; };
-		4125543F935A49B49486C33E /* RulesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/RulesView.swift; sourceTree = "<group>"; };
-		443F99244216BE707150CE77 /* AccountsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/AccountsView.swift; sourceTree = "<group>"; };
+		4125543F935A49B49486C33E /* Native/Views/RulesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/RulesView.swift; sourceTree = "<group>"; };
+		443F99244216BE707150CE77 /* Native/Views/AccountsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/AccountsView.swift; sourceTree = "<group>"; };
 		4BE2ABA870DD3012B1FCB4CE /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
-		50EE63C13CD64073B3C0A282 /* SchedulesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/SchedulesView.swift; sourceTree = "<group>"; };
-		66177DE593ACD3F7FBE818F7 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Models.swift; sourceTree = "<group>"; };
-		6A24D3505F8B4997956B4A63 /* ReportsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ReportsView.swift; sourceTree = "<group>"; };
-		6D5D76757B1F406481F8379E /* ReportComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ReportComponents.swift; sourceTree = "<group>"; };
-		6F51DF911B0314245CE3C35C /* SQLiteHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Core/SQLiteHost.swift; sourceTree = "<group>"; };
-		729C3F507D21493BA3BB885A /* PayeesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/PayeesView.swift; sourceTree = "<group>"; };
-		811B55025A214E8B9035B5F9 /* Reports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Reports.swift; sourceTree = "<group>"; };
-		81255675588A43298DECAEB3 /* Rules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Rules.swift; sourceTree = "<group>"; };
-		83416C8B7281940A2D331143 /* BudgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/BudgetView.swift; sourceTree = "<group>"; };
+		50EE63C13CD64073B3C0A282 /* Native/Views/SchedulesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/SchedulesView.swift; sourceTree = "<group>"; };
+		66177DE593ACD3F7FBE818F7 /* Native/Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Models.swift; sourceTree = "<group>"; };
+		6A24D3505F8B4997956B4A63 /* Native/Views/ReportsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ReportsView.swift; sourceTree = "<group>"; };
+		6D5D76757B1F406481F8379E /* Native/Views/ReportComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ReportComponents.swift; sourceTree = "<group>"; };
+		6F51DF911B0314245CE3C35C /* Native/Core/SQLiteHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Core/SQLiteHost.swift; sourceTree = "<group>"; };
+		729C3F507D21493BA3BB885A /* Native/Views/PayeesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/PayeesView.swift; sourceTree = "<group>"; };
+		7A1C0E5D2F3B4A6C8D9E0F12 /* Native/Views/ReportWidgetEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ReportWidgetEditor.swift; sourceTree = "<group>"; };
+		7A1E5C3B9D2F48A6B0C4E6F1 /* Native/ThemeModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/ThemeModel.swift; sourceTree = "<group>"; };
+		7A1E5C3B9D2F48A6B0C4E6F3 /* Native/Views/ThemeSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ThemeSettingsView.swift; sourceTree = "<group>"; };
+		811B55025A214E8B9035B5F9 /* Native/Reports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Reports.swift; sourceTree = "<group>"; };
+		81255675588A43298DECAEB3 /* Native/Rules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Rules.swift; sourceTree = "<group>"; };
+		83416C8B7281940A2D331143 /* Native/Views/BudgetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/BudgetView.swift; sourceTree = "<group>"; };
 		88C2D1F425FD0D4B7ADC3B2E /* ActualNativeWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ActualNativeWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		8BCCC14C986A49D39DDE270A /* Native/GoalDescription.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/GoalDescription.swift; sourceTree = "<group>"; };
 		90A8172AA7B91566B2A3FB6A /* WidgetSupport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WidgetSupport.swift; path = Native/WidgetSupport.swift; sourceTree = "<group>"; };
-		9A70C3736FC9438A8E9E43FF /* CategoryTransactionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/CategoryTransactionsView.swift; sourceTree = "<group>"; };
-		9B5E55D034124E4FA7708A32 /* ManageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ManageViews.swift; sourceTree = "<group>"; };
-		9E4B2C7A1F6D3E8B5A0C4F21 /* AmountField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/AmountField.swift; sourceTree = "<group>"; };
+		9A70C3736FC9438A8E9E43FF /* Native/Views/CategoryTransactionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/CategoryTransactionsView.swift; sourceTree = "<group>"; };
+		9B5E55D034124E4FA7708A32 /* Native/Views/ManageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ManageViews.swift; sourceTree = "<group>"; };
+		9E4B2C7A1F6D3E8B5A0C4F21 /* Native/Views/AmountField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/AmountField.swift; sourceTree = "<group>"; };
 		A1BB505D4A3C7BD92A98DA78 /* Intents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Intents.swift; path = Native/Intents.swift; sourceTree = "<group>"; };
-		AB9A221DDF49480E9A44C372 /* Importing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Importing.swift; sourceTree = "<group>"; };
-		B7166B33BC754AD2B0247743 /* Schedules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Schedules.swift; sourceTree = "<group>"; };
-		B8F4D2EA6C305F9172D5E3B2 /* ReconcileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ReconcileView.swift; sourceTree = "<group>"; };
+		AB9A221DDF49480E9A44C372 /* Native/Importing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Importing.swift; sourceTree = "<group>"; };
+		B7166B33BC754AD2B0247743 /* Native/Schedules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Schedules.swift; sourceTree = "<group>"; };
+		B8F4D2EA6C305F9172D5E3B2 /* Native/Views/ReconcileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ReconcileView.swift; sourceTree = "<group>"; };
 		BA7499A642120147A4B2BD5F /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = Native/Info.plist; sourceTree = "<group>"; };
-		C3A2A897C9FC5F69A2DAC930 /* EngineClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Core/EngineClient.swift; sourceTree = "<group>"; };
-		D33B550F88C0FAFC47CAA9B5 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/SettingsView.swift; sourceTree = "<group>"; };
-		D8ECE5380F8A47469DB342D8 /* BudgetActionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/BudgetActionsView.swift; sourceTree = "<group>"; };
-		E3D9589739A3279854188C92 /* ActualNativeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/ActualNativeApp.swift; sourceTree = "<group>"; };
-		E4E7BEFC3B3FF10A7AD58AF0 /* TargetsEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/TargetsEditor.swift; sourceTree = "<group>"; };
+		C3A2A897C9FC5F69A2DAC930 /* Native/Core/EngineClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Core/EngineClient.swift; sourceTree = "<group>"; };
+		D33B550F88C0FAFC47CAA9B5 /* Native/Views/SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/SettingsView.swift; sourceTree = "<group>"; };
+		D8ECE5380F8A47469DB342D8 /* Native/Views/BudgetActionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/BudgetActionsView.swift; sourceTree = "<group>"; };
+		E3D9589739A3279854188C92 /* Native/ActualNativeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/ActualNativeApp.swift; sourceTree = "<group>"; };
+		E4E7BEFC3B3FF10A7AD58AF0 /* Native/Views/TargetsEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/TargetsEditor.swift; sourceTree = "<group>"; };
 		EB6B237153F43152E6F44E9A /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = Widget/Info.plist; sourceTree = "<group>"; };
-		F19188F7225770AF6FD525C0 /* TransactionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/TransactionsView.swift; sourceTree = "<group>"; };
+		F19188F7225770AF6FD525C0 /* Native/Views/TransactionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/TransactionsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -198,45 +198,45 @@
 		870B3294C0CBD48AF6BBCC1B = {
 			isa = PBXGroup;
 			children = (
-				E3D9589739A3279854188C92 /* ActualNativeApp.swift */,
-				33E8BE36FC801D3CF8C5A001 /* AppModel.swift */,
-				C3A2A897C9FC5F69A2DAC930 /* EngineClient.swift */,
-				1A35017A7DDD556AA595E322 /* NativeHost.swift */,
-				6F51DF911B0314245CE3C35C /* SQLiteHost.swift */,
-				66177DE593ACD3F7FBE818F7 /* Models.swift */,
-				3D9944038F13D5EE416AC7AF /* Targets.swift */,
-				8BCCC14C986A49D39DDE270A /* GoalDescription.swift */,
-				6D5D76757B1F406481F8379E /* ReportComponents.swift */,
-				2465D96E6AC740AD9BCDF926 /* ReportDetails.swift */,
-				7A1C0E5D2F3B4A6C8D9E0F12 /* ReportWidgetEditor.swift */,
-				6A24D3505F8B4997956B4A63 /* ReportsView.swift */,
-				811B55025A214E8B9035B5F9 /* Reports.swift */,
-				3D1C8D9F0C3BC17165ACEE19 /* Theme.swift */,
-				7A1E5C3B9D2F48A6B0C4E6F3 /* ThemeSettingsView.swift */,
-				7A1E5C3B9D2F48A6B0C4E6F1 /* ThemeModel.swift */,
-				443F99244216BE707150CE77 /* AccountsView.swift */,
-				9E4B2C7A1F6D3E8B5A0C4F21 /* AmountField.swift */,
-				83416C8B7281940A2D331143 /* BudgetView.swift */,
-				AB9A221DDF49480E9A44C372 /* Importing.swift */,
-				35E8712517604F4091EB62AC /* ImportView.swift */,
-				3F6D4459327E4E6FB05D7E0F /* TagsView.swift */,
-				4125543F935A49B49486C33E /* RulesView.swift */,
-				81255675588A43298DECAEB3 /* Rules.swift */,
-				729C3F507D21493BA3BB885A /* PayeesView.swift */,
-				9A70C3736FC9438A8E9E43FF /* CategoryTransactionsView.swift */,
-				50EE63C13CD64073B3C0A282 /* SchedulesView.swift */,
-				B7166B33BC754AD2B0247743 /* Schedules.swift */,
-				9B5E55D034124E4FA7708A32 /* ManageViews.swift */,
-				D8ECE5380F8A47469DB342D8 /* BudgetActionsView.swift */,
-				B8F4D2EA6C305F9172D5E3B2 /* ReconcileView.swift */,
-				22F448B416504426D44ADE65 /* RootView.swift */,
-				D33B550F88C0FAFC47CAA9B5 /* SettingsView.swift */,
-				E4E7BEFC3B3FF10A7AD58AF0 /* TargetsEditor.swift */,
-				35ADAC2A7B4B204230C2E4AE /* TransactionEditor.swift */,
-				F19188F7225770AF6FD525C0 /* TransactionsView.swift */,
-				0AAF66868F872CE43E775077 /* Assets.xcassets */,
-				26AB470B66CA9603C9E53F67 /* Resources */,
-				06D988CE8A4343CC9ED0D4F0 /* ActualNativeUITests.swift */,
+				E3D9589739A3279854188C92 /* Native/ActualNativeApp.swift */,
+				33E8BE36FC801D3CF8C5A001 /* Native/AppModel.swift */,
+				C3A2A897C9FC5F69A2DAC930 /* Native/Core/EngineClient.swift */,
+				1A35017A7DDD556AA595E322 /* Native/Core/NativeHost.swift */,
+				6F51DF911B0314245CE3C35C /* Native/Core/SQLiteHost.swift */,
+				66177DE593ACD3F7FBE818F7 /* Native/Models.swift */,
+				3D9944038F13D5EE416AC7AF /* Native/Targets.swift */,
+				8BCCC14C986A49D39DDE270A /* Native/GoalDescription.swift */,
+				6D5D76757B1F406481F8379E /* Native/Views/ReportComponents.swift */,
+				2465D96E6AC740AD9BCDF926 /* Native/Views/ReportDetails.swift */,
+				7A1C0E5D2F3B4A6C8D9E0F12 /* Native/Views/ReportWidgetEditor.swift */,
+				6A24D3505F8B4997956B4A63 /* Native/Views/ReportsView.swift */,
+				811B55025A214E8B9035B5F9 /* Native/Reports.swift */,
+				3D1C8D9F0C3BC17165ACEE19 /* Native/Theme.swift */,
+				7A1E5C3B9D2F48A6B0C4E6F3 /* Native/Views/ThemeSettingsView.swift */,
+				7A1E5C3B9D2F48A6B0C4E6F1 /* Native/ThemeModel.swift */,
+				443F99244216BE707150CE77 /* Native/Views/AccountsView.swift */,
+				9E4B2C7A1F6D3E8B5A0C4F21 /* Native/Views/AmountField.swift */,
+				83416C8B7281940A2D331143 /* Native/Views/BudgetView.swift */,
+				AB9A221DDF49480E9A44C372 /* Native/Importing.swift */,
+				35E8712517604F4091EB62AC /* Native/Views/ImportView.swift */,
+				3F6D4459327E4E6FB05D7E0F /* Native/Views/TagsView.swift */,
+				4125543F935A49B49486C33E /* Native/Views/RulesView.swift */,
+				81255675588A43298DECAEB3 /* Native/Rules.swift */,
+				729C3F507D21493BA3BB885A /* Native/Views/PayeesView.swift */,
+				9A70C3736FC9438A8E9E43FF /* Native/Views/CategoryTransactionsView.swift */,
+				50EE63C13CD64073B3C0A282 /* Native/Views/SchedulesView.swift */,
+				B7166B33BC754AD2B0247743 /* Native/Schedules.swift */,
+				9B5E55D034124E4FA7708A32 /* Native/Views/ManageViews.swift */,
+				D8ECE5380F8A47469DB342D8 /* Native/Views/BudgetActionsView.swift */,
+				B8F4D2EA6C305F9172D5E3B2 /* Native/Views/ReconcileView.swift */,
+				22F448B416504426D44ADE65 /* Native/Views/RootView.swift */,
+				D33B550F88C0FAFC47CAA9B5 /* Native/Views/SettingsView.swift */,
+				E4E7BEFC3B3FF10A7AD58AF0 /* Native/Views/TargetsEditor.swift */,
+				35ADAC2A7B4B204230C2E4AE /* Native/Views/TransactionEditor.swift */,
+				F19188F7225770AF6FD525C0 /* Native/Views/TransactionsView.swift */,
+				0AAF66868F872CE43E775077 /* Native/Assets.xcassets */,
+				26AB470B66CA9603C9E53F67 /* Native/Resources */,
+				06D988CE8A4343CC9ED0D4F0 /* Tests/UITests/ActualNativeUITests.swift */,
 				615B463D1028E4E24B674CF7 /* Products */,
 				203FCBAC6256D607C727A9CE /* WidgetSnapshot.swift */,
 				90A8172AA7B91566B2A3FB6A /* WidgetSupport.swift */,
@@ -359,7 +359,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				6292B24D93154C6A25CA48FB /* Assets.xcassets in Resources */,
+				6292B24D93154C6A25CA48FB /* Native/Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -400,7 +400,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A43402011D74D5734C7D96ED /* ActualNativeUITests.swift in Sources */,
+				A43402011D74D5734C7D96ED /* Tests/UITests/ActualNativeUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -417,42 +417,42 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				6773E3F2849B62EF2317BF27 /* ActualNativeApp.swift in Sources */,
-				C7C805D8E081A4AD7DCDAEC9 /* AppModel.swift in Sources */,
-				2EDA2189B4348994B63A09C1 /* EngineClient.swift in Sources */,
-				D8E0347376C8932445254001 /* NativeHost.swift in Sources */,
-				3724999EFF609E935F4E5519 /* SQLiteHost.swift in Sources */,
-				0AED486DC5028236E648FC8C /* Models.swift in Sources */,
-				9750BCB19B18BC9E2218101D /* Targets.swift in Sources */,
-				2DB483C95A254EDA91E28784 /* GoalDescription.swift in Sources */,
-				809F71A2A5B047F39C676F68 /* ReportComponents.swift in Sources */,
-				098355D42E8947DDB81495CD /* ReportDetails.swift in Sources */,
-				7A1C0E5D2F3B4A6C8D9E0F11 /* ReportWidgetEditor.swift in Sources */,
-				C5A7C19B2C7C46E0A8A55A02 /* ReportsView.swift in Sources */,
-				2F8FE7A1BB3C4F7184F1D7FF /* Reports.swift in Sources */,
-				6E1F6E9757C9755493C9A6A3 /* TargetsEditor.swift in Sources */,
-				CA222D1BB6E2CDD8B11B84EC /* Theme.swift in Sources */,
-				7A1E5C3B9D2F48A6B0C4E6F4 /* ThemeSettingsView.swift in Sources */,
-				7A1E5C3B9D2F48A6B0C4E6F2 /* ThemeModel.swift in Sources */,
-				AF716BBB3F56F5E55D747809 /* AccountsView.swift in Sources */,
-				5C1A7E0B9D2F4A6E8B3C1D20 /* AmountField.swift in Sources */,
-				AB1BDB58B28CF1FDFFC17C52 /* BudgetView.swift in Sources */,
-				2ACCE8679E7847AFB73B2225 /* Importing.swift in Sources */,
-				5053EA6B4042432DA9A0EB90 /* ImportView.swift in Sources */,
-				1EE747E8A7BA4902B438745D /* TagsView.swift in Sources */,
-				6E739054A39D46758AFA85A3 /* RulesView.swift in Sources */,
-				050D7263F02742B6BF447F6D /* Rules.swift in Sources */,
-				0D29242560594EF4BA07BFC1 /* PayeesView.swift in Sources */,
-				ACE6F83425944BF1A3750FDA /* CategoryTransactionsView.swift in Sources */,
-				F03ED1EC53B849B9A3EEFE78 /* SchedulesView.swift in Sources */,
-				2ABE5A407256424C95B96350 /* Schedules.swift in Sources */,
-				095DE5EF907D462DBD3537A9 /* ManageViews.swift in Sources */,
-				451352A34D5C414DB91A638B /* BudgetActionsView.swift in Sources */,
-				C08A978F6160C98BB61BF18C /* RootView.swift in Sources */,
-				A7E3C1D95B2F4E8061C4D2A1 /* ReconcileView.swift in Sources */,
-				014B35C0E59A05E50245606A /* SettingsView.swift in Sources */,
-				2A6FB75C0E638CB7BA4B4263 /* TransactionEditor.swift in Sources */,
-				02E6863D200C189845137667 /* TransactionsView.swift in Sources */,
+				6773E3F2849B62EF2317BF27 /* Native/ActualNativeApp.swift in Sources */,
+				C7C805D8E081A4AD7DCDAEC9 /* Native/AppModel.swift in Sources */,
+				2EDA2189B4348994B63A09C1 /* Native/Core/EngineClient.swift in Sources */,
+				D8E0347376C8932445254001 /* Native/Core/NativeHost.swift in Sources */,
+				3724999EFF609E935F4E5519 /* Native/Core/SQLiteHost.swift in Sources */,
+				0AED486DC5028236E648FC8C /* Native/Models.swift in Sources */,
+				9750BCB19B18BC9E2218101D /* Native/Targets.swift in Sources */,
+				2DB483C95A254EDA91E28784 /* Native/GoalDescription.swift in Sources */,
+				809F71A2A5B047F39C676F68 /* Native/Views/ReportComponents.swift in Sources */,
+				098355D42E8947DDB81495CD /* Native/Views/ReportDetails.swift in Sources */,
+				7A1C0E5D2F3B4A6C8D9E0F11 /* Native/Views/ReportWidgetEditor.swift in Sources */,
+				C5A7C19B2C7C46E0A8A55A02 /* Native/Views/ReportsView.swift in Sources */,
+				2F8FE7A1BB3C4F7184F1D7FF /* Native/Reports.swift in Sources */,
+				6E1F6E9757C9755493C9A6A3 /* Native/Views/TargetsEditor.swift in Sources */,
+				CA222D1BB6E2CDD8B11B84EC /* Native/Theme.swift in Sources */,
+				7A1E5C3B9D2F48A6B0C4E6F4 /* Native/Views/ThemeSettingsView.swift in Sources */,
+				7A1E5C3B9D2F48A6B0C4E6F2 /* Native/ThemeModel.swift in Sources */,
+				AF716BBB3F56F5E55D747809 /* Native/Views/AccountsView.swift in Sources */,
+				5C1A7E0B9D2F4A6E8B3C1D20 /* Native/Views/AmountField.swift in Sources */,
+				AB1BDB58B28CF1FDFFC17C52 /* Native/Views/BudgetView.swift in Sources */,
+				2ACCE8679E7847AFB73B2225 /* Native/Importing.swift in Sources */,
+				5053EA6B4042432DA9A0EB90 /* Native/Views/ImportView.swift in Sources */,
+				1EE747E8A7BA4902B438745D /* Native/Views/TagsView.swift in Sources */,
+				6E739054A39D46758AFA85A3 /* Native/Views/RulesView.swift in Sources */,
+				050D7263F02742B6BF447F6D /* Native/Rules.swift in Sources */,
+				0D29242560594EF4BA07BFC1 /* Native/Views/PayeesView.swift in Sources */,
+				ACE6F83425944BF1A3750FDA /* Native/Views/CategoryTransactionsView.swift in Sources */,
+				F03ED1EC53B849B9A3EEFE78 /* Native/Views/SchedulesView.swift in Sources */,
+				2ABE5A407256424C95B96350 /* Native/Schedules.swift in Sources */,
+				095DE5EF907D462DBD3537A9 /* Native/Views/ManageViews.swift in Sources */,
+				451352A34D5C414DB91A638B /* Native/Views/BudgetActionsView.swift in Sources */,
+				C08A978F6160C98BB61BF18C /* Native/Views/RootView.swift in Sources */,
+				A7E3C1D95B2F4E8061C4D2A1 /* Native/Views/ReconcileView.swift in Sources */,
+				014B35C0E59A05E50245606A /* Native/Views/SettingsView.swift in Sources */,
+				2A6FB75C0E638CB7BA4B4263 /* Native/Views/TransactionEditor.swift in Sources */,
+				02E6863D200C189845137667 /* Native/Views/TransactionsView.swift in Sources */,
 				92EE72845177356783DEA960 /* WidgetSnapshot.swift in Sources */,
 				C106B1CA3BCEB4813E913337 /* WidgetSupport.swift in Sources */,
 				AD6EF18B16C605CA8C3B9955 /* Intents.swift in Sources */,
