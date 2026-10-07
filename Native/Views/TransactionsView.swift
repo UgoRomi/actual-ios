@@ -9,6 +9,7 @@ struct TransactionsView: View {
     var tag: String? = nil
     @Environment(AppModel.self) private var model
     @State private var search = ""
+    @State private var unclearedOnly = false
     @State private var shownCount = TransactionSection.pageSize
     @State private var selectedTransaction: Transaction?
     @State private var isAdding = false
@@ -37,15 +38,16 @@ struct TransactionsView: View {
             ([transaction.notes ?? ""] + (transaction.splits ?? []).map(\.notes)).contains { NoteTags.extract($0).contains(tag) }
         } } ?? model.transactions
         let sections = TransactionSection.grouped(listed, accountID: accountID, search: search,
-                                                  currency: model.currency, limit: shownCount)
+                                                  unclearedOnly: unclearedOnly, currency: model.currency, limit: shownCount)
         let hasMore = sections.reduce(0) { $0 + $1.transactions.count } == shownCount
         let offBudget = Set((model.overview?.accounts ?? []).filter(\.offbudget).map(\.id))
         return ThemedList {
             if let error = model.errorMessage { Section { ErrorNotice(message: error) { Task { await model.refresh() } } } }
             if let accountID { BankSyncNotice(accountID: accountID) }
             if let account, let reconciliation { ReconcilingBanner(account: account, reconciliation: reconciliation) }
+            // Scheduled transactions are not in the register yet, so the uncleared filter leaves them out.
             let upcoming = model.upcoming.filter { scheduled in
-                tag == nil && (accountID == nil || scheduled.accountId == accountID)
+                tag == nil && !unclearedOnly && (accountID == nil || scheduled.accountId == accountID)
                     && (search.isEmpty || scheduled.title.localizedCaseInsensitiveContains(search)
                         || (scheduled.categoryName ?? "").localizedCaseInsensitiveContains(search))
             }
@@ -58,7 +60,9 @@ struct TransactionsView: View {
                     }
                 }
             }
-            if sections.isEmpty && upcoming.isEmpty {
+            if sections.isEmpty && upcoming.isEmpty && unclearedOnly && search.isEmpty {
+                ContentUnavailableView("All cleared", systemImage: "checkmark.circle", description: Text("Every transaction here has cleared."))
+            } else if sections.isEmpty && upcoming.isEmpty {
                 ContentUnavailableView(search.isEmpty ? "A fresh start" : "No matching transactions", systemImage: search.isEmpty ? "list.bullet.rectangle" : "magnifyingglass", description: Text(search.isEmpty ? "Your transactions will appear here. Add one to keep your budget up to date." : "Try a different payee, category, or amount."))
             }
             ForEach(sections) { section in
@@ -85,6 +89,7 @@ struct TransactionsView: View {
             Section { SyncFooter() }.listRowBackground(Color.clear)
         }
         .onChange(of: search) { shownCount = TransactionSection.pageSize }
+        .onChange(of: unclearedOnly) { shownCount = TransactionSection.pageSize }
         .navigationTitle(accountName ?? "Transactions")
         .searchable(text: $search, prompt: "Payee, category, or amount")
         .toolbar {
@@ -94,6 +99,11 @@ struct TransactionsView: View {
                         .disabled(model.isBusy || account == nil || account?.closed == true)
                 }
                 ToolbarItem(placement: .topBarTrailing) { accountMenu }
+            }
+            ToolbarItem(placement: .topBarTrailing) {
+                Toggle("Uncleared only", systemImage: unclearedOnly ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle",
+                       isOn: $unclearedOnly.animation())
+                    .toggleStyle(.button)
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Add transaction", systemImage: "plus") { isAdding = true }

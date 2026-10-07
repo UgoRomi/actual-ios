@@ -4,11 +4,11 @@ import SQLite3
 @main struct TransactionsRegression {
     static func transaction(_ id: String, date: String = "2026-09-24", account: String = "a",
                             payee: String? = "Market", category: String? = "Food", notes: String? = nil,
-                            amount: Int = -1234, parent: Bool = false, child: Bool = false,
+                            amount: Int = -1234, cleared: Bool = true, parent: Bool = false, child: Bool = false,
                             transfer: Bool = false, categoryID: String? = nil, transferAccount: String? = nil) -> Transaction {
         Transaction(id: id, accountId: account, date: date, payeeId: nil, payeeName: payee,
                     categoryId: categoryID, categoryName: category, amount: amount, notes: notes,
-                    cleared: true, isParent: parent, isChild: child, isTransfer: transfer, reconciled: false,
+                    cleared: cleared, isParent: parent, isChild: child, isTransfer: transfer, reconciled: false,
                     transferAccountId: transferAccount)
     }
 
@@ -32,6 +32,12 @@ import SQLite3
         precondition(TransactionSection.grouped(rows, accountID: "b", search: "HOLIDAY").isEmpty)
         precondition(TransactionSection.grouped(rows, search: "missing").isEmpty)
         precondition(TransactionSection.grouped([]).isEmpty)
+        // The uncleared filter matches Actual's uncleared balance, and combines with the account and search.
+        let clearing = rows + [transaction("pending", payee: "Pharmacy", cleared: false),
+                               transaction("pending-b", account: "b", cleared: false)]
+        precondition(ids(TransactionSection.grouped(clearing, unclearedOnly: true)) == ["pending", "pending-b"])
+        precondition(ids(TransactionSection.grouped(clearing, accountID: "b", unclearedOnly: true)) == ["pending-b"])
+        precondition(ids(TransactionSection.grouped(clearing, search: "pharmacy", unclearedOnly: true)) == ["pending"])
         // A page keeps the first matches of the newest-first register, skipping split parts and other accounts.
         let newestFirst = Array(rows.dropFirst()) + [rows[0]]
         precondition(ids(TransactionSection.grouped(newestFirst, limit: 2)) == ["parent", "transfer"])

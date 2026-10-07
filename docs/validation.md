@@ -61,7 +61,7 @@ Run the standalone regression without the Actual checkout or simulator:
 ./scripts/test-transactions.sh /absolute/path/to/db.sqlite --baseline
 ```
 
-Checks cover newest-first dates, stable same-day order, account scoping, hidden split children, visible split parents/transfers, empty results, payee/category/notes searches, and positive/negative amounts with US/Italian locales and EUR/no currency. A synthetic 10,000-transaction/10,000-date fixture guards against testing only a few date sections. No private budget data is committed.
+Checks cover newest-first dates, stable same-day order, account scoping, the uncleared filter, hidden split children, visible split parents/transfers, empty results, payee/category/notes searches, and positive/negative amounts with US/Italian locales and EUR/no currency. A synthetic 10,000-transaction/10,000-date fixture guards against testing only a few date sections. No private budget data is committed.
 
 On the supplied fixture, the macOS Swift debug harness measured 10.777 seconds for the old per-section preparation versus 0.008 seconds for grouping and 0.047 seconds for a full no-match search. The synthetic fixture took 0.023 seconds to group and 0.050 seconds to search. These measure data preparation, not total screen presentation time. The signed iOS simulator build passed.
 

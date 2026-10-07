@@ -602,11 +602,14 @@ struct TransactionSection: Identifiable {
 
     /// Filter once, then group once. Section rendering must never rescan the full register.
     /// `limit` keeps only the first matching transactions of the newest-first register, and stops filtering once it has them.
+    /// `unclearedOnly` keeps those Actual counts in an account's uncleared balance (`cleared: false`).
     static func grouped(_ transactions: [Transaction], accountID: String? = nil, search: String = "",
-                        currency: String = "", locale: Locale = Money.locale, limit: Int = .max) -> [Self] {
+                        unclearedOnly: Bool = false, currency: String = "", locale: Locale = Money.locale,
+                        limit: Int = .max) -> [Self] {
         let formatter = search.isEmpty ? nil : Money.formatter(currency: currency, locale: locale)
         let matching = transactions.lazy.filter { transaction in
-            guard !transaction.isChild, accountID == nil || transaction.accountId == accountID else { return false }
+            guard !transaction.isChild, accountID == nil || transaction.accountId == accountID,
+                  !unclearedOnly || !transaction.cleared else { return false }
             guard let formatter else { return true }
             return transaction.title.localizedCaseInsensitiveContains(search)
                 || transaction.detail.localizedCaseInsensitiveContains(search)
