@@ -2,7 +2,7 @@
 
 An unofficial SwiftUI iOS client for Actual Budget. A separate app with native Liquid Glass navigation, Actual's purple and navy or a theme of your own, and the real Actual engine running locally through JavaScriptCore.
 
-This is a development build, not yet submitted to the App Store. The app and widget each include a privacy manifest, and the app declares that it uses only exempt encryption. The App Store privacy policy is [`docs/privacy.html`](docs/privacy.html); update it when the app's data handling changes.
+This is a development build, not yet submitted to the App Store. The app and widget each include a privacy manifest, and the app declares that it uses only exempt encryption. The App Store privacy policy is [`site/privacy.html`](site/privacy.html); `site/` holds the pages served publicly. Update the policy when the app's data handling changes.
 
 ## What works
 
