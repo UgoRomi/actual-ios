@@ -30,6 +30,8 @@
 		54A2091B7FBAD00DDF959F31 /* ActualWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14762814060BC0D9E4BB90EF /* ActualWidget.swift */; };
 		5C1A7E0B9D2F4A6E8B3C1D20 /* AmountField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E4B2C7A1F6D3E8B5A0C4F21 /* AmountField.swift */; };
 		6292B24D93154C6A25CA48FB /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0AAF66868F872CE43E775077 /* Assets.xcassets */; };
+		5E1A9C3D7B2F4E6A8C0D1E21 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 5E1A9C3D7B2F4E6A8C0D1E20 /* PrivacyInfo.xcprivacy */; };
+		5E1A9C3D7B2F4E6A8C0D1E23 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 5E1A9C3D7B2F4E6A8C0D1E22 /* PrivacyInfo.xcprivacy */; };
 		6773E3F2849B62EF2317BF27 /* ActualNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3D9589739A3279854188C92 /* ActualNativeApp.swift */; };
 		6E1558E6E4ED0F4EB6464BCC /* ActualNativeWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 88C2D1F425FD0D4B7ADC3B2E /* ActualNativeWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		6E1F6E9757C9755493C9A6A3 /* TargetsEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4E7BEFC3B3FF10A7AD58AF0 /* TargetsEditor.swift */; };
@@ -142,6 +144,8 @@
 		B7166B33BC754AD2B0247743 /* Schedules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Schedules.swift; sourceTree = "<group>"; };
 		B8F4D2EA6C305F9172D5E3B2 /* ReconcileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ReconcileView.swift; sourceTree = "<group>"; };
 		BA7499A642120147A4B2BD5F /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = Native/Info.plist; sourceTree = "<group>"; };
+		5E1A9C3D7B2F4E6A8C0D1E20 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Native/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		5E1A9C3D7B2F4E6A8C0D1E22 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Widget/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		C3A2A897C9FC5F69A2DAC930 /* EngineClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Core/EngineClient.swift; sourceTree = "<group>"; };
 		D33B550F88C0FAFC47CAA9B5 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/SettingsView.swift; sourceTree = "<group>"; };
 		D8ECE5380F8A47469DB342D8 /* BudgetActionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/BudgetActionsView.swift; sourceTree = "<group>"; };
@@ -242,10 +246,12 @@
 				90A8172AA7B91566B2A3FB6A /* WidgetSupport.swift */,
 				BA7499A642120147A4B2BD5F /* Info.plist */,
 				3BCE365185F8F91EB2AEE48A /* ActualNative.entitlements */,
+				5E1A9C3D7B2F4E6A8C0D1E20 /* PrivacyInfo.xcprivacy */,
 				046CE664461C253A5744E0DC /* Frameworks */,
 				14762814060BC0D9E4BB90EF /* ActualWidget.swift */,
 				EB6B237153F43152E6F44E9A /* Info.plist */,
 				400697EE7D76E3928CCC977C /* ActualNativeWidget.entitlements */,
+				5E1A9C3D7B2F4E6A8C0D1E22 /* PrivacyInfo.xcprivacy */,
 				A1BB505D4A3C7BD92A98DA78 /* Intents.swift */,
 			);
 			sourceTree = "<group>";
@@ -360,6 +366,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				6292B24D93154C6A25CA48FB /* Assets.xcassets in Resources */,
+				5E1A9C3D7B2F4E6A8C0D1E21 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -367,6 +374,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				5E1A9C3D7B2F4E6A8C0D1E23 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
