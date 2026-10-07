@@ -76,6 +76,8 @@ export NODE_BINARY=/absolute/path/to/node
 export ACTUAL_SOURCE=/absolute/path/to/actual
 ```
 
+Xcode Cloud runs `ci_scripts/ci_post_clone.sh` before building. It installs Node with Homebrew and clones Actual at the commit in `Engine/upstream.json`. It installs only the packages the engine bundle uses, plus esbuild at the version in Actual's lockfile, then writes `.xcode.env.local`.
+
 Simulator builds use local ad hoc signing so Keychain works. For an iPhone, choose your development team and a unique bundle identifier in Xcode, and enable automatic signing. Device installation has not yet been verified.
 
 The app icon is Actual's logo mark, rendered in light, dark, and tinted variants by `./scripts/generate-app-icon.sh` (requires `rsvg-convert`). Edit the script and rerun it to change the icon.
