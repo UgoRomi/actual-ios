@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Actual Native Privacy Policy</title>
+<meta name="description" content="Privacy policy for Actual Native, an unofficial iPhone app for Actual Budget.">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --text: #1d1d1f;
+    --muted: #5f5f66;
+    --rule: #e3e3e8;
+    --accent: #6b3fd4;
+    --panel: #f5f3fb;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141218;
+      --text: #ececf1;
+      --muted: #a4a3ad;
+      --rule: #2e2b36;
+      --accent: #b9a1ff;
+      --panel: #1f1b29;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 17px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  main { max-width: 42rem; margin: 0 auto; padding: 3rem 16px 4rem; }
+  h1 { font-size: 2rem; line-height: 1.2; margin: 0 0 .25rem; }
+  h2 { font-size: 1.2rem; margin: 2.25rem 0 .5rem; }
+  p, ul { margin: 0 0 1rem; }
+  ul { padding-left: 1.25rem; }
+  li { margin-bottom: .4rem; }
+  a { color: var(--accent); }
+  .meta { color: var(--muted); margin-bottom: 2rem; }
+  .summary {
+    background: var(--panel);
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+  }
+  .summary p:last-child { margin-bottom: 0; }
+  footer {
+    margin-top: 3rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--rule);
+    color: var(--muted);
+    font-size: .9rem;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Privacy Policy</h1>
+  <p class="meta">Actual Native for iPhone · Effective 7 October 2026</p>
+
+  <div class="summary">
+    <p><strong>In short:</strong> Actual Native does not collect any data about you. There are no accounts with us, no analytics, no advertising and no tracking. Your budget stays on your device and on the Actual server you choose to connect to.</p>
+  </div>
+
+  <h2>Who we are</h2>
+  <p>Actual Native is an independent app developed by Ugo Romi. It is an unofficial client for <a href="https://actualbudget.org">Actual Budget</a>, open-source budgeting software, and is not affiliated with or endorsed by the Actual Budget project.</p>
+
+  <h2>Information we collect</h2>
+  <p>None. The app has no servers of its own, and it contains no analytics, advertising, crash-reporting or other third-party tracking code. We never receive your budget, transactions, credentials or usage information.</p>
+
+  <h2>Information stored on your device</h2>
+  <p>To work, the app keeps the following on your iPhone:</p>
+  <ul>
+    <li><strong>Budget data</strong>, such as accounts, transactions, categories and payees, in a database inside the app, protected by iOS data protection.</li>
+    <li><strong>Your sign-in session and budget encryption keys</strong>, stored in the iOS Keychain, and your server address, in a protected settings file.</li>
+    <li><strong>Preferences</strong>, such as your chosen theme and display settings.</li>
+    <li><strong>A summary for widgets</strong> (such as the amount left to budget and categories needing attention), shared only with the app's own Home Screen and Lock Screen widgets.</li>
+  </ul>
+  <p>Files you import, such as bank statements in OFX, QIF or CSV format, are read on your device and added to your budget.</p>
+
+  <h2>Your Actual server</h2>
+  <p>To sync a budget, the app connects only to the Actual server address you enter. That server is run by you or by someone you choose, and its operator, not us, is responsible for the data stored there. If your budget uses Actual's end-to-end encryption, its data is encrypted before it leaves your device.</p>
+  <p>Bank refresh uses the bank connections already set up on your Actual server. The app asks your server to fetch transactions, and your server contacts the bank data provider you configured. The app never contacts a bank or bank data provider directly.</p>
+  <p>If you sign in with OpenID, the sign-in page of your identity provider opens in the iOS sign-in sheet, and that provider's privacy policy applies.</p>
+  <p>The demo budget is created on your device and is not sent anywhere.</p>
+
+  <h2>Apple features</h2>
+  <ul>
+    <li><strong>Apple Intelligence.</strong> On supported devices, "Describe Targets" uses Apple's on-device model. Your description is processed on your iPhone and is not sent to us or to Apple.</li>
+    <li><strong>Siri and Shortcuts.</strong> If you use them to add transactions or check your budget, Apple handles your requests under <a href="https://www.apple.com/legal/privacy/">Apple's Privacy Policy</a>.</li>
+    <li><strong>Background refresh.</strong> iOS may occasionally run the app in the background to sync your budget with your server and keep widgets current.</li>
+    <li><strong>Diagnostics.</strong> If you choose to share analytics with app developers in iOS Settings, Apple may provide us with anonymous crash reports. You can change this at any time in Settings › Privacy &amp; Security › Analytics &amp; Improvements.</li>
+  </ul>
+
+  <h2>Deleting your data</h2>
+  <p>You can remove a budget from your device by touching and holding it in the budget list. Deleting the app removes its budget data and preferences from your iPhone. iOS may keep the app's Keychain entries, which hold only your server sign-in session and encryption keys, after the app is deleted; they remain inaccessible to other apps. Data on your Actual server is managed through Actual itself.</p>
+
+  <h2>Children</h2>
+  <p>The app is not directed at children and does not knowingly collect information from anyone, including children.</p>
+
+  <h2>Changes to this policy</h2>
+  <p>If this policy changes, the updated version will be posted on this page with a new effective date.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy can be asked by opening an issue at <a href="https://github.com/UgoRomi/actual-ios/issues">github.com/UgoRomi/actual-ios</a>.</p>
+
+  <footer>Actual Budget is open-source software released under the MIT License. Actual Native is an independent project.</footer>
+</main>
+</body>
+</html>
