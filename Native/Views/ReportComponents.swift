@@ -31,7 +31,8 @@ struct ReportCardFrame<Trailing: View, Content: View>: View {
             }
             content
         }
-        .padding(18).frame(maxWidth: .infinity, alignment: .leading)
+        // Fills its row, so widgets side by side match in height.
+        .padding(18).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(ActualTheme.surface, in: RoundedRectangle(cornerRadius: 22))
     }
 }

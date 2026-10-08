@@ -1,13 +1,18 @@
 import Charts
 import SwiftUI
 
-/// The budget's report dashboards in one column, as in Actual's mobile web app.
+/// The budget's report dashboards in one column, as in Actual's mobile web app, or in rows where there is room.
 /// Touching and holding a widget edits its saved settings.
 struct ReportsView: View {
     @Environment(AppModel.self) private var model
     @State private var dashboard: ReportsDashboard?
     @State private var pageID: String?
     @State private var error: String?
+    @State private var columnCount = 1
+
+    private func rows(_ widgets: [ReportWidget]) -> [[ReportWidget]] {
+        stride(from: 0, to: widgets.count, by: columnCount).map { Array(widgets[$0..<min($0 + columnCount, widgets.count)]) }
+    }
 
     private var page: DashboardPage? {
         dashboard?.pages.first { $0.id == pageID } ?? dashboard?.pages.first
@@ -23,8 +28,17 @@ struct ReportsView: View {
                             ContentUnavailableView("No reports on this dashboard", systemImage: "chart.bar.xaxis",
                                                    description: Text("Add widgets to this dashboard in Actual web or desktop."))
                         }
-                        ForEach(page.widgets) { widget in
-                            ReportCard(widget: widget, earliestMonth: dashboard.earliestMonth)
+                        // Rows of widgets where there is room, as Actual's desktop dashboard lays them out.
+                        Grid(horizontalSpacing: 16, verticalSpacing: 16) {
+                            ForEach(rows(page.widgets), id: \.first?.id) { row in
+                                GridRow(alignment: .top) {
+                                    ForEach(row) { widget in
+                                        ReportCard(widget: widget, earliestMonth: dashboard.earliestMonth)
+                                    }
+                                    // Keeps a short last row's widgets the width of the others.
+                                    ForEach(row.count..<columnCount, id: \.self) { _ in Color.clear.gridCellUnsizedAxes([.horizontal, .vertical]) }
+                                }
+                            }
                         }
                         if !page.widgets.isEmpty {
                             Text("Touch and hold a widget to edit it. Add, remove, and arrange widgets in Actual web or desktop.")
@@ -35,8 +49,12 @@ struct ReportsView: View {
                         ProgressView("Loading reports…").frame(maxWidth: .infinity, minHeight: 200)
                     }
                     SyncFooter()
-                }.padding(20).frame(maxWidth: 760).frame(maxWidth: .infinity)
+                }.padding(20).frame(maxWidth: columnCount == 1 ? 760 : .infinity).frame(maxWidth: .infinity)
             }
+            .onGeometryChange(for: Int.self) { proxy in
+                // Widgets at least 320 points wide, up to three across.
+                min(3, max(1, Int((proxy.size.width - 24) / 336)))
+            } action: { columnCount = $0 }
             .background(ActualTheme.background)
             .navigationTitle("Reports")
             .toolbar {
@@ -105,7 +123,7 @@ struct ReportCard: View {
         switch widget.kind {
         case .markdown:
             MarkdownBlocks(content: widget.content ?? "", alignment: widget.textAlign ?? "left")
-                .padding(18).frame(maxWidth: .infinity)
+                .padding(18).frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(ActualTheme.surface, in: RoundedRectangle(cornerRadius: 22))
         case .other:
             ReportCardFrame(title: widget.title, subtitle: nil) {

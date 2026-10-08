@@ -1246,11 +1246,42 @@ final class ActualNativeUITests: XCTestCase {
         start.press(forDuration: 0.1, thenDragTo: end)
     }
 
+    /// iPad only: captures each section in landscape and portrait, to review the regular-width layouts.
+    /// Set TEST_RUNNER_SCREENSHOT_DIR to also save the screenshots there.
+    @MainActor
+    func testDemoIPadLayouts() throws {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("Captures iPad layouts") }
+        let app = XCUIApplication()
+        app.launch()
+        // The last budget opened reopens on launch.
+        let demoButton = app.buttons["Explore a demo budget"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        XCTAssertTrue(app.buttons["budget.summary"].waitForExistence(timeout: 60), "The demo budget should open")
+        for orientation in [UIDeviceOrientation.landscapeLeft, .portrait] {
+            XCUIDevice.shared.orientation = orientation
+            let suffix = orientation == .portrait ? "portrait" : "landscape"
+            for section in ["Budget", "Accounts", "Transactions", "Schedules", "Reports"] {
+                // A tab bar item, or the sidebar's.
+                let tab = [app.tabBars.buttons[section], app.cells.containing(.staticText, identifier: section).firstMatch]
+                    .first { $0.exists } ?? app.buttons[section].firstMatch
+                if !tab.waitForExistence(timeout: 10) { capture("ipad-missing-tab"); print(app.debugDescription) }
+                XCTAssertTrue(tab.exists, "\(section) should be reachable")
+                tab.tap()
+                sleep(2)
+                capture("ipad-\(section.lowercased())-\(suffix)")
+            }
+        }
+    }
+
     @MainActor
     private func capture(_ name: String) {
-        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        let screenshot = XCUIScreen.main.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+        if let directory = ProcessInfo.processInfo.environment["SCREENSHOT_DIR"] {
+            try? screenshot.pngRepresentation.write(to: URL(fileURLWithPath: directory).appendingPathComponent("\(name).png"))
+        }
     }
 }
