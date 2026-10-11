@@ -41,6 +41,7 @@ struct TransactionsView: View {
         let hasMore = sections.reduce(0) { $0 + $1.transactions.count } == shownCount
         let offBudget = Set((model.overview?.accounts ?? []).filter(\.offbudget).map(\.id))
         return ThemedList {
+            if let account { AccountBalanceHeader(account: account, currency: model.currency) }
             if let error = model.errorMessage { Section { ErrorNotice(message: error) { Task { await model.refresh() } } } }
             if let accountID { BankSyncNotice(accountID: accountID) }
             if let account, let reconciliation { ReconcilingBanner(account: account, reconciliation: reconciliation) }
@@ -182,6 +183,37 @@ struct TransactionsView: View {
 }
 
 /// An upcoming scheduled transaction, with its date and status, as Actual's register shows it.
+/// An account's cleared, total, and uncleared balances, as Actual's mobile account page shows them.
+struct AccountBalanceHeader: View {
+    let account: Account
+    let currency: String
+
+    var body: some View {
+        let cleared = account.clearedBalance ?? 0
+        Section {
+            HStack(alignment: .firstTextBaseline) {
+                column("Cleared", value: cleared)
+                VStack(spacing: 2) {
+                    Text("Balance").font(.caption).foregroundStyle(.secondary)
+                    MoneyText(value: account.balance, currency: currency, positiveColor: ActualTheme.positive)
+                        .font(.title3.weight(.semibold))
+                }.frame(maxWidth: .infinity)
+                // Both totals sum the same transactions, so what isn't cleared is the difference.
+                column("Uncleared", value: account.balance - cleared)
+            }
+            .lineLimit(1).minimumScaleFactor(0.6)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    private func column(_ title: String, value: Int) -> some View {
+        VStack(spacing: 2) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            MoneyText(value: value, currency: currency, negativeColor: .primary).font(.footnote.weight(.medium))
+        }.frame(maxWidth: .infinity)
+    }
+}
+
 struct ScheduledTransactionRow: View {
     let scheduled: ScheduledTransaction
     let currency: String
