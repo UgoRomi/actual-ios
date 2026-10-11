@@ -416,6 +416,29 @@ struct SplitPart: Decodable, Identifiable, Sendable, Equatable {
 /// A transaction edit shown before the engine saves it, as Actual's mobile app
 /// shows edits right away. It applies to the register and balances as last
 /// loaded, so applying it where the engine has already saved it changes nothing.
+/// A category balance that a saved transaction changed, shown for a moment after saving.
+struct CategoryBalanceChange: Identifiable, Hashable, Sendable {
+    let id: String
+    let name: String
+    let before: Int
+    let after: Int
+
+    /// Expense categories whose balance differs between two loads of a month, in the budget's order.
+    static func changes(from before: BudgetMonth, to after: BudgetMonth) -> [CategoryBalanceChange] {
+        let previous = Dictionary(before.expenseCategories.map { ($0.id, $0.balance) }) { first, _ in first }
+        return after.expenseCategories.compactMap { category in
+            guard let balance = previous[category.id], balance != category.balance else { return nil }
+            return CategoryBalanceChange(id: category.id, name: category.name, before: balance, after: category.balance)
+        }
+    }
+}
+
+/// The category balances one saved transaction changed.
+struct BalanceFeedback: Identifiable, Equatable, Sendable {
+    let id = UUID()
+    let changes: [CategoryBalanceChange]
+}
+
 enum TransactionChange: Sendable {
     /// Adds a transaction, or replaces the one with its ID.
     case save(Transaction)

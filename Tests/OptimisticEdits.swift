@@ -53,6 +53,43 @@ import Foundation
         try require(deleted && shown(model, id) == nil, "Deleting failed: \(model.errorMessage ?? "")")
         print("PASS: deleting shows at once")
 
+        // A saved transaction reports its categories' balances before and after, one per split category.
+        let expenses = model.budget?.expenseCategories.filter { !$0.hidden } ?? []
+        guard expenses.count >= 2 else { throw EngineFailure("Too few demo categories") }
+        let (food, other) = (expenses[0], expenses[1])
+        let day = "\(model.month)-15"
+        model.balanceFeedback = nil
+        let spent = UUID().uuidString.lowercased()
+        var categorized = transactionCopy(draft, id: spent)
+        categorized.date = day
+        categorized.categoryId = food.id
+        try require(await model.edit("saveTransaction", arguments: [
+            "newId": .string(spent), "accountId": .string(account.id), "date": .string(day),
+            "amount": .number(-2500), "categoryId": .string(food.id),
+        ], showing: .save(categorized)), "Saving failed: \(model.errorMessage ?? "")")
+        try require(model.balanceFeedback?.changes == [
+            CategoryBalanceChange(id: food.id, name: food.name, before: food.balance, after: food.balance - 2500),
+        ], "The category's balance change should show: \(String(describing: model.balanceFeedback))")
+        let foodBalance = food.balance - 2500
+        try require(await model.edit("saveSplit", arguments: [
+            "id": .string(spent), "accountId": .string(account.id), "date": .string(day), "amount": .number(-2500),
+            "splits": .array([
+                .object(["amount": .number(-1000), "categoryId": .string(food.id)]),
+                .object(["amount": .number(-1500), "categoryId": .string(other.id)]),
+            ]),
+        ], showing: .save(categorized)), "Splitting failed: \(model.errorMessage ?? "")")
+        try require(Set(model.balanceFeedback?.changes ?? []) == [
+            CategoryBalanceChange(id: food.id, name: food.name, before: foodBalance, after: foodBalance + 1500),
+            CategoryBalanceChange(id: other.id, name: other.name, before: other.balance, after: other.balance - 1500),
+        ], "Each split category's balance change should show: \(String(describing: model.balanceFeedback))")
+        model.balanceFeedback = nil
+        _ = await model.edit("setCleared", arguments: ["id": .string(spent), "cleared": .bool(true)],
+                             showing: .setCleared(id: spent, cleared: true))
+        try require(model.balanceFeedback == nil, "Clearing should not show balance changes")
+        try require(await model.edit("deleteTransaction", arguments: ["id": .string(spent)], showing: .delete(id: spent)),
+                    "Deleting failed: \(model.errorMessage ?? "")")
+        print("PASS: saving shows each category's balance before and after")
+
         // A rejected edit is undone and explained.
         var invalid = draft
         invalid.date = "not a date"
