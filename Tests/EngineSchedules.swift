@@ -146,11 +146,37 @@ extension EngineSmoke {
     linkable = try await engine.call("scheduleTransactions", arguments: ["id": .string(specificSchedule.id)],
                                      as: ScheduleTransactions.self)
     check(linkable.linked.contains { $0.id == candidate.id } && !linkable.matching.contains { $0.id == candidate.id })
+    func registered(_ id: String) async throws -> Transaction? {
+      try await engine.call("register", as: [Transaction].self).first { $0.id == id }
+    }
+    check(try await registered(candidate.id)?.scheduleId == specificSchedule.id, "The register shows the link")
     try await call("linkScheduleTransactions", ["id": .string(specificSchedule.id), "link": .bool(false),
                                                 "transactionIds": .array([.string(candidate.id)])])
     check(try await !engine.call("scheduleTransactions", arguments: ["id": .string(specificSchedule.id)],
                                  as: ScheduleTransactions.self).linked.contains { $0.id == candidate.id })
+    check(try await registered(candidate.id)?.scheduleId == nil)
     try await call("deleteSchedule", ["id": .string(specificSchedule.id)])
+
+    // A schedule created from a transaction links it, as Actual's editor does.
+    try await call("saveSchedule", [
+      "name": .string("Native From Transaction"), "accountId": .string(account.id), "amount": .number(-1_000),
+      "amountOp": .string("is"), "date": .object(["start": .string(today), "frequency": .string("monthly")]),
+      "linkTransactionIds": .array([.string(candidate.id)]),
+    ])
+    let fromTransaction = try await named("Native From Transaction")
+    check(try await registered(candidate.id)?.scheduleId == fromTransaction.id, "Creating links the transaction")
+
+    // Duplicating copies the transaction with a new ID, uncleared, as Actual's Duplicate does.
+    try await call("setCleared", ["id": .string(candidate.id), "cleared": .bool(true)])
+    try await call("duplicateTransaction", ["id": .string(candidate.id)])
+    let copies = try await engine.call("register", as: [Transaction].self).filter { $0.notes == "native link candidate" }
+    check(copies.count == 2, "\(copies.map(\.id))")
+    if let copy = copies.first(where: { $0.id != candidate.id }) {
+      check(copy.amount == -1_000 && copy.accountId == account.id && copy.date == today && !copy.cleared, "\(copy)")
+      try await call("deleteTransaction", ["id": .string(copy.id)])
+    }
+    try await expectFailure("duplicateTransaction", ["id": .string("missing")], "no longer exists")
+    try await call("deleteSchedule", ["id": .string(fromTransaction.id)])
 
     // How far ahead registers list upcoming transactions.
     try await call("savePreference", ["id": .string("upcomingScheduledTransactionLength"), "value": .string("oneMonth")])

@@ -20,6 +20,10 @@ struct TransactionsView: View {
     @State private var importing: ImportFile?
     @State private var fileError: String?
     @State private var selectedScheduled: ScheduledTransaction?
+    @State private var linkingSchedule: Transaction?
+    @State private var creatingSchedule: Transaction?
+    @State private var viewingSchedule: ScheduleEditRoute?
+    @State private var deleting: Transaction?
     @Environment(\.dismiss) private var dismiss
 
     private var account: Account? { accountID.flatMap { id in model.overview?.accounts.first { $0.id == id } } }
@@ -71,6 +75,7 @@ struct TransactionsView: View {
                             }.buttonStyle(.plain)
                             ClearedToggle(transaction: transaction)
                         }
+                        .contextMenu { quickActions(transaction) }
                     }
                 } header: {
                     if let parsed = BudgetDate.date(section.date) { Text(parsed, format: .dateTime.weekday(.wide).month(.abbreviated).day()) }
@@ -107,6 +112,20 @@ struct TransactionsView: View {
         .sheet(isPresented: $isAdding) { TransactionEditor(accountID: accountID) }
         .sheet(isPresented: $showsReconcile) { if let accountID { ReconcileSheet(accountID: accountID) } }
         .sheet(item: $selectedTransaction) { transaction in TransactionEditor(transaction: transaction, accountID: transaction.accountId) }
+        .sheet(item: $linkingSchedule) { transaction in ScheduleLinkSheet(transaction: transaction) }
+        .sheet(item: $creatingSchedule) { transaction in ScheduleEditor(schedule: nil, transaction: transaction) }
+        .sheet(item: $viewingSchedule) { route in ScheduleEditor(schedule: route.schedule) }
+        .confirmationDialog("Delete this transaction?", isPresented: $deleting.isPresent, titleVisibility: .visible,
+                            presenting: deleting) { transaction in
+            Button("Delete transaction", role: .destructive) {
+                let arguments: [String: JSONValue] = [
+                    "id": .string(transaction.id), "allowReconciled": .bool(transaction.isReconciled),
+                    "allowReconciledTransfer": .bool(transaction.transferReconciled == true),
+                ]
+                Task { await model.edit("deleteTransaction", arguments: arguments, showing: .delete(id: transaction.id)) }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: { transaction in Text(transaction.deleteMessage) }
         // Actual's scheduled transaction menu.
         .confirmationDialog(selectedScheduled?.title ?? "", isPresented: $selectedScheduled.isPresent,
                             titleVisibility: .visible, presenting: selectedScheduled) { scheduled in
@@ -158,6 +177,46 @@ struct TransactionsView: View {
         .sheet(isPresented: $closing) {
             // A closed account without transactions is deleted; leave its page.
             if let account { CloseAccountSheet(account: account) { if self.account == nil { dismiss() } } }
+        }
+    }
+
+    /// Actual's transaction menu: duplicate, link to a schedule or create one from it, and delete.
+    @ViewBuilder private func quickActions(_ transaction: Transaction) -> some View {
+        Group {
+            if let scheduleID = transaction.scheduleId {
+                Button("View Schedule", systemImage: "calendar") { viewSchedule(scheduleID) }
+                Button("Unlink Schedule", systemImage: "link.badge.minus") {
+                    Task {
+                        await model.manage("linkScheduleTransactions", [
+                            "id": .string(scheduleID), "transactionIds": .array([.string(transaction.id)]),
+                            "link": .bool(false),
+                        ])
+                    }
+                }
+            } else {
+                Button("Link Schedule…", systemImage: "link") { linkingSchedule = transaction }
+                Button("Create Schedule…", systemImage: "calendar.badge.plus") { creatingSchedule = transaction }
+            }
+            if transaction.canEdit {
+                Divider()
+                Button("Duplicate", systemImage: "plus.square.on.square") {
+                    Task { await model.duplicateTransaction(transaction.id) }
+                }
+                Button("Delete", systemImage: "trash", role: .destructive) { deleting = transaction }
+            }
+        }
+        .disabled(model.isBusy)
+    }
+
+    private func viewSchedule(_ id: String) {
+        Task {
+            do {
+                guard let schedule = try await model.schedules().first(where: { $0.id == id }) else {
+                    model.errorMessage = "This schedule no longer exists."
+                    return
+                }
+                viewingSchedule = ScheduleEditRoute(schedule: schedule)
+            } catch { model.errorMessage = error.localizedDescription }
         }
     }
 

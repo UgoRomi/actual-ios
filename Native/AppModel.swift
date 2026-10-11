@@ -338,7 +338,7 @@ final class AppModel {
         errorMessage = nil
         defer { finishOperation() }
         let switchesBudget = ["open", "download", "demo"].contains(method)
-        let isEdit = ["saveTransaction", "deleteTransaction", "budget", "setCleared", "unlockTransaction",
+        let isEdit = ["saveTransaction", "deleteTransaction", "duplicateTransaction", "budget", "setCleared", "unlockTransaction",
                       "createReconciliationTransaction", "finishReconciliation", "saveTargets",
                       "applyTargets", "budgetAction", "commitImport", "saveReportWidget"].contains(method)
             || Self.managementMethods.contains(method)
@@ -623,6 +623,12 @@ final class AppModel {
     /// The next dates a schedule's date falls on.
     func upcomingDates(_ date: ScheduleDate, count: Int = 5) async throws -> [String] {
         try await client().call("upcomingDates", arguments: ["date": date.json, "count": .number(count)], as: [String].self)
+    }
+
+    /// Adds a copy of a transaction and its split parts, uncleared, as Actual's Duplicate does.
+    @discardableResult
+    func duplicateTransaction(_ id: String) async -> Bool {
+        await perform("duplicateTransaction", arguments: ["id": .string(id)])
     }
 
     @discardableResult
