@@ -25,6 +25,8 @@ struct RootView: View {
         .overlay {
             if !model.hasStarted || model.isOpeningBudget { openingBudget }
         }
+        // Above sheets too, since transactions are also edited from sheets.
+        .background { BalanceFeedbackWindow(model: model, isShowing: model.balanceFeedback != nil) }
     }
 
     /// A tab bar on iPhone. On iPad, a sidebar that also lists accounts, as Actual's desktop sidebar does.

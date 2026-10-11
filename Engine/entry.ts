@@ -237,6 +237,8 @@ async function overview() {
 // One month of the budget: its summary and visible category groups.
 async function budgetMonth(month: string) {
   checkMonth(month);
+  // Balances recompute after a transaction is saved; read them once settled.
+  await sheet.waitOnSpreadsheet();
   const budget = await lib.send("api/budget-month", { month });
   const budgetType = getBudgetType() === "tracking" ? "tracking" : "envelope";
   // Tracking budgets have no to-budget cell. Mirror the mobile web summary:

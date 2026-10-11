@@ -36,6 +36,8 @@ final class AppModel {
     var reconciliation: Reconciliation?
     /// The result of applying targets to the month.
     var targetsMessage: String?
+    /// Category balances the latest saved transaction changed, shown for a moment over the app.
+    var balanceFeedback: BalanceFeedback?
     /// Changes whenever saved budget data may have changed, so reports reload.
     var dataRevision = 0
     /// The engine's latest register and accounts, before pending edits.
@@ -408,6 +410,10 @@ final class AppModel {
         let id = editCount
         pendingEdits.append((id, change))
         showPendingEdits()
+        // A saved transaction shows how it changed its categories' balances in its month.
+        var feedbackMonth: String?
+        if case .save(let saved) = change { feedbackMonth = String(saved.date.prefix(7)) }
+        let balancesBefore = await balances(in: feedbackMonth)
         // Until the reload that includes it, or until it fails.
         defer {
             if generation == budgetGeneration {
@@ -427,6 +433,10 @@ final class AppModel {
         }
         guard generation == budgetGeneration else { return true }
         syncStatus = "Saved on this device"
+        if let balancesBefore, let balancesAfter = await balances(in: feedbackMonth), generation == budgetGeneration {
+            let changes = CategoryBalanceChange.changes(from: balancesBefore, to: balancesAfter)
+            if !changes.isEmpty { balanceFeedback = BalanceFeedback(changes: changes) }
+        }
         do { try await load(change.changesBudget ? BudgetPart.all : [.overview, .register]) }
         catch {
             // The write succeeded. Do not invite a duplicate transaction by reporting it as unsaved.
@@ -434,6 +444,12 @@ final class AppModel {
         }
         beginBudgetSync()
         return true
+    }
+
+    /// The month's category balances, or nil without a month or if they could not load.
+    private func balances(in month: String?) async -> BudgetMonth? {
+        guard let month else { return nil }
+        return try? await client().call("budgetMonth", arguments: ["month": .string(month)], as: BudgetMonth.self)
     }
 
     /// Accept that another device's discarded changes may show different
