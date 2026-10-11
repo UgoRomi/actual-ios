@@ -97,9 +97,7 @@ struct TransactionEditor: View {
                             Text(item.name).tag(item.id)
                         }
                     }
-                    DatePicker("Date", selection: $date, displayedComponents: .date)
-                        // Rebuilding the picker closes its calendar once a date is chosen.
-                        .id(date)
+                    DateRow(date: $date)
                     NavigationLink {
                         PayeePicker(selection: $payee, transferAccount: $transferAccount,
                                     payees: model.overview?.payees ?? [], accounts: transferAccounts)
@@ -465,6 +463,40 @@ struct TransactionEditor: View {
             transferAccountId: transferAccount.isEmpty ? nil : transferAccount,
             transferId: sameTransfer ? existing?.transferId : nil,
             transferReconciled: sameTransfer ? existing?.transferReconciled : nil)
+    }
+}
+
+/// A date that opens a calendar, which closes once a day is chosen.
+///
+/// The compact `DatePicker` keeps its calendar open after a choice. Our own popover can close it
+/// with the same animation it opens with.
+private struct DateRow: View {
+    @Binding var date: Date
+    @State private var choosing = false
+
+    var body: some View {
+        // The whole row opens the calendar, so VoiceOver can too.
+        Button { choosing = true } label: {
+            LabeledContent("Date") {
+                Text(date.formatted(date: .abbreviated, time: .omitted))
+                    .foregroundStyle(choosing ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 6)
+                    .background(Color(.tertiarySystemFill), in: .capsule)
+                    // Anchored to the date, as the system picker's calendar is.
+                    .popover(isPresented: $choosing) {
+                        DatePicker("Date", selection: $date, displayedComponents: .date)
+                            .datePickerStyle(.graphical)
+                            .frame(width: 320)
+                            .padding()
+                            .presentationCompactAdaptation(.popover)
+                    }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("date-row")
+        .onChange(of: date) { if choosing { choosing = false } }
     }
 }
 

@@ -1140,7 +1140,7 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertEqual(amount.value as? String, "43\(decimalSeparator)21", "= shows the calculation's result")
 
         // Choosing another date closes the calendar.
-        app.datePickers.firstMatch.tap()
+        app.buttons["date-row"].tap()
         let nextMonth = app.buttons["DatePicker.NextMonth"]
         XCTAssertTrue(nextMonth.waitForExistence(timeout: 5), "Tapping the date opens a calendar")
         // The month's last other day, so the transfer stays near the top of the register.
@@ -1148,6 +1148,7 @@ final class ActualNativeUITests: XCTestCase {
             .matching(NSPredicate(format: "isSelected == false"))
         days.element(boundBy: days.count - 1).tap()
         XCTAssertTrue(wait(forAbsence: nextMonth), "Choosing a date closes the calendar")
+        XCTAssertFalse(app.buttons["date-row"].label.contains("/"), "The chosen date keeps its written-out format")
 
         let payeeRow = app.buttons["payee-row"]
         let categoryRow = app.buttons["category-row"]
