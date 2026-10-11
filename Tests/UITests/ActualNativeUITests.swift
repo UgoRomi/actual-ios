@@ -631,6 +631,31 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Payees"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.cells.element(boundBy: 1).waitForExistence(timeout: 10), "The demo's payees are listed")
         capture("payees")
+        // Select payees, as Actual's payees page does, and favorite them together.
+        app.navigationBars["Payees"].buttons["Select"].tap()
+        XCTAssertTrue(app.navigationBars["Select Payees"].waitForExistence(timeout: 10))
+        let kroger = app.staticTexts["Kroger"]
+        scroll(app, to: kroger)
+        kroger.tap()
+        capture("payees-selecting")
+        XCTAssertTrue(app.navigationBars["1 Payee"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Merge"].isEnabled, "Merging needs two payees")
+        tapWhenEnabled(app.buttons["Favorite"])
+        XCTAssertTrue(app.buttons["Unfavorite"].waitForExistence(timeout: 10), "The selected payee becomes a favorite")
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.navigationBars["Payees"].waitForExistence(timeout: 10))
+        // A payee's page sets it as a favorite and starts a rule that matches it.
+        scroll(app, to: kroger)
+        kroger.tap()
+        XCTAssertTrue(app.navigationBars["Kroger"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.switches["Favorite"].value as? String, "1")
+        capture("payee-detail")
+        tapWhenEnabled(app.buttons["Create Rule"])
+        XCTAssertTrue(app.navigationBars["New Rule"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["payee is Kroger"].exists, "A new rule matches the payee")
+        app.navigationBars["New Rule"].buttons["Cancel"].tap()
+        XCTAssertTrue(app.navigationBars["New Rule"].waitForNonExistence(timeout: 10))
+        app.navigationBars["Kroger"].buttons.firstMatch.tap()
         app.navigationBars["Payees"].buttons.firstMatch.tap()
 
         app.buttons["Rules"].tap()
@@ -644,6 +669,7 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(app.buttons["payee is nothing"].exists)
         capture("rule-new")
         app.navigationBars["New Rule"].buttons["Cancel"].tap()
+        XCTAssertTrue(app.navigationBars["New Rule"].waitForNonExistence(timeout: 10))
         app.navigationBars["Rules"].buttons.firstMatch.tap()
 
         let numbers = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Numbers")).firstMatch
@@ -1207,6 +1233,14 @@ final class ActualNativeUITests: XCTestCase {
     private func tapKeys(_ app: XCUIApplication, _ keys: String) {
         let names: [Character: String] = ["+": "Plus", "−": "Minus", "×": "Multiply", "÷": "Divide", "=": "Equals"]
         for key in keys { app.buttons[names[key] ?? String(key)].tap() }
+    }
+
+    /// Taps a button once it is enabled; buttons that save wait while the app is busy.
+    @MainActor
+    private func tapWhenEnabled(_ element: XCUIElement) {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == true"), object: element)
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: 15), .completed, "\(element) should be enabled")
+        element.tap()
     }
 
     @MainActor

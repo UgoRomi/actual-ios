@@ -516,12 +516,18 @@ struct PayeePicker: View {
     /// The choice for no payee of its own.
     var noneLabel = "No payee"
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var model
     @State private var search = ""
     @FocusState private var searchFocused: Bool
 
     private var query: String { search.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var matches: [Payee] {
         query.isEmpty ? payees : payees.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+    /// As Actual's payee autocomplete: favorites and common payees first, under "Suggested Payees".
+    private var suggested: [Payee] {
+        let byID = Dictionary(matches.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return (model.overview?.suggestedPayeeIds ?? []).compactMap { byID[$0] }
     }
     private var matchingAccounts: [Account] {
         query.isEmpty ? accounts : accounts.filter { $0.name.localizedCaseInsensitiveContains(query) }
@@ -539,6 +545,11 @@ struct PayeePicker: View {
                 }
             }
             if query.isEmpty { Section { choice(noneLabel, value: "") } }
+            if !suggested.isEmpty {
+                Section("Suggested Payees") {
+                    ForEach(suggested) { payee in choice(payee.name, value: payee.name, favorite: payee.favorite) }
+                }
+            }
             // Before payees: the account list is short, and payees can number in the hundreds.
             if !matchingAccounts.isEmpty {
                 Section("Transfer to/from") {
@@ -556,8 +567,9 @@ struct PayeePicker: View {
                     }
                 }
             }
-            if !matches.isEmpty {
-                Section("Payees") { ForEach(matches) { payee in choice(payee.name, value: payee.name) } }
+            let others = matches.filter { payee in !suggested.contains { $0.id == payee.id } }
+            if !others.isEmpty {
+                Section("Payees") { ForEach(others) { payee in choice(payee.name, value: payee.name) } }
             }
         }
         .navigationTitle("Payee").navigationBarTitleDisplayMode(.inline)
@@ -566,8 +578,17 @@ struct PayeePicker: View {
         .onAppear { searchFocused = true }
     }
 
-    private func choice(_ title: String, value: String) -> some View {
-        Button { choose(value) } label: { CheckRow(title: title, selected: transferAccount.isEmpty && selection == value) }
+    /// A favorite shows a bookmark, as in Actual's payee autocomplete.
+    private func choice(_ title: String, value: String, favorite: Bool = false) -> some View {
+        Button { choose(value) } label: {
+            HStack {
+                if favorite {
+                    Image(systemName: "bookmark.fill").font(.caption).foregroundStyle(ActualTheme.accent)
+                        .accessibilityLabel("Favorite")
+                }
+                CheckRow(title: title, selected: transferAccount.isEmpty && selection == value)
+            }
+        }
     }
 
 

@@ -15,9 +15,11 @@ struct Rule: Decodable, Identifiable, Sendable {
     /// Whether every part is one this app's editor offers, as Actual's editor does.
     var isEditable: Bool { !isSchedule && conditions.allSatisfy(\.isEditableCondition) && actions.allSatisfy(\.isEditableAction) }
 
-    static func new() -> Rule {
-        Rule(id: "", stage: nil, conditionsOp: "and",
-             conditions: [RuleItem.condition(field: "payee")], actions: [RuleItem.action(field: "category")])
+    /// A new rule that sets a category. With a payee, it matches that payee, as Actual's payees page creates one.
+    static func new(payeeID: String? = nil) -> Rule {
+        var payee = RuleItem.condition(field: "payee")
+        if let payeeID { payee.raw["value"] = .string(payeeID) }
+        return Rule(id: "", stage: nil, conditionsOp: "and", conditions: [payee], actions: [RuleItem.action(field: "category")])
     }
 
     var json: [String: JSONValue] {

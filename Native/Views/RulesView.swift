@@ -1,7 +1,9 @@
 import SwiftUI
 
 /// Actual's rules page: every rule in plain language, to edit, apply, or delete.
+/// For a payee, as Actual's "View rules": only the rules that use it, and new rules match it.
 struct RulesView: View {
+    var payee: ManagedPayee? = nil
     @Environment(AppModel.self) private var model
     @State private var rules: [Rule] = []
     @State private var loadError: String?
@@ -18,6 +20,9 @@ struct RulesView: View {
         let describer = describer
         ThemedList {
             if let error = model.errorMessage ?? loadError { Section { ErrorNotice(message: error) } }
+            if let payee, !rules.isEmpty {
+                Section { Text("Rules that use \(payee.label)").font(.subheadline).foregroundStyle(.secondary) }
+            }
             ForEach(shown) { rule in
                 Button { editing = RuleEditRoute(rule: rule) } label: {
                     VStack(alignment: .leading, spacing: 6) {
@@ -38,15 +43,18 @@ struct RulesView: View {
         }
         .overlay {
             if shown.isEmpty && loadError == nil {
-                ContentUnavailableView(search.isEmpty ? "No rules" : "No matching rules", systemImage: "wand.and.rays",
-                                       description: Text(search.isEmpty ? "Rules categorize, rename, and tidy transactions as they arrive." : ""))
+                ContentUnavailableView(
+                    search.isEmpty ? (payee == nil ? "No rules" : "No rules use this payee") : "No matching rules",
+                    systemImage: "wand.and.rays",
+                    description: Text(search.isEmpty ? "Rules categorize, rename, and tidy transactions as they arrive." : ""))
             }
         }
-        .navigationTitle("Rules")
+        .navigationTitle(payee?.name ?? "Rules")
         .searchable(text: $search, prompt: "Search rules")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("Add rule", systemImage: "plus") { editing = RuleEditRoute(rule: .new()) }.disabled(model.isBusy)
+                Button("Add rule", systemImage: "plus") { editing = RuleEditRoute(rule: .new(payeeID: payee?.id)) }
+                    .disabled(model.isBusy)
             }
         }
         .task(id: model.dataRevision) { await load() }
@@ -54,8 +62,16 @@ struct RulesView: View {
     }
 
     private func load() async {
-        do { rules = try await model.rules(); loadError = nil }
-        catch { loadError = error.localizedDescription }
+        do {
+            let all = try await model.rules()
+            if let payee {
+                let ids = try await model.payeeRuleIDs(payee.id)
+                rules = all.filter { ids.contains($0.id) }
+            } else {
+                rules = all
+            }
+            loadError = nil
+        } catch { loadError = error.localizedDescription }
     }
 }
 

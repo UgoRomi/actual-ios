@@ -419,3 +419,13 @@ Against a dedicated 26.10.0 checkout with core, API, and sync server built: `./s
 Two checks failed for reasons unrelated to the upgrade and were corrected. The rules preview check looked for a transaction with the previewed amount, which the demo budget's random amounts sometimes contain; it now compares the number of transactions. The sync check expected a monthly schedule starting 2026-10-01 to be next due that day, which stopped being true once the date passed; the schedule now starts in 2099.
 
 Not verified end to end: the simulator UI tests and a physical device.
+
+## Payee management as in Actual's payees page (2026-10-11)
+
+Compared with Actual 26.10.0's `ManagePayees`, `PayeeMenu`, `PayeeTableRow`, `MobilePayeesPage`, and `PayeeAutocomplete`. The payees page adds favorites, selecting several payees to favorite, set learning for, merge, or delete together, **View Rules** and **Create Rule** for a payee, swipe and touch-and-hold menus, and transfer payees listed last for their rules only. Payee pickers open with **Suggested Payees**, built like upstream's `getPayeeSuggestions`: favorites by name, then `common-payees-get` (most used in the last 12 weeks), up to five. The overview now reads payees through `payees-get`, since `api/payees-get` drops `favorite`.
+
+`node Engine/typecheck.mjs`, `./scripts/build.sh`, and `./scripts/test-engine.sh` passed. The engine test checks that transfer payees are listed last and refused for favorites and renaming, favorites set for two payees at once and lead the suggestions, `setPayeeLearning` takes several payees, and `payeeRules` returns the rule category learning added.
+
+`testDemoPayeesRulesAndFormatting` now also selects Kroger, checks that Merge needs two payees, favorites it, sees the favorite on its page, and starts a rule that matches it. It passed on a new iPhone 17 Pro / iOS 26.0 simulator; screenshots of the list, selection, and payee page were inspected. Earlier runs failed in the test and showed two fixes: a disabled `NavigationLink` dimmed rows while selecting and could swallow the tap, so selecting shows plain rows; and the new actions ignored taps while the app was busy, so they are now disabled while busy, as other actions are, and the test waits for them to be enabled. The test also waits for a rule sheet to close before going back.
+
+Not verified end to end: merging several selected payees and deleting them in the UI (merging and deleting are covered by the engine test), transfer payees' rules from the UI, the iPad layout, and a physical device.
