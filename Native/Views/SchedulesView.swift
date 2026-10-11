@@ -133,26 +133,32 @@ struct SchedulesView: View {
     }
 
     private func row(_ schedule: Schedule) -> some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(schedule.name ?? payeeName(schedule) ?? "Unnamed schedule").font(.body.weight(.medium))
-                Text([payeeName(schedule).flatMap { $0 == schedule.name ? nil : $0 }, accountName(schedule)]
-                    .compactMap { $0 }.joined(separator: " · "))
-                    .font(.caption).foregroundStyle(.secondary)
-                HStack(spacing: 6) {
-                    ScheduleStatusBadge(status: schedule.status)
-                    if let next = schedule.nextDate {
-                        Text(BudgetDate.display(next)).font(.caption).foregroundStyle(.secondary)
-                    }
-                    if case .recurring = schedule.date {
-                        Image(systemName: "repeat").font(.caption2).foregroundStyle(.secondary).accessibilityLabel("Repeats")
-                    }
-                }
+        let title = Text(schedule.name ?? payeeName(schedule) ?? "Unnamed schedule").font(.body.weight(.medium))
+        let detail = Text([payeeName(schedule).flatMap { $0 == schedule.name ? nil : $0 }, accountName(schedule)]
+            .compactMap { $0 }.joined(separator: " · "))
+        let status = HStack(spacing: 6) {
+            ScheduleStatusBadge(status: schedule.status)
+            if let next = schedule.nextDate {
+                Text(BudgetDate.display(next)).font(.caption).foregroundStyle(.secondary)
             }
-            Spacer(minLength: 8)
-            Text(amountText(schedule)).monospacedDigit().font(.body.weight(.semibold))
-                .foregroundStyle(schedule.amount.scheduled > 0 ? ActualTheme.positive : Color.primary)
-        }.padding(.vertical, 4).contentShape(Rectangle())
+            if case .recurring = schedule.date {
+                Image(systemName: "repeat").font(.caption2).foregroundStyle(.secondary).accessibilityLabel("Repeats")
+            }
+        }
+        let amount = Text(amountText(schedule)).monospacedDigit().font(.body.weight(.semibold))
+            .foregroundStyle(schedule.amount.scheduled > 0 ? ActualTheme.positive : Color.primary)
+        return RegisterColumns { title } detail: { detail } notes: { status } amount: { amount } stacked: {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    title
+                    detail.font(.caption).foregroundStyle(.secondary)
+                    status
+                }
+                Spacer(minLength: 8)
+                amount
+            }.padding(.vertical, 4)
+        }
+        .contentShape(Rectangle())
             .accessibilityElement(children: .combine)
     }
 }

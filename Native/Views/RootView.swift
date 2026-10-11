@@ -1,19 +1,21 @@
 import SwiftUI
 
+/// A section of the open budget; on iPad's sidebar, also each open account's register.
+enum AppTab: Hashable {
+    case budget, accounts, transactions, schedules, reports
+    case account(String)
+}
+
 struct RootView: View {
     @Environment(AppModel.self) private var model
+    @State private var tab = AppTab.budget
+    @Environment(\.horizontalSizeClass) private var sizeClass
     var body: some View {
         Group {
             if !model.hasStarted {
                 ActualTheme.background.ignoresSafeArea()
             } else if model.isBudgetOpen {
-                TabView {
-                    Tab("Budget", systemImage: "chart.pie") { BudgetView() }
-                    Tab("Accounts", systemImage: "creditcard") { AccountsView() }
-                    Tab("Transactions", systemImage: "list.bullet.rectangle") { TransactionsView() }
-                    Tab("Schedules", systemImage: "calendar.badge.clock") { SchedulesView() }
-                    Tab("Reports", systemImage: "chart.bar.xaxis") { ReportsView() }
-                }
+                budgetTabs
             } else { WelcomeView() }
         }
         // Date pickers start the week on the budget's first day, as Actual's do.
@@ -22,6 +24,38 @@ struct RootView: View {
         .disabled(model.isOpeningBudget)
         .overlay {
             if !model.hasStarted || model.isOpeningBudget { openingBudget }
+        }
+    }
+
+    /// A tab bar on iPhone. On iPad, a sidebar that also lists accounts, as Actual's desktop sidebar does.
+    private var budgetTabs: some View {
+        let accounts = model.overview?.openAccounts ?? []
+        return TabView(selection: $tab) {
+            Tab("Budget", systemImage: "chart.pie", value: AppTab.budget) { BudgetView() }
+            Tab("Accounts", systemImage: "creditcard", value: AppTab.accounts) { AccountsView() }
+            Tab("Transactions", systemImage: "list.bullet.rectangle", value: AppTab.transactions) { TransactionsView() }
+            Tab("Schedules", systemImage: "calendar.badge.clock", value: AppTab.schedules) { SchedulesView() }
+            Tab("Reports", systemImage: "chart.bar.xaxis", value: AppTab.reports) { ReportsView() }
+            // Only the sidebar lists accounts; a tab bar would move the last tab under More.
+            if sizeClass == .regular {
+                TabSection("Accounts") {
+                    ForEach(accounts) { account in
+                        Tab(account.name, systemImage: account.offbudget ? "chart.line.uptrend.xyaxis" : "building.columns",
+                            value: AppTab.account(account.id)) {
+                            TransactionsView(accountID: account.id, accountName: account.name)
+                        }
+                    }
+                }
+                .defaultVisibility(.hidden, for: .tabBar)
+            }
+        }
+        .tabViewStyle(.sidebarAdaptable)
+        .onChange(of: accounts.map(\.id)) { _, ids in
+            // A closed or deleted account leaves the sidebar; show the rest of the accounts.
+            if case .account(let id) = tab, !ids.contains(id) { tab = .accounts }
+        }
+        .onChange(of: sizeClass) { _, sizeClass in
+            if sizeClass != .regular, case .account = tab { tab = .accounts }
         }
     }
 

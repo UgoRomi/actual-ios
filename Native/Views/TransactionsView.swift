@@ -186,20 +186,30 @@ struct ScheduledTransactionRow: View {
     let scheduled: ScheduledTransaction
     let currency: String
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(scheduled.title).font(.body.weight(.medium)).foregroundStyle(.primary)
-                HStack(spacing: 6) {
-                    ScheduleStatusBadge(status: scheduled.shownStatus)
-                    Text(BudgetDate.display(scheduled.date))
-                    if let category = scheduled.categoryName { Text("· \(category)") }
-                }.font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 8)
-            // Actual's register shows previews in light text.
-            MoneyText(value: scheduled.amount, currency: currency, positiveColor: ActualTheme.positive, negativeColor: .secondary)
-                .font(.body.weight(.semibold))
-        }.padding(.vertical, 6).contentShape(Rectangle())
+        // Actual's register shows previews in light text.
+        let amount = MoneyText(value: scheduled.amount, currency: currency, positiveColor: ActualTheme.positive, negativeColor: .secondary)
+            .font(.body.weight(.semibold))
+        RegisterColumns {
+            Text(scheduled.title).font(.body.weight(.medium)).foregroundStyle(.primary)
+        } detail: {
+            Text(scheduled.categoryName ?? "")
+        } notes: {
+            HStack(spacing: 6) { ScheduleStatusBadge(status: scheduled.shownStatus); Text(BudgetDate.display(scheduled.date)) }
+        } amount: { amount } stacked: {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(scheduled.title).font(.body.weight(.medium)).foregroundStyle(.primary)
+                    HStack(spacing: 6) {
+                        ScheduleStatusBadge(status: scheduled.shownStatus)
+                        Text(BudgetDate.display(scheduled.date))
+                        if let category = scheduled.categoryName { Text("· \(category)") }
+                    }.font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                amount
+            }.padding(.vertical, 6)
+        }
+        .contentShape(Rectangle())
             .accessibilityElement(children: .combine)
             .accessibilityHint("Post or skip this scheduled transaction")
     }
@@ -211,28 +221,72 @@ struct TransactionRow: View {
     /// Categories the transaction still needs; see `Transaction.missingCategories`.
     var missingCategories = 0
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(transaction.title).font(.body.weight(.medium)).foregroundStyle(.primary)
-                // As in Actual's mobile register, transfers and splits are marked beside the category.
-                // The title and detail already say so to VoiceOver.
-                HStack(spacing: 4) {
-                    if transaction.isTransfer { Image(systemName: "arrow.left.arrow.right").accessibilityHidden(true) }
-                    else if transaction.isParent { Image(systemName: "square.split.2x2").accessibilityHidden(true) }
-                    // Actual highlights a missing category; a split says how many of its parts lack one.
-                    if missingCategories == 0 || transaction.isParent {
-                        Text(transaction.canEdit ? transaction.detail : "\(transaction.detail) · view only")
-                    }
-                    if missingCategories > 0 {
-                        UncategorizedBadge(parts: transaction.isParent ? missingCategories : nil)
-                    }
-                }.font(.caption).foregroundStyle(.secondary)
-                if let notes = transaction.notes, !notes.isEmpty { NotesText(notes: notes).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
-            }
-            Spacer(minLength: 8)
-            MoneyText.transaction(transaction.amount, currency: currency).font(.body.weight(.semibold))
-        }.padding(.vertical, 6).contentShape(Rectangle())
+        let title = Text(transaction.title).font(.body.weight(.medium)).foregroundStyle(.primary)
+        let amount = MoneyText.transaction(transaction.amount, currency: currency).font(.body.weight(.semibold))
+        RegisterColumns { title } detail: { detail } notes: { notes } amount: { amount } stacked: {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    title
+                    detail.font(.caption).foregroundStyle(.secondary)
+                    notes.font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                amount
+            }.padding(.vertical, 6)
+        }
+        .contentShape(Rectangle())
             .accessibilityElement(children: .combine)
+    }
+
+    /// As in Actual's mobile register, transfers and splits are marked beside the category.
+    /// The title and detail already say so to VoiceOver.
+    private var detail: some View {
+        HStack(spacing: 4) {
+            if transaction.isTransfer { Image(systemName: "arrow.left.arrow.right").accessibilityHidden(true) }
+            else if transaction.isParent { Image(systemName: "square.split.2x2").accessibilityHidden(true) }
+            // Actual highlights a missing category; a split says how many of its parts lack one.
+            if missingCategories == 0 || transaction.isParent {
+                Text(transaction.canEdit ? transaction.detail : "\(transaction.detail) · view only")
+            }
+            if missingCategories > 0 {
+                UncategorizedBadge(parts: transaction.isParent ? missingCategories : nil)
+            }
+        }
+    }
+
+    @ViewBuilder private var notes: some View {
+        if let notes = transaction.notes, !notes.isEmpty { NotesText(notes: notes).lineLimit(1) }
+    }
+}
+
+/// A register row on one line where there is room, in columns as Actual's desktop register lists them:
+/// title, category or other detail, notes, and amount. Otherwise, its stacked layout.
+struct RegisterColumns<Title: View, Detail: View, Notes: View, Amount: View, Stacked: View>: View {
+    @ViewBuilder var title: Title
+    @ViewBuilder var detail: Detail
+    @ViewBuilder var notes: Notes
+    @ViewBuilder var amount: Amount
+    @ViewBuilder var stacked: Stacked
+    @ScaledMetric(relativeTo: .subheadline) private var detailWidth: CGFloat = 200
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        if dynamicTypeSize.isAccessibilitySize { stacked } else {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 16) {
+                    title.lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                    detail.lineLimit(1).font(.subheadline).foregroundStyle(.secondary)
+                        .frame(width: detailWidth, alignment: .leading)
+                    notes.lineLimit(1).font(.subheadline).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    amount.lineLimit(1).frame(minWidth: 96, alignment: .trailing)
+                }
+                .padding(.vertical, 2)
+                // Fits from this width, however long its text.
+                .frame(minWidth: 600, idealWidth: 600, maxWidth: .infinity)
+                stacked
+            }
+        }
     }
 }
 

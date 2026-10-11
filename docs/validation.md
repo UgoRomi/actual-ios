@@ -35,7 +35,9 @@ xcodebuild test \
   CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
 ```
 
-Choose a new result bundle path if one already exists. UI tests use only the app's demo budget. Screenshot attachments are stored in the `.xcresult` bundle.
+Choose a new result bundle path if one already exists. UI tests use only the app's demo budget. Screenshot attachments are stored in the `.xcresult` bundle. With `TEST_RUNNER_SCREENSHOT_DIR=/absolute/path` set, the tests also save them there as PNG files.
+
+On an iPad simulator, `testDemoIPadLayouts` captures each section in landscape and portrait, to review the sidebar and the wide Budget, register, and Reports layouts; it skips on iPhone. On 2026-10-08 it passed on iPad Air 13-inch (M4), and the demo navigation, schedules, and reports tests passed on iPhone 17 Pro with the tab bar unchanged. The demo navigation test expects the welcome screen, so run it on a simulator where no budget was left open.
 
 ## Remaining validation
 
