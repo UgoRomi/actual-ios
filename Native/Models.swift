@@ -368,6 +368,8 @@ struct Transaction: Decodable, Identifiable, Sendable {
     var transferInSplit: Bool? = nil
     /// A split's parts, for its parent only.
     var splits: [SplitPart]? = nil
+    /// The schedule this transaction is linked to.
+    var scheduleId: String? = nil
 
     /// Reconciled transactions, transfers, and splits can be edited too, after any warning.
     /// A transfer linked to part of a split is edited from the split, as Actual does.
@@ -384,6 +386,18 @@ struct Transaction: Decodable, Identifiable, Sendable {
     var detail: String {
         if isParent { return "Split" + ((splits?.count).map { " · \($0) parts" } ?? "") }
         return transferAccountId != nil && categoryId == nil ? "Transfer" : categoryName ?? "Uncategorized"
+    }
+
+    /// What deleting this transaction does, as the confirmation explains it.
+    var deleteMessage: String {
+        switch (isReconciled, transferReconciled == true) {
+        case (true, true): "This transaction and its linked transaction in another account are reconciled. Deleting them may bring their reconciliations out of balance."
+        case (true, false): "Deleting reconciled transactions may bring your reconciliation out of balance."
+        case (false, true): "This transfer has a linked transaction in another account that is reconciled. Deleting it may bring that account’s reconciliation out of balance."
+        case (false, false): transferId == nil
+            ? "This removes the transaction from your budget and updates your balances."
+            : "This removes the transfer from both accounts and updates your balances."
+        }
     }
 
     /// The notes Actual gives the adjustment a reconciliation creates; it marks one no other way.

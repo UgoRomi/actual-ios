@@ -334,16 +334,7 @@ struct TransactionEditor: View {
         }
     }
 
-    private var deleteMessage: String {
-        switch (isReconciled, isTransferReconciled) {
-        case (true, true): "This transaction and its linked transaction in another account are reconciled. Deleting them may bring their reconciliations out of balance."
-        case (true, false): "Deleting reconciled transactions may bring your reconciliation out of balance."
-        case (false, true): "This transfer has a linked transaction in another account that is reconciled. Deleting it may bring that account’s reconciliation out of balance."
-        case (false, false): current?.transferId == nil
-            ? "This removes the transaction from your budget and updates your balances."
-            : "This removes the transfer from both accounts and updates your balances."
-        }
-    }
+    private var deleteMessage: String { current?.deleteMessage ?? "" }
 
     private func initialize() {
         guard !initialized else { return }
@@ -464,7 +455,7 @@ struct TransactionEditor: View {
             isParent: false, isChild: false, isTransfer: !transferAccount.isEmpty, reconciled: reconciled,
             transferAccountId: transferAccount.isEmpty ? nil : transferAccount,
             transferId: sameTransfer ? existing?.transferId : nil,
-            transferReconciled: sameTransfer ? existing?.transferReconciled : nil)
+            transferReconciled: sameTransfer ? existing?.transferReconciled : nil, scheduleId: existing?.scheduleId)
     }
 }
 

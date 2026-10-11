@@ -8,7 +8,12 @@ import { loadKey } from "@actual/source/server/encryption/index.ts";
 import { runMutator } from "@actual/source/server/mutators.ts";
 import * as sheet from "@actual/source/server/sheet.ts";
 import { currentMonth, sheetForMonth } from "@actual/source/shared/months.ts";
-import { makeChild, recalculateSplit } from "@actual/source/shared/transactions.ts";
+import {
+  makeChild,
+  realizeTempTransactions,
+  recalculateSplit,
+  ungroupTransaction,
+} from "@actual/source/shared/transactions.ts";
 import * as storage from "@actual/storage";
 import { setSyncingMode, fullSync, clearFullSyncTimeout } from "@actual/sync";
 
@@ -357,6 +362,8 @@ async function register() {
       transferId: row.transfer_id ?? null,
       transferReconciled: Boolean(linked?.reconciled),
       transferInSplit: Boolean(linked?.is_child),
+      // The schedule the transaction is linked to.
+      scheduleId: row.schedule ?? null,
       // A split's parts, in Actual's order.
       splits: row.is_parent
         ? (row.subtransactions ?? []).map((child) => ({
@@ -407,7 +414,7 @@ async function editable(id: string, allowReconciled: boolean, allowReconciledTra
 async function perform(method: string, args: Obj): Promise<unknown> {
   if (
     [
-      "saveTransaction", "deleteTransaction", "budget", "sync", "syncAccounts", "setCleared",
+      "saveTransaction", "deleteTransaction", "duplicateTransaction", "budget", "sync", "syncAccounts", "setCleared",
       "unlockTransaction", "createReconciliationTransaction", "finishReconciliation", "saveTargets",
       "applyTargets", "budgetAction", "saveSplit", "commitImport", ...managementMethods, ...scheduleWrites, ...ruleWrites,
       ...reportWrites,
@@ -738,6 +745,23 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       await editable(id, args.allowReconciled === true, args.allowReconciledTransfer === true, true);
       // Actual deletes a transfer's linked transaction too.
       await lib.send("transactions-batch-update", { deleted: [{ id }] });
+      return {};
+    }
+    case "duplicateTransaction": {
+      // As Actual's Duplicate: a copy of the transaction and any split parts,
+      // with new IDs, neither cleared nor reconciled.
+      const { data } = await lib.send(
+        "query",
+        lib.q("transactions").filter({ id: text(args.id) }).select("*").options({ splits: "grouped" }).serialize(),
+      );
+      const row = (data as never[])[0];
+      if (!row) throw new Error("Transaction no longer exists");
+      const added = realizeTempTransactions(ungroupTransaction(row)).map((t) => ({
+        ...t,
+        cleared: false,
+        reconciled: false,
+      }));
+      await lib.send("transactions-batch-update", { added } as never);
       return {};
     }
     case "setCleared": {
