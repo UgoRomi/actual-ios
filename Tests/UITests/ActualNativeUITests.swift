@@ -639,11 +639,51 @@ final class ActualNativeUITests: XCTestCase {
             .waitForExistence(timeout: 10), "Rules read as sentences")
         capture("rules")
         // A new rule starts as Actual's does: if the payee is nothing, set the category.
-        app.buttons["Add rule"].tap()
+        let addRule = app.buttons["Add rule"]
+        XCTAssertTrue(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == true"), object: addRule)],
+                                     timeout: 10) == .completed)
+        addRule.tap()
         XCTAssertTrue(app.navigationBars["New Rule"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["payee is nothing"].exists)
         capture("rule-new")
+        // As in Actual, a rule can split each match; a new split takes an equal part of the remainder.
+        let split = app.buttons["Split into Multiple Transactions"]
+        scroll(app, to: split)
+        let share = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "allocate an equal portion")).firstMatch
+        XCTAssertTrue(tap(split, until: share))
+        capture("rule-split")
+        let another = app.buttons["Add Another Split"]
+        scroll(app, to: another)
+        XCTAssertTrue(another.exists)
+        XCTAssertTrue(tap(share, until: app.navigationBars["Split Amount"]))
+        XCTAssertTrue(tap(app.buttons["A fixed amount"].firstMatch, until: app.buttons["Payment"]), "A fixed amount is entered as a payment or deposit")
+        capture("rule-split-amount")
+        app.navigationBars["Split Amount"].buttons.firstMatch.tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "allocate a fixed amount")).firstMatch
+            .waitForExistence(timeout: 10))
+        let matching = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Matching Transactions")).firstMatch
+        scroll(app, to: matching)
+        capture("rule-split-sections")
         app.navigationBars["New Rule"].buttons["Cancel"].tap()
+
+        // An existing rule lists the transactions it matches, to apply its actions to.
+        app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "If ")).firstMatch.tap()
+        let matches = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Matching Transactions")).firstMatch
+        scroll(app, to: matches)
+        XCTAssertTrue(tap(matches, until: app.navigationBars["Matching Transactions"]))
+        capture("rule-matches")
+        app.navigationBars["Matching Transactions"].buttons.firstMatch.tap()
+        // A schedule's rule is view only, so it closes with Done.
+        let close = app.buttons["Cancel"].exists ? app.buttons["Cancel"] : app.buttons["Done"]
+        close.firstMatch.tap()
+
+        // Selecting rules offers to delete them together; schedules keep theirs, so a budget with only those has none to select.
+        if app.buttons["Select"].isEnabled {
+            app.buttons["Select"].tap()
+            XCTAssertTrue(app.buttons["Delete"].waitForExistence(timeout: 10))
+            capture("rules-select")
+            app.buttons["Done"].tap()
+        }
         app.navigationBars["Rules"].buttons.firstMatch.tap()
 
         let numbers = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Numbers")).firstMatch
@@ -1224,6 +1264,17 @@ final class ActualNativeUITests: XCTestCase {
     @MainActor
     private func scroll(_ app: XCUIApplication, to element: XCUIElement) {
         for _ in 0..<8 where !element.isHittable { app.swipeUp() }
+    }
+
+    /// Taps until the expected element appears: a tap while a sheet or push settles can be missed.
+    @MainActor
+    @discardableResult
+    private func tap(_ element: XCUIElement, until target: XCUIElement) -> Bool {
+        for _ in 0..<3 {
+            if element.waitForExistence(timeout: 5) { element.tap() }
+            if target.waitForExistence(timeout: 4) { return true }
+        }
+        return false
     }
 
     @MainActor

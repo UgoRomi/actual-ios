@@ -100,6 +100,7 @@ private struct PayeeDetail: View {
     @State private var renaming = false
     @State private var merging = false
     @State private var confirmsDelete = false
+    @State private var creatingRule: RuleEditRoute?
 
     private var payee: ManagedPayee? { payees.first { $0.id == payeeID } }
 
@@ -108,8 +109,17 @@ private struct PayeeDetail: View {
             if let payee {
                 Section {
                     Button { renaming = true } label: { LabeledContent("Name", value: payee.name) }
-                    LabeledContent("Rules", value: "\(payee.ruleCount)")
                     LabeledContent("Transactions", value: payee.unused ? "None" : "Yes")
+                }
+                // As Actual's payees page: view the payee's rules, or create its first.
+                Section {
+                    if payee.ruleCount > 0 {
+                        NavigationLink { RulesView(payeeID: payeeID, payeeName: payee.name) } label: {
+                            LabeledContent("Rules", value: "\(payee.ruleCount)")
+                        }
+                    } else {
+                        Button("Create Rule", systemImage: "wand.and.rays") { creatingRule = RuleEditRoute(rule: .new(payeeID: payeeID)) }
+                    }
                 }
                 // As in Actual, a payee's learning can be changed only while the budget learns categories.
                 if model.overview?.format?.learnCategories ?? true {
@@ -142,6 +152,7 @@ private struct PayeeDetail: View {
         }
         .disabled(model.isBusy)
         .navigationTitle(payee?.name ?? "Payee").navigationBarTitleDisplayMode(.inline)
+        .sheet(item: $creatingRule) { route in RuleEditor(rule: route.rule) }
         .sheet(isPresented: $renaming) {
             NameSheet(title: "Rename Payee", initial: payee?.name ?? "") { name in
                 let renamed = await model.manage("renamePayee", ["id": .string(payeeID), "name": .string(name)])

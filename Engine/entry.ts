@@ -17,7 +17,7 @@ import { uploadSnapshotIfDue } from "./adapters/cloud-storage";
 import { canSyncBank, syncBankAccounts } from "./bank-sync";
 import { budgetAction, categoryAverage, envelopeSummary } from "./budget-actions";
 import { learnsCategories, manage, managementMethods } from "./management";
-import { ruleCommand, rulesList, ruleWrites } from "./rules";
+import { ruleCommand, ruleReads, rulesList, ruleWrites } from "./rules";
 import { commitImport, prepareImport } from "./importing";
 import { saveSplit } from "./splits";
 import { scheduleCommand, schedulePreviews, schedules, scheduleWrites } from "./schedules";
@@ -780,12 +780,12 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       }
       if (method === "schedules") return runMutator(schedules);
       if (method === "schedulePreviews") return runMutator(schedulePreviews);
-      if (method === "rules") return runMutator(rulesList);
+      if (method === "rules") return runMutator(() => rulesList(args));
       if (method === "prepareImport" || method === "commitImport") {
         requireBudget();
         return method === "prepareImport" ? prepareImport(args) : commitImport(args);
       }
-      if ([...ruleWrites, "ruleMatches"].includes(method)) {
+      if ([...ruleWrites, ...ruleReads].includes(method)) {
         requireBudget();
         return ruleCommand(method, args);
       }

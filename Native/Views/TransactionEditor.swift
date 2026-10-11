@@ -23,6 +23,7 @@ struct TransactionEditor: View {
     @State private var splits: [SplitDraft] = []
     /// A payee a rule chose, which should not run rules again.
     @State private var ruledPayee: String?
+    @State private var ruleDraft: RuleEditRoute?
 
     private var editable: Bool { transaction?.canEdit ?? true }
     /// The latest load: this transaction, or a transfer's linked transaction,
@@ -121,6 +122,17 @@ struct TransactionEditor: View {
                 splitSection.disabled(!editable || model.isBusy)
                 if let validation { Section { Text(validation).foregroundStyle(ActualTheme.negative) } }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
+                if let transaction {
+                    // As Actual's register: a rule for transactions like this saved one.
+                    Section {
+                        Button("Create Rule from Transaction", systemImage: "wand.and.rays") {
+                            Task {
+                                do { ruleDraft = RuleEditRoute(rule: try await model.ruleDraft(transactionID: transaction.id)) }
+                                catch { validation = error.localizedDescription }
+                            }
+                        }.disabled(model.isBusy)
+                    }
+                }
                 if transaction != nil && editable {
                     Section {
                         Button("Delete transaction", role: .destructive) { showDeleteConfirmation = true }
@@ -146,6 +158,7 @@ struct TransactionEditor: View {
                 }
             }
             .interactiveDismissDisabled(model.isBusy)
+            .sheet(item: $ruleDraft) { route in RuleEditor(rule: route.rule) }
             .confirmationDialog("Delete this transaction?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
                 Button("Delete transaction", role: .destructive) {
                     if let transaction {

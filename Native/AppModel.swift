@@ -565,21 +565,26 @@ final class AppModel {
         "createCategoryGroup", "updateCategoryGroup", "deleteCategoryGroup", "createCategory", "updateCategory",
         "deleteCategory", "moveCategory", "moveCategoryGroup", "saveNotes", "createAccount", "updateAccount",
         "closeAccount", "reopenAccount", "renamePayee", "deletePayees", "mergePayees", "savePreference",
-        "setPayeeLearning", "saveRule", "deleteRule", "applyRule", "discoverTags", "createTag", "updateTag", "deleteTag",
+        "setPayeeLearning", "saveRule", "deleteRule", "deleteRules", "applyRule", "discoverTags", "createTag", "updateTag", "deleteTag",
         "linkScheduleTransactions",
         // Schedules: posting adds a transaction, and saving can add a payee.
         "saveSchedule", "deleteSchedule", "skipSchedule", "postSchedule", "completeSchedule",
     ]
 
-    /// Every rule, as Actual's rules page lists them.
-    func rules() async throws -> [Rule] {
-        try await client().call("rules", as: [Rule].self)
+    /// Every rule, or a payee's, as Actual's rules page lists them.
+    func rules(payeeID: String? = nil) async throws -> [Rule] {
+        try await client().call("rules", arguments: payeeID.map { ["payeeId": .string($0)] } ?? [:], as: [Rule].self)
     }
 
-    /// How many transactions a rule's conditions match now.
-    func ruleMatches(_ rule: Rule) async throws -> Int {
-        struct Count: Decodable { let count: Int }
-        return try await client().call("ruleMatches", arguments: rule.json, as: Count.self).count
+    /// The transactions a rule's conditions match now.
+    func ruleMatches(_ rule: Rule) async throws -> [RuleMatch] {
+        struct Matches: Decodable { let transactions: [RuleMatch] }
+        return try await client().call("ruleMatches", arguments: rule.json, as: Matches.self).transactions
+    }
+
+    /// A rule for transactions like this one, as Actual's register's "Create rule" drafts it.
+    func ruleDraft(transactionID: String) async throws -> Rule {
+        try await client().call("ruleFromTransaction", arguments: ["id": .string(transactionID)], as: Rule.self)
     }
 
     /// Payees with their rule counts, as Actual's payees page lists them.

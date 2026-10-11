@@ -419,3 +419,9 @@ Against a dedicated 26.10.0 checkout with core, API, and sync server built: `./s
 Two checks failed for reasons unrelated to the upgrade and were corrected. The rules preview check looked for a transaction with the previewed amount, which the demo budget's random amounts sometimes contain; it now compares the number of transactions. The sync check expected a monthly schedule starting 2026-10-01 to be next due that day, which stopped being true once the date passed; the schedule now starts in 2099.
 
 Not verified end to end: the simulator UI tests and a physical device.
+
+## Rule management (2026-10-11)
+
+Split rules, category group conditions, applying to chosen matches, deleting several rules, a payee's rules, and drafting a rule from a transaction were compared with Actual 26.10.0's `RuleEditor.tsx`, `ManageRules.tsx`, `MobileRulesPage.tsx`, and the register's `onCreateRule`. `./scripts/test-engine.sh` passed: the rules check saves and describes a two-split rule, applies it to one chosen match and checks the parts' amounts and categories, drafts rules from a split and an ordinary transaction, lists a payee's rules, hides a completed schedule's rule, and deletes several rules while a schedule keeps its own. `node Engine/typecheck.mjs` and `./scripts/build.sh` passed.
+
+`testDemoPayeesRulesAndFormatting` passed on a fresh iPhone 17 Pro (iOS 26.0) simulator. Screenshots of the split sections, the split amount editor, and the matching transactions page were inspected. The run found that changing an action's kind or a split's method gave the item a new identity, which left its pushed editor showing the old value; items now keep their identity. A menu-style picker did not open under XCUITest, so the split method is an inline list. The demo's rules all belong to schedules, so selecting rules is checked only when a budget has others. Not verified: applying to chosen transactions in the simulator (the demo's rules match none) and a physical device.
