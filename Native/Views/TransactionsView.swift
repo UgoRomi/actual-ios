@@ -21,6 +21,10 @@ struct TransactionsView: View {
     @State private var importing: ImportFile?
     @State private var fileError: String?
     @State private var selectedScheduled: ScheduledTransaction?
+    @State private var linkingSchedule: Transaction?
+    @State private var creatingSchedule: Transaction?
+    @State private var viewingSchedule: ScheduleEditRoute?
+    @State private var deleting: Transaction?
     @Environment(\.dismiss) private var dismiss
 
     private var account: Account? { accountID.flatMap { id in model.overview?.accounts.first { $0.id == id } } }
@@ -42,6 +46,7 @@ struct TransactionsView: View {
         let hasMore = sections.reduce(0) { $0 + $1.transactions.count } == shownCount
         let offBudget = Set((model.overview?.accounts ?? []).filter(\.offbudget).map(\.id))
         return ThemedList {
+            if let account { AccountBalanceHeader(account: account, currency: model.currency) }
             if let error = model.errorMessage { Section { ErrorNotice(message: error) { Task { await model.refresh() } } } }
             if let accountID { BankSyncNotice(accountID: accountID) }
             if let account, let reconciliation { ReconcilingBanner(account: account, reconciliation: reconciliation) }
@@ -75,6 +80,7 @@ struct TransactionsView: View {
                             }.buttonStyle(.plain)
                             ClearedToggle(transaction: transaction)
                         }
+                        .contextMenu { quickActions(transaction) }
                     }
                 } header: {
                     if let parsed = BudgetDate.date(section.date) { Text(parsed, format: .dateTime.weekday(.wide).month(.abbreviated).day()) }
@@ -117,6 +123,20 @@ struct TransactionsView: View {
         .sheet(isPresented: $isAdding) { TransactionEditor(accountID: accountID) }
         .sheet(isPresented: $showsReconcile) { if let accountID { ReconcileSheet(accountID: accountID) } }
         .sheet(item: $selectedTransaction) { transaction in TransactionEditor(transaction: transaction, accountID: transaction.accountId) }
+        .sheet(item: $linkingSchedule) { transaction in ScheduleLinkSheet(transaction: transaction) }
+        .sheet(item: $creatingSchedule) { transaction in ScheduleEditor(schedule: nil, transaction: transaction) }
+        .sheet(item: $viewingSchedule) { route in ScheduleEditor(schedule: route.schedule) }
+        .confirmationDialog("Delete this transaction?", isPresented: $deleting.isPresent, titleVisibility: .visible,
+                            presenting: deleting) { transaction in
+            Button("Delete transaction", role: .destructive) {
+                let arguments: [String: JSONValue] = [
+                    "id": .string(transaction.id), "allowReconciled": .bool(transaction.isReconciled),
+                    "allowReconciledTransfer": .bool(transaction.transferReconciled == true),
+                ]
+                Task { await model.edit("deleteTransaction", arguments: arguments, showing: .delete(id: transaction.id)) }
+            }
+            Button("Cancel", role: .cancel) { }
+        } message: { transaction in Text(transaction.deleteMessage) }
         // Actual's scheduled transaction menu.
         .confirmationDialog(selectedScheduled?.title ?? "", isPresented: $selectedScheduled.isPresent,
                             titleVisibility: .visible, presenting: selectedScheduled) { scheduled in
@@ -171,6 +191,46 @@ struct TransactionsView: View {
         }
     }
 
+    /// Actual's transaction menu: duplicate, link to a schedule or create one from it, and delete.
+    @ViewBuilder private func quickActions(_ transaction: Transaction) -> some View {
+        Group {
+            if let scheduleID = transaction.scheduleId {
+                Button("View Schedule", systemImage: "calendar") { viewSchedule(scheduleID) }
+                Button("Unlink Schedule", systemImage: "link.badge.minus") {
+                    Task {
+                        await model.manage("linkScheduleTransactions", [
+                            "id": .string(scheduleID), "transactionIds": .array([.string(transaction.id)]),
+                            "link": .bool(false),
+                        ])
+                    }
+                }
+            } else {
+                Button("Link Schedule…", systemImage: "link") { linkingSchedule = transaction }
+                Button("Create Schedule…", systemImage: "calendar.badge.plus") { creatingSchedule = transaction }
+            }
+            if transaction.canEdit {
+                Divider()
+                Button("Duplicate", systemImage: "plus.square.on.square") {
+                    Task { await model.duplicateTransaction(transaction.id) }
+                }
+                Button("Delete", systemImage: "trash", role: .destructive) { deleting = transaction }
+            }
+        }
+        .disabled(model.isBusy)
+    }
+
+    private func viewSchedule(_ id: String) {
+        Task {
+            do {
+                guard let schedule = try await model.schedules().first(where: { $0.id == id }) else {
+                    model.errorMessage = "This schedule no longer exists."
+                    return
+                }
+                viewingSchedule = ScheduleEditRoute(schedule: schedule)
+            } catch { model.errorMessage = error.localizedDescription }
+        }
+    }
+
     /// Actual's mobile account menu.
     private var accountMenu: some View {
         Menu("Account options", systemImage: "ellipsis.circle") {
@@ -192,24 +252,65 @@ struct TransactionsView: View {
 }
 
 /// An upcoming scheduled transaction, with its date and status, as Actual's register shows it.
+/// An account's cleared, total, and uncleared balances, as Actual's mobile account page shows them.
+struct AccountBalanceHeader: View {
+    let account: Account
+    let currency: String
+
+    var body: some View {
+        let cleared = account.clearedBalance ?? 0
+        Section {
+            HStack(alignment: .firstTextBaseline) {
+                column("Cleared", value: cleared)
+                VStack(spacing: 2) {
+                    Text("Balance").font(.caption).foregroundStyle(.secondary)
+                    MoneyText(value: account.balance, currency: currency, positiveColor: ActualTheme.positive)
+                        .font(.title3.weight(.semibold))
+                }.frame(maxWidth: .infinity)
+                // Both totals sum the same transactions, so what isn't cleared is the difference.
+                column("Uncleared", value: account.balance - cleared)
+            }
+            .lineLimit(1).minimumScaleFactor(0.6)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    private func column(_ title: String, value: Int) -> some View {
+        VStack(spacing: 2) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            MoneyText(value: value, currency: currency, negativeColor: .primary).font(.footnote.weight(.medium))
+        }.frame(maxWidth: .infinity)
+    }
+}
+
 struct ScheduledTransactionRow: View {
     let scheduled: ScheduledTransaction
     let currency: String
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(scheduled.title).font(.body.weight(.medium)).foregroundStyle(.primary)
-                HStack(spacing: 6) {
-                    ScheduleStatusBadge(status: scheduled.shownStatus)
-                    Text(BudgetDate.display(scheduled.date))
-                    if let category = scheduled.categoryName { Text("· \(category)") }
-                }.font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer(minLength: 8)
-            // Actual's register shows previews in light text.
-            MoneyText(value: scheduled.amount, currency: currency, positiveColor: ActualTheme.positive, negativeColor: .secondary)
-                .font(.body.weight(.semibold))
-        }.padding(.vertical, 6).contentShape(Rectangle())
+        // Actual's register shows previews in light text.
+        let amount = MoneyText(value: scheduled.amount, currency: currency, positiveColor: ActualTheme.positive, negativeColor: .secondary)
+            .font(.body.weight(.semibold))
+        RegisterColumns {
+            Text(scheduled.title).font(.body.weight(.medium)).foregroundStyle(.primary)
+        } detail: {
+            Text(scheduled.categoryName ?? "")
+        } notes: {
+            HStack(spacing: 6) { ScheduleStatusBadge(status: scheduled.shownStatus); Text(BudgetDate.display(scheduled.date)) }
+        } amount: { amount } stacked: {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(scheduled.title).font(.body.weight(.medium)).foregroundStyle(.primary)
+                    HStack(spacing: 6) {
+                        ScheduleStatusBadge(status: scheduled.shownStatus)
+                        Text(BudgetDate.display(scheduled.date))
+                        if let category = scheduled.categoryName { Text("· \(category)") }
+                    }.font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                amount
+            }.padding(.vertical, 6)
+        }
+        .contentShape(Rectangle())
             .accessibilityElement(children: .combine)
             .accessibilityHint("Post or skip this scheduled transaction")
     }
@@ -221,28 +322,72 @@ struct TransactionRow: View {
     /// Categories the transaction still needs; see `Transaction.missingCategories`.
     var missingCategories = 0
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(transaction.title).font(.body.weight(.medium)).foregroundStyle(.primary)
-                // As in Actual's mobile register, transfers and splits are marked beside the category.
-                // The title and detail already say so to VoiceOver.
-                HStack(spacing: 4) {
-                    if transaction.isTransfer { Image(systemName: "arrow.left.arrow.right").accessibilityHidden(true) }
-                    else if transaction.isParent { Image(systemName: "square.split.2x2").accessibilityHidden(true) }
-                    // Actual highlights a missing category; a split says how many of its parts lack one.
-                    if missingCategories == 0 || transaction.isParent {
-                        Text(transaction.canEdit ? transaction.detail : "\(transaction.detail) · view only")
-                    }
-                    if missingCategories > 0 {
-                        UncategorizedBadge(parts: transaction.isParent ? missingCategories : nil)
-                    }
-                }.font(.caption).foregroundStyle(.secondary)
-                if let notes = transaction.notes, !notes.isEmpty { NotesText(notes: notes).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
-            }
-            Spacer(minLength: 8)
-            MoneyText.transaction(transaction.amount, currency: currency).font(.body.weight(.semibold))
-        }.padding(.vertical, 6).contentShape(Rectangle())
+        let title = Text(transaction.title).font(.body.weight(.medium)).foregroundStyle(.primary)
+        let amount = MoneyText.transaction(transaction.amount, currency: currency).font(.body.weight(.semibold))
+        RegisterColumns { title } detail: { detail } notes: { notes } amount: { amount } stacked: {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 5) {
+                    title
+                    detail.font(.caption).foregroundStyle(.secondary)
+                    notes.font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 8)
+                amount
+            }.padding(.vertical, 6)
+        }
+        .contentShape(Rectangle())
             .accessibilityElement(children: .combine)
+    }
+
+    /// As in Actual's mobile register, transfers and splits are marked beside the category.
+    /// The title and detail already say so to VoiceOver.
+    private var detail: some View {
+        HStack(spacing: 4) {
+            if transaction.isTransfer { Image(systemName: "arrow.left.arrow.right").accessibilityHidden(true) }
+            else if transaction.isParent { Image(systemName: "square.split.2x2").accessibilityHidden(true) }
+            // Actual highlights a missing category; a split says how many of its parts lack one.
+            if missingCategories == 0 || transaction.isParent {
+                Text(transaction.canEdit ? transaction.detail : "\(transaction.detail) · view only")
+            }
+            if missingCategories > 0 {
+                UncategorizedBadge(parts: transaction.isParent ? missingCategories : nil)
+            }
+        }
+    }
+
+    @ViewBuilder private var notes: some View {
+        if let notes = transaction.notes, !notes.isEmpty { NotesText(notes: notes).lineLimit(1) }
+    }
+}
+
+/// A register row on one line where there is room, in columns as Actual's desktop register lists them:
+/// title, category or other detail, notes, and amount. Otherwise, its stacked layout.
+struct RegisterColumns<Title: View, Detail: View, Notes: View, Amount: View, Stacked: View>: View {
+    @ViewBuilder var title: Title
+    @ViewBuilder var detail: Detail
+    @ViewBuilder var notes: Notes
+    @ViewBuilder var amount: Amount
+    @ViewBuilder var stacked: Stacked
+    @ScaledMetric(relativeTo: .subheadline) private var detailWidth: CGFloat = 200
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        if dynamicTypeSize.isAccessibilitySize { stacked } else {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 16) {
+                    title.lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                    detail.lineLimit(1).font(.subheadline).foregroundStyle(.secondary)
+                        .frame(width: detailWidth, alignment: .leading)
+                    notes.lineLimit(1).font(.subheadline).foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    amount.lineLimit(1).frame(minWidth: 96, alignment: .trailing)
+                }
+                .padding(.vertical, 2)
+                // Fits from this width, however long its text.
+                .frame(minWidth: 600, idealWidth: 600, maxWidth: .infinity)
+                stacked
+            }
+        }
     }
 }
 

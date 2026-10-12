@@ -355,7 +355,7 @@ struct TargetsEditor: View {
     }
 
     private func save() async {
-        if await model.saveTargets(categoryID: category.id, templates: templates) {
+        if await model.saveTargets(categoryID: category.id, month: month, templates: templates) {
             original = templates
             sourceStart = sourceText
             path.removeLast()

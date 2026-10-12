@@ -631,6 +631,31 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Payees"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.cells.element(boundBy: 1).waitForExistence(timeout: 10), "The demo's payees are listed")
         capture("payees")
+        // Select payees, as Actual's payees page does, and favorite them together.
+        app.navigationBars["Payees"].buttons["Select"].tap()
+        XCTAssertTrue(app.navigationBars["Select Payees"].waitForExistence(timeout: 10))
+        let kroger = app.staticTexts["Kroger"]
+        scroll(app, to: kroger)
+        kroger.tap()
+        capture("payees-selecting")
+        XCTAssertTrue(app.navigationBars["1 Payee"].waitForExistence(timeout: 10))
+        XCTAssertFalse(app.buttons["Merge"].isEnabled, "Merging needs two payees")
+        tapWhenEnabled(app.buttons["Favorite"])
+        XCTAssertTrue(app.buttons["Unfavorite"].waitForExistence(timeout: 10), "The selected payee becomes a favorite")
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.navigationBars["Payees"].waitForExistence(timeout: 10))
+        // A payee's page sets it as a favorite and starts a rule that matches it.
+        scroll(app, to: kroger)
+        kroger.tap()
+        XCTAssertTrue(app.navigationBars["Kroger"].waitForExistence(timeout: 10))
+        XCTAssertEqual(app.switches["Favorite"].value as? String, "1")
+        capture("payee-detail")
+        tapWhenEnabled(app.buttons["Create Rule"])
+        XCTAssertTrue(app.navigationBars["New Rule"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["payee is Kroger"].exists, "A new rule matches the payee")
+        app.navigationBars["New Rule"].buttons["Cancel"].tap()
+        XCTAssertTrue(app.navigationBars["New Rule"].waitForNonExistence(timeout: 10))
+        app.navigationBars["Kroger"].buttons.firstMatch.tap()
         app.navigationBars["Payees"].buttons.firstMatch.tap()
 
         app.buttons["Rules"].tap()
@@ -639,11 +664,52 @@ final class ActualNativeUITests: XCTestCase {
             .waitForExistence(timeout: 10), "Rules read as sentences")
         capture("rules")
         // A new rule starts as Actual's does: if the payee is nothing, set the category.
-        app.buttons["Add rule"].tap()
+        let addRule = app.buttons["Add rule"]
+        XCTAssertTrue(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == true"), object: addRule)],
+                                     timeout: 10) == .completed)
+        addRule.tap()
         XCTAssertTrue(app.navigationBars["New Rule"].waitForExistence(timeout: 10))
         XCTAssertTrue(app.buttons["payee is nothing"].exists)
         capture("rule-new")
+        // As in Actual, a rule can split each match; a new split takes an equal part of the remainder.
+        let split = app.buttons["Split into Multiple Transactions"]
+        scroll(app, to: split)
+        let share = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "allocate an equal portion")).firstMatch
+        XCTAssertTrue(tap(split, until: share))
+        capture("rule-split")
+        let another = app.buttons["Add Another Split"]
+        scroll(app, to: another)
+        XCTAssertTrue(another.exists)
+        XCTAssertTrue(tap(share, until: app.navigationBars["Split Amount"]))
+        XCTAssertTrue(tap(app.buttons["A fixed amount"].firstMatch, until: app.buttons["Payment"]), "A fixed amount is entered as a payment or deposit")
+        capture("rule-split-amount")
+        app.navigationBars["Split Amount"].buttons.firstMatch.tap()
+        XCTAssertTrue(app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "allocate a fixed amount")).firstMatch
+            .waitForExistence(timeout: 10))
+        let matching = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Matching Transactions")).firstMatch
+        scroll(app, to: matching)
+        capture("rule-split-sections")
         app.navigationBars["New Rule"].buttons["Cancel"].tap()
+        XCTAssertTrue(app.navigationBars["New Rule"].waitForNonExistence(timeout: 10))
+
+        // An existing rule lists the transactions it matches, to apply its actions to.
+        app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "If ")).firstMatch.tap()
+        let matches = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Matching Transactions")).firstMatch
+        scroll(app, to: matches)
+        XCTAssertTrue(tap(matches, until: app.navigationBars["Matching Transactions"]))
+        capture("rule-matches")
+        app.navigationBars["Matching Transactions"].buttons.firstMatch.tap()
+        // A schedule's rule is view only, so it closes with Done.
+        let close = app.buttons["Cancel"].exists ? app.buttons["Cancel"] : app.buttons["Done"]
+        close.firstMatch.tap()
+
+        // Selecting rules offers to delete them together; schedules keep theirs, so a budget with only those has none to select.
+        if app.buttons["Select"].isEnabled {
+            app.buttons["Select"].tap()
+            XCTAssertTrue(app.buttons["Delete"].waitForExistence(timeout: 10))
+            capture("rules-select")
+            app.buttons["Done"].tap()
+        }
         app.navigationBars["Rules"].buttons.firstMatch.tap()
 
         let numbers = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Numbers")).firstMatch
@@ -1209,6 +1275,14 @@ final class ActualNativeUITests: XCTestCase {
         for key in keys { app.buttons[names[key] ?? String(key)].tap() }
     }
 
+    /// Taps a button once it is enabled; buttons that save wait while the app is busy.
+    @MainActor
+    private func tapWhenEnabled(_ element: XCUIElement) {
+        let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "isEnabled == true"), object: element)
+        XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: 15), .completed, "\(element) should be enabled")
+        element.tap()
+    }
+
     @MainActor
     private func wait(forAbsence element: XCUIElement) -> Bool {
         let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: element)
@@ -1224,6 +1298,17 @@ final class ActualNativeUITests: XCTestCase {
     @MainActor
     private func scroll(_ app: XCUIApplication, to element: XCUIElement) {
         for _ in 0..<8 where !element.isHittable { app.swipeUp() }
+    }
+
+    /// Taps until the expected element appears: a tap while a sheet or push settles can be missed.
+    @MainActor
+    @discardableResult
+    private func tap(_ element: XCUIElement, until target: XCUIElement) -> Bool {
+        for _ in 0..<3 {
+            if element.waitForExistence(timeout: 5) { element.tap() }
+            if target.waitForExistence(timeout: 4) { return true }
+        }
+        return false
     }
 
     @MainActor
@@ -1246,11 +1331,42 @@ final class ActualNativeUITests: XCTestCase {
         start.press(forDuration: 0.1, thenDragTo: end)
     }
 
+    /// iPad only: captures each section in landscape and portrait, to review the regular-width layouts.
+    /// Set TEST_RUNNER_SCREENSHOT_DIR to also save the screenshots there.
+    @MainActor
+    func testDemoIPadLayouts() throws {
+        guard UIDevice.current.userInterfaceIdiom == .pad else { throw XCTSkip("Captures iPad layouts") }
+        let app = XCUIApplication()
+        app.launch()
+        // The last budget opened reopens on launch.
+        let demoButton = app.buttons["Explore a demo budget"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        XCTAssertTrue(app.buttons["budget.summary"].waitForExistence(timeout: 60), "The demo budget should open")
+        for orientation in [UIDeviceOrientation.landscapeLeft, .portrait] {
+            XCUIDevice.shared.orientation = orientation
+            let suffix = orientation == .portrait ? "portrait" : "landscape"
+            for section in ["Budget", "Accounts", "Transactions", "Schedules", "Reports"] {
+                // A tab bar item, or the sidebar's.
+                let tab = [app.tabBars.buttons[section], app.cells.containing(.staticText, identifier: section).firstMatch]
+                    .first { $0.exists } ?? app.buttons[section].firstMatch
+                if !tab.waitForExistence(timeout: 10) { capture("ipad-missing-tab"); print(app.debugDescription) }
+                XCTAssertTrue(tab.exists, "\(section) should be reachable")
+                tab.tap()
+                sleep(2)
+                capture("ipad-\(section.lowercased())-\(suffix)")
+            }
+        }
+    }
+
     @MainActor
     private func capture(_ name: String) {
-        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        let screenshot = XCUIScreen.main.screenshot()
+        let attachment = XCTAttachment(screenshot: screenshot)
         attachment.name = name
         attachment.lifetime = .keepAlways
         add(attachment)
+        if let directory = ProcessInfo.processInfo.environment["SCREENSHOT_DIR"] {
+            try? screenshot.pngRepresentation.write(to: URL(fileURLWithPath: directory).appendingPathComponent("\(name).png"))
+        }
     }
 }

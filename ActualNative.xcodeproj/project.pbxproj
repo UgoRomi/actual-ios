@@ -29,6 +29,7 @@
 		5053EA6B4042432DA9A0EB90 /* Native/Views/ImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35E8712517604F4091EB62AC /* Native/Views/ImportView.swift */; };
 		54A2091B7FBAD00DDF959F31 /* ActualWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14762814060BC0D9E4BB90EF /* ActualWidget.swift */; };
 		5C1A7E0B9D2F4A6E8B3C1D20 /* Native/Views/AmountField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E4B2C7A1F6D3E8B5A0C4F21 /* Native/Views/AmountField.swift */; };
+		5C1A7E0B9D2F4A6E8B3C1E31 /* Native/Views/BalanceFeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E4B2C7A1F6D3E8B5A0C4E32 /* Native/Views/BalanceFeedbackView.swift */; };
 		6292B24D93154C6A25CA48FB /* Native/Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0AAF66868F872CE43E775077 /* Native/Assets.xcassets */; };
 		6773E3F2849B62EF2317BF27 /* Native/ActualNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3D9589739A3279854188C92 /* Native/ActualNativeApp.swift */; };
 		5E1A9C3D7B2F4E6A8C0D1E21 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 5E1A9C3D7B2F4E6A8C0D1E20 /* PrivacyInfo.xcprivacy */; };
@@ -139,6 +140,7 @@
 		9A70C3736FC9438A8E9E43FF /* Native/Views/CategoryTransactionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/CategoryTransactionsView.swift; sourceTree = "<group>"; };
 		9B5E55D034124E4FA7708A32 /* Native/Views/ManageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ManageViews.swift; sourceTree = "<group>"; };
 		9E4B2C7A1F6D3E8B5A0C4F21 /* Native/Views/AmountField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/AmountField.swift; sourceTree = "<group>"; };
+		9E4B2C7A1F6D3E8B5A0C4E32 /* Native/Views/BalanceFeedbackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/BalanceFeedbackView.swift; sourceTree = "<group>"; };
 		A1BB505D4A3C7BD92A98DA78 /* Intents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Intents.swift; path = Native/Intents.swift; sourceTree = "<group>"; };
 		AB9A221DDF49480E9A44C372 /* Native/Importing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Importing.swift; sourceTree = "<group>"; };
 		B7166B33BC754AD2B0247743 /* Native/Schedules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Schedules.swift; sourceTree = "<group>"; };
@@ -220,6 +222,7 @@
 				7A1E5C3B9D2F48A6B0C4E6F1 /* Native/ThemeModel.swift */,
 				443F99244216BE707150CE77 /* Native/Views/AccountsView.swift */,
 				9E4B2C7A1F6D3E8B5A0C4F21 /* Native/Views/AmountField.swift */,
+				9E4B2C7A1F6D3E8B5A0C4E32 /* Native/Views/BalanceFeedbackView.swift */,
 				83416C8B7281940A2D331143 /* Native/Views/BudgetView.swift */,
 				AB9A221DDF49480E9A44C372 /* Native/Importing.swift */,
 				35E8712517604F4091EB62AC /* Native/Views/ImportView.swift */,
@@ -444,6 +447,7 @@
 				7A1E5C3B9D2F48A6B0C4E6F2 /* Native/ThemeModel.swift in Sources */,
 				AF716BBB3F56F5E55D747809 /* Native/Views/AccountsView.swift in Sources */,
 				5C1A7E0B9D2F4A6E8B3C1D20 /* Native/Views/AmountField.swift in Sources */,
+				5C1A7E0B9D2F4A6E8B3C1E31 /* Native/Views/BalanceFeedbackView.swift in Sources */,
 				AB1BDB58B28CF1FDFFC17C52 /* Native/Views/BudgetView.swift in Sources */,
 				2ACCE8679E7847AFB73B2225 /* Native/Importing.swift in Sources */,
 				5053EA6B4042432DA9A0EB90 /* Native/Views/ImportView.swift in Sources */,

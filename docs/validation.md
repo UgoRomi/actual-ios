@@ -35,7 +35,9 @@ xcodebuild test \
   CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
 ```
 
-Choose a new result bundle path if one already exists. UI tests use only the app's demo budget. Screenshot attachments are stored in the `.xcresult` bundle.
+Choose a new result bundle path if one already exists. UI tests use only the app's demo budget. Screenshot attachments are stored in the `.xcresult` bundle. With `TEST_RUNNER_SCREENSHOT_DIR=/absolute/path` set, the tests also save them there as PNG files.
+
+On an iPad simulator, `testDemoIPadLayouts` captures each section in landscape and portrait, to review the sidebar and the wide Budget, register, and Reports layouts; it skips on iPhone. On 2026-10-08 it passed on iPad Air 13-inch (M4), and the demo navigation, schedules, and reports tests passed on iPhone 17 Pro with the tab bar unchanged. The demo navigation test expects the welcome screen, so run it on a simulator where no budget was left open.
 
 ## Remaining validation
 
@@ -244,10 +246,12 @@ Adding, editing, deleting, clearing, and unlocking a transaction show immediatel
 
 Targets follow Actual's budget automations editor (`desktop-client/src/components/modals/BudgetAutomationsModal` and `components/budget/goals`) and its `budget/*` template handlers. `Engine/targets.ts` ports the client-side parts: reading `#template` notes, migrating legacy templates, and the editor's validation messages. It saves with `budget/set-category-automations` using the `ui` source, previews with `budget/dry-run-category-template`, and applies with `budget/apply-single-template`, `budget/apply-goal-template`, and `budget/overwrite-goal-template`. Template amounts are decimal currency units in Actual, and integer minor units across the bridge, converted with the budget currency's decimal places as upstream does. Unlike the web editor, opening a category with notes templates does not store them; only saving writes. As on the web, saving first stores the category's `#cleanup` lines, which Actual ignores once the editor manages it.
 
+Actual compares a month with the goal stored when its targets were last applied, so on the web an edited target keeps showing the old goal until targets are applied again. After saving, this app stores the goal that applying the category's targets would for the month being viewed (as `goal-template.ts` `computeTemplates` does for one category), without changing its budgeted amount; removing every target clears that goal. Other months keep their goals until targets are applied there.
+
 `./scripts/test-engine.sh` exercises targets on the demo budget:
 - It previews a fixed amount exactly and flags a refill without a cap.
 - It flags percentages over 100%, accepts a fractional percentage, and refuses to save invalid targets.
-- It stores decimal amounts with the `ui` source, reads them back in minor units, and applies one category's target, so its budgeted amount and goal match.
+- It stores decimal amounts with the `ui` source, reads them back in minor units, and applies one category's target, so its budgeted amount and goal match. Saving a smaller or larger target then updates the goal at once and leaves the budgeted amount alone; removing every target clears the goal.
 - With a long-term goal added, it checks the goal and the balance comparison.
 - It reads notes templates, with descriptions and a `#cleanup` line, without writing `goal_def`, and reports unreadable notes lines.
 - Saving migrated targets keeps the notes. Overwriting the month budgets every category with targets, skipping unreadable lines as Actual does. Applying without overwrite leaves budgeted categories alone.
@@ -417,3 +421,19 @@ Against a dedicated 26.10.0 checkout with core, API, and sync server built: `./s
 Two checks failed for reasons unrelated to the upgrade and were corrected. The rules preview check looked for a transaction with the previewed amount, which the demo budget's random amounts sometimes contain; it now compares the number of transactions. The sync check expected a monthly schedule starting 2026-10-01 to be next due that day, which stopped being true once the date passed; the schedule now starts in 2099.
 
 Not verified end to end: the simulator UI tests and a physical device.
+
+## Rule management (2026-10-11)
+
+Split rules, category group conditions, applying to chosen matches, deleting several rules, a payee's rules, and drafting a rule from a transaction were compared with Actual 26.10.0's `RuleEditor.tsx`, `ManageRules.tsx`, `MobileRulesPage.tsx`, and the register's `onCreateRule`. `./scripts/test-engine.sh` passed: the rules check saves and describes a two-split rule, applies it to one chosen match and checks the parts' amounts and categories, drafts rules from a split and an ordinary transaction, lists a payee's rules, hides a completed schedule's rule, and deletes several rules while a schedule keeps its own. `node Engine/typecheck.mjs` and `./scripts/build.sh` passed.
+
+`testDemoPayeesRulesAndFormatting` passed on a fresh iPhone 17 Pro (iOS 26.0) simulator. Screenshots of the split sections, the split amount editor, and the matching transactions page were inspected. The run found that changing an action's kind or a split's method gave the item a new identity, which left its pushed editor showing the old value; items now keep their identity. A menu-style picker did not open under XCUITest, so the split method is an inline list. The demo's rules all belong to schedules, so selecting rules is checked only when a budget has others. Not verified: applying to chosen transactions in the simulator (the demo's rules match none) and a physical device.
+
+## Payee management as in Actual's payees page (2026-10-11)
+
+Compared with Actual 26.10.0's `ManagePayees`, `PayeeMenu`, `PayeeTableRow`, `MobilePayeesPage`, and `PayeeAutocomplete`. The payees page adds favorites, selecting several payees to favorite, set learning for, merge, or delete together, **View Rules** and **Create Rule** for a payee, swipe and touch-and-hold menus, and transfer payees listed last for their rules only. Payee pickers open with **Suggested Payees**, built like upstream's `getPayeeSuggestions`: favorites by name, then `common-payees-get` (most used in the last 12 weeks), up to five. The overview now reads payees through `payees-get`, since `api/payees-get` drops `favorite`.
+
+`node Engine/typecheck.mjs`, `./scripts/build.sh`, and `./scripts/test-engine.sh` passed. The engine test checks that transfer payees are listed last and refused for favorites and renaming, favorites set for two payees at once and lead the suggestions, `setPayeeLearning` takes several payees, and a payee's rules (the rules page's `payeeId` filter from rule management, which **View Rules** opens) include the rule category learning added.
+
+`testDemoPayeesRulesAndFormatting` now also selects Kroger, checks that Merge needs two payees, favorites it, sees the favorite on its page, and starts a rule that matches it. It passed on a new iPhone 17 Pro / iOS 26.0 simulator; screenshots of the list, selection, and payee page were inspected. Earlier runs failed in the test and showed two fixes: a disabled `NavigationLink` dimmed rows while selecting and could swallow the tap, so selecting shows plain rows; and the new actions ignored taps while the app was busy, so they are now disabled while busy, as other actions are, and the test waits for them to be enabled. The test also waits for a rule sheet to close before going back.
+
+Not verified end to end: merging several selected payees and deleting them in the UI (merging and deleting are covered by the engine test), transfer payees' rules from the UI, the iPad layout, and a physical device.
