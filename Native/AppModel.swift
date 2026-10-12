@@ -546,9 +546,10 @@ final class AppModel {
         ], as: ParsedTargets.self)
     }
 
-    func saveTargets(categoryID: String, templates: [TargetTemplate]) async -> Bool {
+    /// Saves a category's targets and updates the month's goal to match.
+    func saveTargets(categoryID: String, month: String, templates: [TargetTemplate]) async -> Bool {
         await perform("saveTargets", arguments: [
-            "categoryId": .string(categoryID), "templates": .array(templates.map(\.json)),
+            "categoryId": .string(categoryID), "month": .string(month), "templates": .array(templates.map(\.json)),
         ])
     }
 

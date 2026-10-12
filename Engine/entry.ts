@@ -606,7 +606,7 @@ async function perform(method: string, args: Obj): Promise<unknown> {
     case "parseTargets":
       return runMutator(() => parseTargets(text(args.categoryId), text(args.month), text(args.text)));
     case "saveTargets":
-      await saveTargets(text(args.categoryId), args.templates);
+      await saveTargets(text(args.categoryId), text(args.month), args.templates);
       return {};
     case "applyTargets":
       return applyTargets(text(args.month), text(args.categoryId) || null, args.overwrite === true);
