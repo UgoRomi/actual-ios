@@ -288,31 +288,12 @@ struct BudgetView: View {
     }
 
     private func filterChip(_ option: BudgetFilter, count: Int) -> some View {
-        let selected = filter == option
-        let tint = option == .overspent ? ActualTheme.negative : ActualTheme.warning
-        return Button {
+        FilterChip(title: option.title, count: option == .all ? nil : count,
+                   tint: option == .overspent ? ActualTheme.negative : ActualTheme.warning,
+                   isSelected: filter == option,
+                   countLabel: option == .all ? nil : Text("^[\(count) category](inflect: true)")) {
             withAnimation(.snappy) { filter = option }
-        } label: {
-            HStack(spacing: 6) {
-                Text(option.title)
-                if option != .all {
-                    Text(count, format: .number)
-                        .font(.caption.bold()).monospacedDigit()
-                        .foregroundStyle(selected ? ActualTheme.onAccent : count > 0 ? tint : Color.secondary)
-                        .padding(.horizontal, 6).padding(.vertical, 1)
-                        .background(selected ? ActualTheme.onAccent.opacity(0.22) : count > 0 ? tint.opacity(0.14) : Color.secondary.opacity(0.12), in: Capsule())
-                }
-            }
-            .font(.subheadline.weight(.medium))
-            .foregroundStyle(selected ? ActualTheme.onAccent : Color.primary)
-            .padding(.horizontal, 12).padding(.vertical, 7)
-            .background(selected ? ActualTheme.accent : ActualTheme.surface, in: Capsule())
-            .contentShape(Capsule())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(option.title)
-        .accessibilityValue(option == .all ? Text("") : Text("^[\(count) category](inflect: true)"))
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     @ViewBuilder

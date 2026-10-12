@@ -187,6 +187,42 @@ extension View {
     }
 }
 
+/// A quick-filter capsule, as the budget's Overspent and Underfunded filters show, with an optional count.
+struct FilterChip: View {
+    let title: String
+    var count: Int?
+    /// The count's color while the chip is off and the count is not zero.
+    var tint = ActualTheme.warning
+    let isSelected: Bool
+    /// Describes the count to VoiceOver, such as "3 categories".
+    var countLabel: Text?
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                Text(title)
+                if let count {
+                    Text(count, format: .number)
+                        .font(.caption.bold()).monospacedDigit()
+                        .foregroundStyle(isSelected ? ActualTheme.onAccent : count > 0 ? tint : Color.secondary)
+                        .padding(.horizontal, 6).padding(.vertical, 1)
+                        .background(isSelected ? ActualTheme.onAccent.opacity(0.22) : count > 0 ? tint.opacity(0.14) : Color.secondary.opacity(0.12), in: Capsule())
+                }
+            }
+            .font(.subheadline.weight(.medium))
+            .foregroundStyle(isSelected ? ActualTheme.onAccent : Color.primary)
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(isSelected ? ActualTheme.accent : ActualTheme.surface, in: Capsule())
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityValue(countLabel ?? Text(""))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+}
+
 struct MoneyText: View {
     let value: Int
     var currency = ""

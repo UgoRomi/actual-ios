@@ -45,8 +45,12 @@ struct TransactionsView: View {
                                                   unclearedOnly: unclearedOnly, currency: model.currency, limit: shownCount)
         let hasMore = sections.reduce(0) { $0 + $1.transactions.count } == shownCount
         let offBudget = Set((model.overview?.accounts ?? []).filter(\.offbudget).map(\.id))
+        let unclearedCount = listed.reduce(0) { count, transaction in
+            !transaction.isChild && !transaction.cleared && (accountID == nil || transaction.accountId == accountID) ? count + 1 : count
+        }
         return ThemedList {
             if let account { AccountBalanceHeader(account: account, currency: model.currency) }
+            if unclearedOnly || !listed.isEmpty { filterBar(unclearedCount: unclearedCount) }
             if let error = model.errorMessage { Section { ErrorNotice(message: error) { Task { await model.refresh() } } } }
             if let accountID { BankSyncNotice(accountID: accountID) }
             if let account, let reconciliation { ReconcilingBanner(account: account, reconciliation: reconciliation) }
@@ -66,7 +70,13 @@ struct TransactionsView: View {
                 }
             }
             if sections.isEmpty && upcoming.isEmpty && unclearedOnly && search.isEmpty {
-                ContentUnavailableView("All cleared", systemImage: "checkmark.circle", description: Text("Every transaction here has cleared."))
+                ContentUnavailableView {
+                    Label("All cleared", systemImage: "checkmark.circle")
+                } description: {
+                    Text("Every transaction here has cleared.")
+                } actions: {
+                    Button("Show All Transactions") { withAnimation(.snappy) { unclearedOnly = false } }
+                }
             } else if sections.isEmpty && upcoming.isEmpty {
                 ContentUnavailableView(search.isEmpty ? "A fresh start" : "No matching transactions", systemImage: search.isEmpty ? "list.bullet.rectangle" : "magnifyingglass", description: Text(search.isEmpty ? "Your transactions will appear here. Add one to keep your budget up to date." : "Try a different payee, category, or amount."))
             }
@@ -105,11 +115,6 @@ struct TransactionsView: View {
                         .disabled(model.isBusy || account == nil || account?.closed == true)
                 }
                 ToolbarItem(placement: .topBarTrailing) { accountMenu }
-            }
-            ToolbarItem(placement: .topBarTrailing) {
-                Toggle("Uncleared only", systemImage: unclearedOnly ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle",
-                       isOn: $unclearedOnly.animation())
-                    .toggleStyle(.button)
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Button("Add transaction", systemImage: "plus") { isAdding = true }
@@ -232,6 +237,25 @@ struct TransactionsView: View {
     }
 
     /// Actual's mobile account menu.
+    /// Quick filters, as the budget shows them. Uncleared turns on and off, with how many transactions it shows.
+    private func filterBar(unclearedCount: Int) -> some View {
+        Section {
+            ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                    FilterChip(title: "Uncleared", count: unclearedCount, isSelected: unclearedOnly,
+                               countLabel: Text("^[\(unclearedCount) transaction](inflect: true)")) {
+                        withAnimation(.snappy) { unclearedOnly.toggle() }
+                    }
+                    .accessibilityIdentifier("transactions.uncleared")
+                }
+            }
+            .scrollIndicators(.hidden).scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+        }
+        .listRowBackground(Color.clear)
+        .listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+        .listSectionSpacing(.compact)
+    }
+
     private var accountMenu: some View {
         Menu("Account options", systemImage: "ellipsis.circle") {
             Button("Rename Account", systemImage: "pencil") { renaming = true }

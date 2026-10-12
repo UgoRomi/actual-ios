@@ -1128,6 +1128,43 @@ final class ActualNativeUITests: XCTestCase {
         capture("register-uncategorized")
     }
 
+    /// The Uncleared chip turns on and off, showing only transactions not yet cleared.
+    @MainActor
+    func testDemoUnclearedFilter() {
+        let app = XCUIApplication()
+        app.launch()
+        let demoButton = app.buttons["Explore a demo budget"]
+        let accountsTab = app.tabBars.buttons["Accounts"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        XCTAssertTrue(accountsTab.waitForExistence(timeout: 60), "The demo budget should open")
+        accountsTab.tap()
+        app.staticTexts["Capital One Checking"].tap()
+        let checking = app.navigationBars["Capital One Checking"]
+        XCTAssertTrue(checking.waitForExistence(timeout: 10))
+        // A new transaction starts uncleared.
+        checking.buttons["Add transaction"].tap()
+        XCTAssertTrue(app.navigationBars["New transaction"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Clear"].waitForExistence(timeout: 5), "The amount should be focused")
+        tapKeys(app, "34")
+        app.navigationBars["New transaction"].buttons["Save"].tap()
+        XCTAssertTrue(wait(forAbsence: app.navigationBars["New transaction"]), "The transaction should save")
+
+        let chip = app.buttons["transactions.uncleared"]
+        XCTAssertTrue(chip.waitForExistence(timeout: 10), "The register shows the Uncleared chip")
+        XCTAssertFalse(chip.isSelected)
+        capture("register-uncleared-off")
+        chip.tap()
+        XCTAssertTrue(chip.isSelected, "The chip turns on")
+        XCTAssertTrue(wait(forAbsence: app.buttons["Mark uncleared"].firstMatch), "Cleared transactions are hidden")
+        let added = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "No payee", "34")).firstMatch
+        XCTAssertTrue(added.waitForExistence(timeout: 10), "The new uncleared transaction stays listed")
+        capture("register-uncleared-on")
+        chip.tap()
+        XCTAssertFalse(chip.isSelected, "The chip turns off")
+        XCTAssertTrue(app.buttons["Mark uncleared"].firstMatch.waitForExistence(timeout: 10), "Cleared transactions return")
+    }
+
     /// As in Actual, categorizing a payee's transactions learns its category, and choosing
     /// that payee for a new transaction fills the category in before saving.
     @MainActor

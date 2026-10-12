@@ -437,3 +437,7 @@ Compared with Actual 26.10.0's `ManagePayees`, `PayeeMenu`, `PayeeTableRow`, `Mo
 `testDemoPayeesRulesAndFormatting` now also selects Kroger, checks that Merge needs two payees, favorites it, sees the favorite on its page, and starts a rule that matches it. It passed on a new iPhone 17 Pro / iOS 26.0 simulator; screenshots of the list, selection, and payee page were inspected. Earlier runs failed in the test and showed two fixes: a disabled `NavigationLink` dimmed rows while selecting and could swallow the tap, so selecting shows plain rows; and the new actions ignored taps while the app was busy, so they are now disabled while busy, as other actions are, and the test waits for them to be enabled. The test also waits for a rule sheet to close before going back.
 
 Not verified end to end: merging several selected payees and deleting them in the UI (merging and deleting are covered by the engine test), transfer payees' rules from the UI, the iPad layout, and a physical device.
+
+## Uncleared filter chip
+
+Validated on 2026-10-12. The **Uncleared** chip uses the same `FilterChip` as the budget's filters. The UI test `testDemoUnclearedFilter` passed on a new iPhone 17 Pro / iOS 27 simulator: it adds an uncleared transaction to a demo account, turns the chip on (cleared rows disappear, the new one stays), and turns it off again. Screenshots of both states were inspected.
