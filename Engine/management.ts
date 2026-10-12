@@ -250,8 +250,9 @@ export async function manage(method: string, args: Obj): Promise<unknown> {
       return {};
     }
     case "payees": {
-      // As Actual's payees page: ordinary payees, how many rules use each, and which are unused.
-      const payees = (await lib.send("payees-get")).filter((p) => !p.transfer_acct);
+      // As Actual's payees page: every payee, how many rules use each, and which are unused.
+      // Transfer payees come last; they stand for accounts, so only their rules can be managed.
+      const payees = await lib.send("payees-get");
       const counts = await lib.send("payees-get-rule-counts");
       const unused = new Set((await lib.send("payees-get-orphaned")).map((p) => p.id));
       return payees
@@ -261,8 +262,10 @@ export async function manage(method: string, args: Obj): Promise<unknown> {
           ruleCount: (counts as Record<string, number>)[p.id] ?? 0,
           unused: unused.has(p.id),
           learnCategories: learnsFor(p),
+          favorite: isFavorite(p),
+          isTransfer: Boolean(p.transfer_acct),
         }))
-        .sort((a, b) => a.name.localeCompare(b.name));
+        .sort((a, b) => Number(a.isTransfer) - Number(b.isTransfer) || a.name.localeCompare(b.name));
     }
     case "renamePayee": {
       const payee = await ordinaryPayee(args.id);
@@ -270,10 +273,19 @@ export async function manage(method: string, args: Obj): Promise<unknown> {
       return {};
     }
     case "setPayeeLearning": {
-      // As Actual's payee menu: whether categorizing this payee's transactions updates its category rule.
-      const payee = await ordinaryPayee(args.id);
-      if (typeof args.learn !== "boolean") throw new Error("Choose whether to learn categories for this payee.");
-      await lib.send("payees-batch-change", { updated: [{ id: payee.id, learn_categories: args.learn }] });
+      // As Actual's payee menu: whether categorizing these payees' transactions updates their category rules.
+      const ids = await payeeIds(args.ids);
+      const learn = args.learn;
+      if (typeof learn !== "boolean") throw new Error("Choose whether to learn categories for these payees.");
+      await lib.send("payees-batch-change", { updated: ids.map((id) => ({ id, learn_categories: learn })) });
+      return {};
+    }
+    case "setPayeeFavorite": {
+      // Favorites lead payee pickers' suggestions, as in Actual.
+      const ids = await payeeIds(args.ids);
+      const favorite = args.favorite;
+      if (typeof favorite !== "boolean") throw new Error("Choose whether these payees are favorites.");
+      await lib.send("payees-batch-change", { updated: ids.map((id) => ({ id, favorite })) });
       return {};
     }
     case "deletePayees": {
@@ -321,6 +333,23 @@ export async function learnsCategories(): Promise<boolean> {
 function learnsFor(payee: PayeeEntity): boolean {
   return Number(payee.learn_categories ?? 1) !== 0;
 }
+export function isFavorite(payee: Pick<PayeeEntity, "favorite">): boolean {
+  return Boolean(Number(payee.favorite ?? 0));
+}
+
+// Payee pickers' "Suggested Payees", as Actual's getPayeeSuggestions: favorites, then the
+// most common payees of the last 12 weeks, up to five suggestions in all, each part by name.
+export async function suggestedPayeeIds(payees: PayeeEntity[]): Promise<string[]> {
+  const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
+  const favorites = payees.filter(isFavorite).sort(byName);
+  // Actual's common payees include transfer payees; pickers list accounts separately.
+  const ordinary = new Set(payees.filter((p) => !p.transfer_acct).map((p) => p.id));
+  const common = (await lib.send("common-payees-get"))
+    .filter((p) => ordinary.has(p.id) && !isFavorite(p))
+    .slice(0, Math.max(0, 5 - favorites.length))
+    .sort(byName);
+  return [...favorites, ...common].map((p) => p.id);
+}
 
 // Transfer payees stand for accounts, which Actual never renames, merges, or deletes as payees.
 function ordinary(payees: PayeeEntity[], id: unknown): PayeeEntity {
@@ -342,5 +371,5 @@ export const managementMethods = [
   "createCategoryGroup", "updateCategoryGroup", "deleteCategoryGroup", "createCategory", "updateCategory",
   "deleteCategory", "moveCategory", "moveCategoryGroup", "saveNotes", "createAccount", "updateAccount",
   "closeAccount", "reopenAccount", "renamePayee", "deletePayees", "mergePayees", "savePreference",
-  "setPayeeLearning", "discoverTags", "createTag", "updateTag", "deleteTag",
+  "setPayeeLearning", "setPayeeFavorite", "discoverTags", "createTag", "updateTag", "deleteTag",
 ];

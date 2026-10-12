@@ -581,7 +581,8 @@ final class AppModel {
         "createCategoryGroup", "updateCategoryGroup", "deleteCategoryGroup", "createCategory", "updateCategory",
         "deleteCategory", "moveCategory", "moveCategoryGroup", "saveNotes", "createAccount", "updateAccount",
         "closeAccount", "reopenAccount", "renamePayee", "deletePayees", "mergePayees", "savePreference",
-        "setPayeeLearning", "saveRule", "deleteRule", "deleteRules", "applyRule", "discoverTags", "createTag", "updateTag", "deleteTag",
+        "setPayeeLearning", "setPayeeFavorite", "saveRule", "deleteRule", "deleteRules", "applyRule", "discoverTags",
+        "createTag", "updateTag", "deleteTag",
         "linkScheduleTransactions",
         // Schedules: posting adds a transaction, and saving can add a payee.
         "saveSchedule", "deleteSchedule", "skipSchedule", "postSchedule", "completeSchedule",

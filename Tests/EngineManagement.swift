@@ -141,7 +141,10 @@ extension EngineSmoke {
     check(try await !overview().accounts.contains { $0.id == loan })
 
     // Payees: rename, merge (moving transactions), and delete unused ones.
-    struct Listed: Decodable { let id: String; let name: String; let ruleCount: Int; let unused: Bool; let learnCategories: Bool }
+    struct Listed: Decodable {
+      let id: String; let name: String; let ruleCount: Int; let unused: Bool; let learnCategories: Bool
+      let favorite: Bool; let isTransfer: Bool
+    }
     func payees() async throws -> [Listed] { try await engine.call("payees", as: [Listed].self) }
     let keep = try await created("createAccount", ["name": .string("Native Payee Account")])
     for (index, payee) in ["Native Cafe", "native café", "Native Unused"].enumerated() {
@@ -155,7 +158,24 @@ extension EngineSmoke {
           let accented = listed.first(where: { $0.name == "native café" }),
           let spare = listed.first(where: { $0.name == "Native Unused" })
     else { throw EngineFailure("Payees missing: \(listed.map(\.name))") }
-    check(!listed.contains { $0.name.isEmpty }, "Transfer payees are not listed")
+    // As on Actual's payees page, transfer payees are listed last, for their rules only.
+    guard let accountPayee = listed.first(where: { $0.isTransfer && $0.name == "Native Payee Account" })
+    else { throw EngineFailure("Transfer payee not listed: \(listed.map(\.name))") }
+    check(listed.drop { !$0.isTransfer }.allSatisfy(\.isTransfer), "Transfer payees come last")
+    try await expectFailure("setPayeeFavorite", ["ids": .array([.string(accountPayee.id)]), "favorite": .bool(true)],
+                            "Transfer payees")
+    try await expectFailure("renamePayee", ["id": .string(accountPayee.id), "name": .string("Renamed")], "Transfer payees")
+    // Favorites, set for several payees at once, lead pickers' suggestions, as in Actual.
+    try await expectFailure("setPayeeFavorite", ["ids": .array([.string(spare.id)])], "Choose whether")
+    try await call("setPayeeFavorite", ["ids": .array([.string(spare.id), .string(cafe.id)]), "favorite": .bool(true)])
+    listed = try await payees()
+    check(listed.filter(\.favorite).map(\.id).sorted() == [cafe.id, spare.id].sorted(), "Payees become favorites")
+    let suggested = try await overview().suggestedPayeeIds
+    check(Array(suggested.prefix(2)) == [cafe.id, spare.id] && suggested.count <= 5,
+          "Favorites lead suggestions by name, then common payees: \(suggested)")
+    check(try await overview().payees.first { $0.id == cafe.id }?.favorite == true)
+    try await call("setPayeeFavorite", ["ids": .array([.string(spare.id)]), "favorite": .bool(false)])
+    check(try await payees().first { $0.id == spare.id }?.favorite == false)
     try await expectFailure("renamePayee", ["id": .string(cafe.id), "name": .string(" ")], "Enter a name")
     try await call("renamePayee", ["id": .string(cafe.id), "name": .string("Native Coffee")])
     try await call("mergePayees", ["targetId": .string(cafe.id), "mergeIds": .array([.string(accented.id)])])
@@ -190,13 +210,17 @@ extension EngineSmoke {
     check(try await overview().format?.learnCategories == true, "Learning is on unless turned off")
     let grocer = try await categorizeThree("Native Grocer")
     check(grocer.learnCategories && grocer.ruleCount == 1, "Learning adds a category rule: \(grocer)")
+    // "View rules" lists the rules that use a payee.
+    let grocerRules = try await engine.call("rules", arguments: ["payeeId": .string(grocer.id)], as: [Rule].self)
+    check(grocerRules.count == 1, "A payee's rules are listed: \(grocerRules.map(\.id))")
+    check(try await engine.call("rules", arguments: ["payeeId": .string(accountPayee.id)], as: [Rule].self).isEmpty)
     _ = try await engine.call("saveTransaction", arguments: [
       "accountId": .string(keep), "date": .string("2026-09-04"), "amount": .number(-500),
       "payeeName": .string("Native Baker"), "notes": .string(""), "cleared": .bool(false),
     ])
     guard let baker = try await payees().first(where: { $0.name == "Native Baker" }) else { throw EngineFailure("Baker missing") }
-    try await expectFailure("setPayeeLearning", ["id": .string(baker.id)], "Choose whether")
-    try await call("setPayeeLearning", ["id": .string(baker.id), "learn": .bool(false)])
+    try await expectFailure("setPayeeLearning", ["ids": .array([.string(baker.id)])], "Choose whether")
+    try await call("setPayeeLearning", ["ids": .array([.string(baker.id)]), "learn": .bool(false)])
     let unlearned = try await categorizeThree("Native Baker")
     check(!unlearned.learnCategories && unlearned.ruleCount == 0, "A payee can stop learning: \(unlearned)")
     try await call("savePreference", ["id": .string("learn-categories"), "value": .string("false")])

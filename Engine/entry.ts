@@ -21,7 +21,7 @@ import { native } from "./native";
 import { uploadSnapshotIfDue } from "./adapters/cloud-storage";
 import { canSyncBank, syncBankAccounts } from "./bank-sync";
 import { budgetAction, categoryAverage, envelopeSummary } from "./budget-actions";
-import { learnsCategories, manage, managementMethods } from "./management";
+import { isFavorite, learnsCategories, manage, managementMethods, suggestedPayeeIds } from "./management";
 import { ruleCommand, ruleReads, rulesList, ruleWrites } from "./rules";
 import { commitImport, prepareImport } from "./importing";
 import { saveSplit } from "./splits";
@@ -188,7 +188,7 @@ async function budgets() {
 async function overview() {
   const preferences = await lib.send("preferences/get");
   const rawAccounts = await lib.send("accounts-get");
-  const payees = await lib.send("api/payees-get");
+  const payees = (await lib.send("payees-get")).filter((p) => !p.transfer_acct);
   const accounts = [];
   for (const account of rawAccounts) {
     accounts.push({
@@ -228,7 +228,9 @@ async function overview() {
       learnCategories: String(preferences["learn-categories"] ?? "true") === "true",
     },
     accounts,
-    payees: payees.filter((p) => !p.transfer_acct).map((p) => ({ id: p.id, name: p.name })),
+    payees: payees.map((p) => ({ id: p.id, name: p.name, favorite: isFavorite(p) })),
+    // Payee pickers list these first, as Actual's "Suggested Payees".
+    suggestedPayeeIds: await suggestedPayeeIds(payees),
     // Tags color #tags in notes, as Actual shows them.
     tags: (await lib.send("tags-get")).map((t) => ({
       id: t.id,

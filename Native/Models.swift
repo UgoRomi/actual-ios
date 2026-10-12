@@ -79,6 +79,8 @@ struct BudgetOverview: Decodable, Sendable {
     var format: BudgetFormat? = nil
     var accounts: [Account]
     let payees: [Payee]
+    /// Payees that pickers list first, as Actual's "Suggested Payees": favorites, then common payees.
+    var suggestedPayeeIds: [String] = []
     var tags: [Tag] = []
 
     var openAccounts: [Account] { accounts.filter { !$0.closed } }
@@ -524,7 +526,7 @@ enum TransactionChange: Sendable {
     }
 }
 
-struct Payee: Decodable, Identifiable, Sendable { let id: String; let name: String }
+struct Payee: Decodable, Identifiable, Sendable { let id: String; let name: String; var favorite = false }
 
 /// A tag for #tags in notes, as Actual's tags page lists them.
 struct Tag: Decodable, Identifiable, Sendable, Hashable {
@@ -567,6 +569,13 @@ struct ManagedPayee: Decodable, Identifiable, Sendable, Hashable {
     let unused: Bool
     /// Whether categorizing this payee's transactions updates its category rule, as Actual's payee menu sets.
     let learnCategories: Bool
+    /// Favorites lead payee pickers' suggestions.
+    let favorite: Bool
+    /// A transfer payee stands for an account: only its rules are managed here.
+    let isTransfer: Bool
+
+    /// As Actual's payees page labels transfer payees.
+    var label: String { isTransfer ? "Transfer: \(name)" : name }
 }
 
 /// A new transaction's fields after Actual's rules ran on it.
