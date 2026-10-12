@@ -246,10 +246,12 @@ Adding, editing, deleting, clearing, and unlocking a transaction show immediatel
 
 Targets follow Actual's budget automations editor (`desktop-client/src/components/modals/BudgetAutomationsModal` and `components/budget/goals`) and its `budget/*` template handlers. `Engine/targets.ts` ports the client-side parts: reading `#template` notes, migrating legacy templates, and the editor's validation messages. It saves with `budget/set-category-automations` using the `ui` source, previews with `budget/dry-run-category-template`, and applies with `budget/apply-single-template`, `budget/apply-goal-template`, and `budget/overwrite-goal-template`. Template amounts are decimal currency units in Actual, and integer minor units across the bridge, converted with the budget currency's decimal places as upstream does. Unlike the web editor, opening a category with notes templates does not store them; only saving writes. As on the web, saving first stores the category's `#cleanup` lines, which Actual ignores once the editor manages it.
 
+Actual compares a month with the goal stored when its targets were last applied, so on the web an edited target keeps showing the old goal until targets are applied again. After saving, this app stores the goal that applying the category's targets would for the month being viewed (as `goal-template.ts` `computeTemplates` does for one category), without changing its budgeted amount; removing every target clears that goal. Other months keep their goals until targets are applied there.
+
 `./scripts/test-engine.sh` exercises targets on the demo budget:
 - It previews a fixed amount exactly and flags a refill without a cap.
 - It flags percentages over 100%, accepts a fractional percentage, and refuses to save invalid targets.
-- It stores decimal amounts with the `ui` source, reads them back in minor units, and applies one category's target, so its budgeted amount and goal match.
+- It stores decimal amounts with the `ui` source, reads them back in minor units, and applies one category's target, so its budgeted amount and goal match. Saving a smaller or larger target then updates the goal at once and leaves the budgeted amount alone; removing every target clears the goal.
 - With a long-term goal added, it checks the goal and the balance comparison.
 - It reads notes templates, with descriptions and a `#cleanup` line, without writing `goal_def`, and reports unreadable notes lines.
 - Saving migrated targets keeps the notes. Overwriting the month budgets every category with targets, skipping unreadable lines as Actual does. Applying without overwrite leaves budgeted categories alone.
