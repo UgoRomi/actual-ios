@@ -95,7 +95,7 @@ import SQLite3
         // The budget's number and date formats, as Actual's settings choose them.
         Money.configure(BudgetFormat(numberFormat: "dot-comma", hideFraction: false))
         precondition(Money.formatted(123_456) == "1.234,56", Money.formatted(123_456))
-        precondition(Money.parse("1.234,56") == 123_456 && Money.editable(123_456) == "1234,56")
+        precondition(Money.parse("1.234,56") == 123_456 && Money.editable(123_456) == "1.234,56")
         Money.configure(BudgetFormat(numberFormat: "comma-dot", hideFraction: true))
         precondition(Money.formatted(123_456) == "1,235" && Money.parse("12.5") == 1250)
         Money.configure(BudgetFormat(numberFormat: "comma-dot-in", hideFraction: false))

@@ -739,12 +739,12 @@ enum Money {
         return formatter.string(from: NSDecimalNumber(decimal: Decimal(minorUnits) / 100)) ?? "—"
     }
 
+    /// An amount for an amount field, with thousands separators as Actual's amount inputs show it.
     static func editable(_ minorUnits: Int, locale: Locale = Money.locale) -> String {
         let formatter = FormatterCache.shared.formatter("editable", "", locale) {
             let formatter = NumberFormatter()
             formatter.locale = locale
             formatter.numberStyle = .decimal
-            formatter.usesGroupingSeparator = false
             formatter.minimumFractionDigits = 2
             formatter.maximumFractionDigits = 2
             return formatter

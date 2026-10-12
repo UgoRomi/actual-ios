@@ -65,12 +65,14 @@ import Foundation
         expect("1 234,56−0,56", 123400, locale: french)
         let arabic = Locale(identifier: "ar_EG")
         expect("١٢٫٥+١", 1350, locale: arabic)
-        for locale in [Locale(identifier: "en_US"), german, french, Locale(identifier: "de_CH"), arabic] {
+        for locale in [Locale(identifier: "en_US"), german, french, Locale(identifier: "de_CH"), Locale(identifier: "en_IN"), arabic] {
             for value in [0, 5, -1234, 123456789, -98765432100] {
                 expect(Money.editable(value, locale: locale), value, locale: locale)
                 expect(Money.editable(value, locale: locale) + "+1", value + 100, locale: locale)
             }
         }
+        // Amount fields show thousands separators, as Actual's amount inputs do.
+        precondition(Money.editable(123456789, locale: Locale(identifier: "en_US")) == "1,234,567.89")
         print("PASS: localized numbers and round trips")
     }
 }
