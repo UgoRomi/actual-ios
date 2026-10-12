@@ -85,10 +85,83 @@ extension EngineSmoke {
     matched = try await engine.call("register", as: [Transaction].self).first { $0.payeeId == payee.id && $0.amount == -5_000 }
     check(matched?.categoryId == fun, "New transactions use the edited rule")
 
+    // A category group condition matches the group's categories.
+    let budget = try await snapshot(engine, month: BudgetDate.month(Date()))
+    guard let foodGroup = budget.groups.first(where: { $0.categories.contains { $0.id == food } }) else {
+      throw EngineFailure("Group missing")
+    }
+    var byGroup = Rule.new()
+    byGroup.conditions = [RuleItem.condition(field: "category_group")]
+    byGroup.conditions[0].raw["value"] = .string(foodGroup.id)
+    check(byGroup.isEditable)
+    struct Matches: Decodable { let count: Int; let transactions: [RuleMatch] }
+    let groupMatches = try await engine.call("ruleMatches", arguments: byGroup.json, as: Matches.self)
+    check(groupMatches.count > 0 && groupMatches.transactions.contains { $0.categoryId == food })
+
+    // A split rule: a fixed 10.00 for food, and the rest for fun.
+    var split = Rule.new()
+    split.conditions = [payeeCondition]
+    split.actions = []
+    split.addSplit()
+    split.addSplit()
+    check(split.splitCount == 2 && split.actions.map(\.op) == ["set-split-amount", "set", "set-split-amount", "set"])
+    check(RuleItem.actionFields(split: 1) == ["category", "payee", "notes"])
+    split.actions[0] = split.actions[0].withSplitMethod("fixed-amount")
+    split.actions[0].raw["value"] = .number(-1_000)
+    split.actions[1].raw["value"] = .string(food)
+    split.actions[3].raw["value"] = .string(fun)
+    check(split.isEditable && split.actions[2].splitMethod == "remainder")
+    check(describer.describe(split).contains("split into split 1: allocate a fixed amount"), describer.describe(split))
+    split.id = try await engine.call("saveRule", arguments: split.json, as: Saved.self).id
+    guard let savedSplit = try await list().first(where: { $0.id == split.id }) else { throw EngineFailure("Split rule missing") }
+    check(savedSplit.isEditable && savedSplit.splitCount == 2)
+
+    // Applying to one chosen match splits only that transaction.
+    let splitMatches = try await engine.call("ruleMatches", arguments: savedSplit.json, as: Matches.self)
+    check(splitMatches.count == 2, "\(splitMatches.count)")
+    guard let larger = splitMatches.transactions.first(where: { $0.amount == -5_000 }) else { throw EngineFailure("Match missing") }
+    var chosen = savedSplit.json
+    chosen["ids"] = .array([.string(larger.id)])
+    check(try await engine.call("applyRule", arguments: chosen, as: Count.self).count == 1)
+    let register = try await engine.call("register", as: [Transaction].self)
+    let splitTransaction = register.first { $0.id == larger.id }
+    check(splitTransaction?.isParent == true && splitTransaction?.splits?.map(\.amount) == [-1_000, -4_000],
+          "\(String(describing: splitTransaction))")
+    check(splitTransaction?.splits?.map(\.categoryId) == [food, fun])
+    check(register.first { $0.payeeId == payee.id && $0.amount == -4_321 }?.isParent == false)
+
+    // As Actual's register's "Create rule": a split's parts become the draft's splits.
+    let draft = try await engine.call("ruleFromTransaction", arguments: ["id": .string(larger.id)], as: Rule.self)
+    check(draft.id.isEmpty && draft.isEditable && draft.splitCount == 2, "\(draft)")
+    check(draft.conditions.map(\.field) == ["payee", "amount"] && draft.conditions[1].op == "isapprox")
+    check(draft.actions.filter { $0.op == "set-split-amount" }.map(\.value) == [.number(-1_000), .number(-4_000)])
+    guard let smaller = register.first(where: { $0.payeeId == payee.id && $0.amount == -4_321 }) else { throw EngineFailure("Missing") }
+    let plain = try await engine.call("ruleFromTransaction", arguments: ["id": .string(smaller.id)], as: Rule.self)
+    check(plain.splitCount == 0 && plain.actions.first?.value == .string(food), "\(plain)")
+
+    // A payee's rules, as its page lists them.
+    let payeeRules = try await engine.call("rules", arguments: ["payeeId": .string(payee.id)], as: [Rule].self)
+    check(Set(payeeRules.map(\.id)) == [rule.id, split.id], "\(payeeRules.map(\.id))")
+
+    // Completed schedules' rules are not listed, as on Actual's rules page.
+    let schedules = try await engine.call("schedules", as: [Schedule].self)
+    if let open = schedules.first(where: { !$0.completed }) {
+      let before = try await list().count
+      _ = try await engine.call("completeSchedule", arguments: ["id": .string(open.id), "completed": .bool(true)])
+      check(try await list().count == before - 1)
+      _ = try await engine.call("completeSchedule", arguments: ["id": .string(open.id), "completed": .bool(false)])
+      check(try await list().count == before)
+    }
+
+    // Deleting several keeps schedules' rules and deletes the rest.
+    try await expectFailure("deleteRules", ["ids": .array([.string(split.id), .string(scheduleRule.id)])], "belong to schedules")
+    let remaining = try await list()
+    check(!remaining.contains { $0.id == split.id } && remaining.contains { $0.id == scheduleRule.id })
+
     // A schedule's rule stays with the schedule; others can be deleted.
     try await expectFailure("deleteRule", ["id": .string(scheduleRule.id)], "belongs to a schedule")
     _ = try await engine.call("deleteRule", arguments: ["id": .string(rule.id)])
     check(try await !list().contains { $0.id == rule.id })
-    print("PASS: rules list, validate, create, match, apply, edit, and delete")
+    print("PASS: rules list, validate, create, split, match, apply, draft, edit, and delete")
   }
 }

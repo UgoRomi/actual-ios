@@ -54,7 +54,7 @@ struct PayeesView: View {
         .searchable(text: $search, prompt: "Search payees")
         .toolbar { toolbar }
         .task(id: model.dataRevision) { await load() }
-        .navigationDestination(item: $rulesFor) { payee in RulesView(payee: payee) }
+        .navigationDestination(item: $rulesFor) { payee in RulesView(payeeID: payee.id, payeeName: payee.label) }
         .sheet(item: $creatingRule) { route in RuleEditor(rule: route.rule) }
         .sheet(isPresented: $mergingSelected) {
             MergeTargetPicker(payees: selected, title: "Keep Which Payee?",
@@ -293,7 +293,7 @@ private struct PayeeDetail: View {
                 }
                 Section {
                     if payee.ruleCount > 0 {
-                        NavigationLink { RulesView(payee: payee) } label: {
+                        NavigationLink { RulesView(payeeID: payee.id, payeeName: payee.label) } label: {
                             LabeledContent("Rules", value: "\(payee.ruleCount)")
                         }
                     }

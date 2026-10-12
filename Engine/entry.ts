@@ -8,7 +8,12 @@ import { loadKey } from "@actual/source/server/encryption/index.ts";
 import { runMutator } from "@actual/source/server/mutators.ts";
 import * as sheet from "@actual/source/server/sheet.ts";
 import { currentMonth, sheetForMonth } from "@actual/source/shared/months.ts";
-import { makeChild, recalculateSplit } from "@actual/source/shared/transactions.ts";
+import {
+  makeChild,
+  realizeTempTransactions,
+  recalculateSplit,
+  ungroupTransaction,
+} from "@actual/source/shared/transactions.ts";
 import * as storage from "@actual/storage";
 import { setSyncingMode, fullSync, clearFullSyncTimeout } from "@actual/sync";
 
@@ -17,7 +22,7 @@ import { uploadSnapshotIfDue } from "./adapters/cloud-storage";
 import { canSyncBank, syncBankAccounts } from "./bank-sync";
 import { budgetAction, categoryAverage, envelopeSummary } from "./budget-actions";
 import { isFavorite, learnsCategories, manage, managementMethods, suggestedPayeeIds } from "./management";
-import { ruleCommand, rulesList, ruleWrites } from "./rules";
+import { ruleCommand, ruleReads, rulesList, ruleWrites } from "./rules";
 import { commitImport, prepareImport } from "./importing";
 import { saveSplit } from "./splits";
 import { scheduleCommand, schedulePreviews, schedules, scheduleWrites } from "./schedules";
@@ -239,6 +244,8 @@ async function overview() {
 // One month of the budget: its summary and visible category groups.
 async function budgetMonth(month: string) {
   checkMonth(month);
+  // Balances recompute after a transaction is saved; read them once settled.
+  await sheet.waitOnSpreadsheet();
   const budget = await lib.send("api/budget-month", { month });
   const budgetType = getBudgetType() === "tracking" ? "tracking" : "envelope";
   // Tracking budgets have no to-budget cell. Mirror the mobile web summary:
@@ -357,6 +364,8 @@ async function register() {
       transferId: row.transfer_id ?? null,
       transferReconciled: Boolean(linked?.reconciled),
       transferInSplit: Boolean(linked?.is_child),
+      // The schedule the transaction is linked to.
+      scheduleId: row.schedule ?? null,
       // A split's parts, in Actual's order.
       splits: row.is_parent
         ? (row.subtransactions ?? []).map((child) => ({
@@ -407,7 +416,7 @@ async function editable(id: string, allowReconciled: boolean, allowReconciledTra
 async function perform(method: string, args: Obj): Promise<unknown> {
   if (
     [
-      "saveTransaction", "deleteTransaction", "budget", "sync", "syncAccounts", "setCleared",
+      "saveTransaction", "deleteTransaction", "duplicateTransaction", "budget", "sync", "syncAccounts", "setCleared",
       "unlockTransaction", "createReconciliationTransaction", "finishReconciliation", "saveTargets",
       "applyTargets", "budgetAction", "saveSplit", "commitImport", ...managementMethods, ...scheduleWrites, ...ruleWrites,
       ...reportWrites,
@@ -740,6 +749,23 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       await lib.send("transactions-batch-update", { deleted: [{ id }] });
       return {};
     }
+    case "duplicateTransaction": {
+      // As Actual's Duplicate: a copy of the transaction and any split parts,
+      // with new IDs, neither cleared nor reconciled.
+      const { data } = await lib.send(
+        "query",
+        lib.q("transactions").filter({ id: text(args.id) }).select("*").options({ splits: "grouped" }).serialize(),
+      );
+      const row = (data as never[])[0];
+      if (!row) throw new Error("Transaction no longer exists");
+      const added = realizeTempTransactions(ungroupTransaction(row)).map((t) => ({
+        ...t,
+        cleared: false,
+        reconciled: false,
+      }));
+      await lib.send("transactions-batch-update", { added } as never);
+      return {};
+    }
     case "setCleared": {
       if (typeof args.cleared !== "boolean") throw new Error("Choose whether the transaction is cleared.");
       await setCleared(text(args.id), args.cleared);
@@ -776,18 +802,18 @@ async function perform(method: string, args: Obj): Promise<unknown> {
       return { budgets: await budgets() };
     }
     default:
-      if ([...managementMethods, "categoryNeedsTransfer", "payees", "payeeRules", "tags"].includes(method)) {
+      if ([...managementMethods, "categoryNeedsTransfer", "payees", "tags"].includes(method)) {
         requireBudget();
         return manage(method, args);
       }
       if (method === "schedules") return runMutator(schedules);
       if (method === "schedulePreviews") return runMutator(schedulePreviews);
-      if (method === "rules") return runMutator(rulesList);
+      if (method === "rules") return runMutator(() => rulesList(args));
       if (method === "prepareImport" || method === "commitImport") {
         requireBudget();
         return method === "prepareImport" ? prepareImport(args) : commitImport(args);
       }
-      if ([...ruleWrites, "ruleMatches"].includes(method)) {
+      if ([...ruleWrites, ...ruleReads].includes(method)) {
         requireBudget();
         return ruleCommand(method, args);
       }

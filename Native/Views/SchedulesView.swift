@@ -115,26 +115,46 @@ struct SchedulesView: View {
         Task { await model.manage(method, arguments) }
     }
 
-    private func payeeName(_ schedule: Schedule) -> String? {
-        schedule.payeeId.flatMap { id in model.overview?.payees.first { $0.id == id }?.name }
+    private func payeeName(_ schedule: Schedule) -> String? { schedule.payeeName(in: model.overview) }
+    private func accountName(_ schedule: Schedule) -> String? { schedule.accountName(in: model.overview) }
+    private func amountText(_ schedule: Schedule) -> String { schedule.amountText(currency: model.currency) }
+
+    private func row(_ schedule: Schedule) -> some View { ScheduleRow(schedule: schedule) }
+}
+
+struct ScheduleEditRoute: Identifiable {
+    let id = UUID()
+    let schedule: Schedule?
+}
+
+extension Schedule {
+    func payeeName(in overview: BudgetOverview?) -> String? {
+        payeeId.flatMap { id in overview?.payees.first { $0.id == id }?.name }
     }
-    private func accountName(_ schedule: Schedule) -> String? {
-        schedule.accountId.flatMap { id in model.overview?.accounts.first { $0.id == id }?.name }
+    func accountName(in overview: BudgetOverview?) -> String? {
+        accountId.flatMap { id in overview?.accounts.first { $0.id == id }?.name }
     }
     /// As Actual's schedules list: "~" for approximate, "+" for income, payments without a sign.
-    private func amountText(_ schedule: Schedule) -> String {
+    func amountText(currency: String) -> String {
         func signed(_ value: Int) -> String {
-            (value > 0 ? "+" : "") + Money.formatted(abs(value), currency: model.currency)
+            (value > 0 ? "+" : "") + Money.formatted(abs(value), currency: currency)
         }
-        switch schedule.amount {
-        case .exact(let value): return (schedule.amountOp == .isapprox ? "~" : "") + signed(value)
+        switch amount {
+        case .exact(let value): return (amountOp == .isapprox ? "~" : "") + signed(value)
         case .range(let low, let high): return "\(signed(low)) to \(signed(high))"
         }
     }
+}
 
-    private func row(_ schedule: Schedule) -> some View {
-        let title = Text(schedule.name ?? payeeName(schedule) ?? "Unnamed schedule").font(.body.weight(.medium))
-        let detail = Text([payeeName(schedule).flatMap { $0 == schedule.name ? nil : $0 }, accountName(schedule)]
+/// A schedule as Actual's schedules table lists it: name, payee and account, status and next date, amount.
+struct ScheduleRow: View {
+    let schedule: Schedule
+    @Environment(AppModel.self) private var model
+
+    var body: some View {
+        let payeeName = schedule.payeeName(in: model.overview)
+        let title = Text(schedule.name ?? payeeName ?? "Unnamed schedule").font(.body.weight(.medium))
+        let detail = Text([payeeName.flatMap { $0 == schedule.name ? nil : $0 }, schedule.accountName(in: model.overview)]
             .compactMap { $0 }.joined(separator: " · "))
         let status = HStack(spacing: 6) {
             ScheduleStatusBadge(status: schedule.status)
@@ -145,9 +165,9 @@ struct SchedulesView: View {
                 Image(systemName: "repeat").font(.caption2).foregroundStyle(.secondary).accessibilityLabel("Repeats")
             }
         }
-        let amount = Text(amountText(schedule)).monospacedDigit().font(.body.weight(.semibold))
+        let amount = Text(schedule.amountText(currency: model.currency)).monospacedDigit().font(.body.weight(.semibold))
             .foregroundStyle(schedule.amount.scheduled > 0 ? ActualTheme.positive : Color.primary)
-        return RegisterColumns { title } detail: { detail } notes: { status } amount: { amount } stacked: {
+        RegisterColumns { title } detail: { detail } notes: { status } amount: { amount } stacked: {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 5) {
                     title
@@ -163,9 +183,71 @@ struct SchedulesView: View {
     }
 }
 
-struct ScheduleEditRoute: Identifiable {
-    let id = UUID()
-    let schedule: Schedule?
+/// Actual's Link Schedule dialog: choose the active schedule a transaction belongs to,
+/// or create one from the transaction.
+struct ScheduleLinkSheet: View {
+    let transaction: Transaction
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var schedules: [Schedule]?
+    @State private var loadError: String?
+    @State private var search = ""
+    @State private var creating = false
+
+    /// Like Actual, only schedules that are not completed.
+    private var shown: [Schedule] {
+        (schedules ?? []).filter { schedule in
+            guard !schedule.completed else { return false }
+            guard !search.isEmpty else { return true }
+            return [schedule.name, schedule.payeeName(in: model.overview), schedule.accountName(in: model.overview),
+                    schedule.amountText(currency: model.currency)]
+                .compactMap { $0 }.contains { $0.localizedCaseInsensitiveContains(search) }
+        }.sorted { ($0.nextDate ?? "9999") < ($1.nextDate ?? "9999") }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ThemedList {
+                if let error = model.errorMessage ?? loadError {
+                    Section { ErrorNotice(message: error) { Task { await load() } } }
+                }
+                Section {
+                    Button("Create New Schedule", systemImage: "plus") { creating = true }
+                } footer: { Text("Starts from this transaction’s payee, account, amount, and date.") }
+                Section("Schedules") {
+                    if schedules == nil && loadError == nil {
+                        ProgressView().frame(maxWidth: .infinity)
+                    } else if shown.isEmpty {
+                        Text(search.isEmpty ? "No active schedules" : "No matching schedules").foregroundStyle(.secondary)
+                    }
+                    ForEach(shown) { schedule in
+                        Button { link(schedule) } label: { ScheduleRow(schedule: schedule) }.buttonStyle(.plain)
+                    }
+                }
+            }
+            .disabled(model.isBusy)
+            .navigationTitle("Link Schedule").navigationBarTitleDisplayMode(.inline)
+            .searchable(text: $search, prompt: "Name, payee, account, or amount")
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .task { await load() }
+            // Saving the new schedule links the transaction, so both sheets close.
+            .sheet(isPresented: $creating) { ScheduleEditor(schedule: nil, transaction: transaction) { dismiss() } }
+        }
+    }
+
+    private func load() async {
+        do { schedules = try await model.schedules(); loadError = nil }
+        catch { loadError = error.localizedDescription }
+    }
+
+    private func link(_ schedule: Schedule) {
+        Task {
+            let linked = await model.manage("linkScheduleTransactions", [
+                "id": .string(schedule.id), "transactionIds": .array([.string(transaction.id)]),
+            ])
+            if linked { dismiss() }
+        }
+    }
 }
 
 /// A schedule's status, colored as Actual's status badges.
@@ -200,10 +282,16 @@ struct ScheduleStatusBadge: View {
 /// Creates or edits a schedule, as Actual's schedule editor does.
 struct ScheduleEditor: View {
     let schedule: Schedule?
+    /// For a new schedule, the transaction it starts from and links, as in Actual.
+    var transaction: Transaction? = nil
+    /// Called once the schedule is saved.
+    var onSave: (() -> Void)? = nil
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
     @State private var payee = ""
+    /// The transaction's payee, which may be a transfer's, kept while its name is unchanged.
+    @State private var transactionPayee: (name: String, id: String)?
     @State private var noTransfer = ""
     @State private var account = ""
     @State private var isOutflow = true
@@ -385,6 +473,7 @@ struct ScheduleEditor: View {
         initialized = true
         guard let schedule else {
             account = model.overview?.openAccounts.first?.id ?? ""
+            if let transaction { prefill(from: transaction) }
             return
         }
         name = schedule.name ?? ""
@@ -413,6 +502,22 @@ struct ScheduleEditor: View {
         }
     }
 
+    /// As Actual's editor for a schedule made from a transaction: named after its payee,
+    /// with its account and exact amount, repeating monthly from its date.
+    private func prefill(from transaction: Transaction) {
+        let payeeName = transaction.payeeName ?? ""
+        name = payeeName
+        payee = payeeName
+        if let id = transaction.payeeId, !payeeName.isEmpty { transactionPayee = (payeeName, id) }
+        account = transaction.accountId
+        amountOp = .is
+        isOutflow = transaction.amount <= 0
+        amount = Money.editable(abs(transaction.amount))
+        start = BudgetDate.date(transaction.date) ?? Date()
+        repeats = true
+        recurrence = ScheduleDate.Recurrence(start: transaction.date, frequency: .monthly)
+    }
+
     private func save() {
         func cents(_ text: String) -> Int? { Money.parse(text).flatMap { $0 >= 0 ? (isOutflow ? -$0 : $0) : nil } }
         guard let first = cents(amount) else { validation = "A valid amount is required"; return }
@@ -434,14 +539,21 @@ struct ScheduleEditor: View {
             return
         }
         let cleanedPayee = payee.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let match = model.overview?.payees.first(where: { $0.name == cleanedPayee }) {
+        if let transactionPayee, transactionPayee.name == cleanedPayee {
+            arguments["payeeId"] = .string(transactionPayee.id)
+        } else if let match = model.overview?.payees.first(where: { $0.name == cleanedPayee }) {
             arguments["payeeId"] = .string(match.id)
         } else if !cleanedPayee.isEmpty {
             arguments["payeeName"] = .string(cleanedPayee)
         }
         if let schedule { arguments["id"] = .string(schedule.id) }
+        else if let transaction { arguments["linkTransactionIds"] = .array([.string(transaction.id)]) }
         validation = nil
-        Task { if await model.manage("saveSchedule", arguments) { dismiss() } }
+        Task {
+            guard await model.manage("saveSchedule", arguments) else { return }
+            dismiss()
+            onSave?()
+        }
     }
 }
 

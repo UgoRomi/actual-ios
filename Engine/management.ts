@@ -267,12 +267,6 @@ export async function manage(method: string, args: Obj): Promise<unknown> {
         }))
         .sort((a, b) => Number(a.isTransfer) - Number(b.isTransfer) || a.name.localeCompare(b.name));
     }
-    case "payeeRules": {
-      // As Actual's "View rules": the rules whose conditions or actions use this payee.
-      const payee = (await lib.send("payees-get")).find((p) => p.id === args.id);
-      if (!payee) throw new Error("This payee no longer exists.");
-      return (await lib.send("payees-get-rules", { id: payee.id })).map((rule) => rule.id);
-    }
     case "renamePayee": {
       const payee = await ordinaryPayee(args.id);
       await lib.send("payees-batch-change", { updated: [{ id: payee.id, name: name(args.name, "payee") }] });

@@ -15,11 +15,37 @@ struct Rule: Decodable, Identifiable, Sendable {
     /// Whether every part is one this app's editor offers, as Actual's editor does.
     var isEditable: Bool { !isSchedule && conditions.allSatisfy(\.isEditableCondition) && actions.allSatisfy(\.isEditableAction) }
 
-    /// A new rule that sets a category. With a payee, it matches that payee, as Actual's payees page creates one.
-    static func new(payeeID: String? = nil) -> Rule {
-        var payee = RuleItem.condition(field: "payee")
-        if let payeeID { payee.raw["value"] = .string(payeeID) }
-        return Rule(id: "", stage: nil, conditionsOp: "and", conditions: [payee], actions: [RuleItem.action(field: "category")])
+    /// How many transactions the rule splits a match into; 0 when it does not split.
+    var splitCount: Int { actions.map(\.splitIndex).max() ?? 0 }
+
+    /// The indices of a split's actions: 0 for those applied before splitting.
+    func actionIndices(split: Int) -> [Int] { actions.indices.filter { actions[$0].splitIndex == split } }
+
+    /// As Actual's editor adds an action: the first field the split does not set yet.
+    mutating func addAction(split: Int) {
+        let used = Set(actions.filter { $0.splitIndex == split }.map(\.field))
+        let fields = RuleItem.actionFields(split: split)
+        actions.append(.action(field: fields.first { !used.contains($0) } ?? "category", split: split))
+    }
+
+    /// As Actual's "Split into multiple transactions": a new split takes an equal part of the remainder.
+    mutating func addSplit() {
+        let split = splitCount + 1
+        actions.append(.splitAmount(split: split))
+        addAction(split: split)
+    }
+
+    /// Removes a split and its actions, renumbering the splits after it.
+    mutating func removeSplit(_ split: Int) {
+        actions.removeAll { $0.splitIndex == split }
+        for index in actions.indices where actions[index].splitIndex > split {
+            actions[index].splitIndex -= 1
+        }
+    }
+
+    static func new() -> Rule {
+        Rule(id: "", stage: nil, conditionsOp: "and",
+             conditions: [RuleItem.condition(field: "payee")], actions: [RuleItem.action(field: "category")])
     }
 
     var json: [String: JSONValue] {
@@ -32,11 +58,22 @@ struct Rule: Decodable, Identifiable, Sendable {
     }
 }
 
+/// A transaction a rule's conditions match, as the rule editor lists them.
+struct RuleMatch: Decodable, Identifiable, Sendable, Equatable {
+    let id: String
+    let date: String
+    let amount: Int
+    let payeeId: String?
+    let accountId: String
+    let categoryId: String?
+    let notes: String
+}
+
 /// A rule condition or action, kept as Actual's JSON so settings this app does not edit survive saving.
 struct RuleItem: Decodable, Sendable, Equatable, Identifiable {
     var raw: [String: JSONValue]
     /// For lists only; not saved.
-    let id = UUID()
+    var id = UUID()
 
     init(raw: [String: JSONValue]) { self.raw = raw }
     init(from decoder: Decoder) throws { raw = try [String: JSONValue](from: decoder) }
@@ -46,6 +83,19 @@ struct RuleItem: Decodable, Sendable, Equatable, Identifiable {
     var op: String { if case .string(let value) = raw["op"] { value } else { "" } }
     var value: JSONValue { raw["value"] ?? .null }
     var options: [String: JSONValue] { if case .object(let value) = raw["options"] { value } else { [:] } }
+
+    /// The split an action applies to; 0 for the transaction itself.
+    var splitIndex: Int {
+        get { if case .number(let split) = options["splitIndex"] { split } else { 0 } }
+        set {
+            var options = options
+            options["splitIndex"] = .number(newValue)
+            raw["options"] = .object(options)
+        }
+    }
+
+    /// How a split's amount is allocated: "fixed-amount", "fixed-percent", or "remainder".
+    var splitMethod: String { if case .string(let method) = options["method"] { method } else { "" } }
 
     /// A field's type, as Actual's FIELD_INFO defines it.
     static func type(of field: String) -> String {
@@ -59,8 +109,20 @@ struct RuleItem: Decodable, Sendable, Equatable, Identifiable {
     }
 
     /// Condition fields Actual's editor offers; amount also has inflow and outflow variants.
-    static let conditionFields = ["imported_payee", "payee", "account", "category", "date", "notes", "amount", "cleared"]
+    static let conditionFields = ["imported_payee", "payee", "account", "category", "category_group", "date", "notes",
+                                  "amount", "cleared"]
     static let actionFields = ["category", "payee", "payee_name", "notes", "cleared", "account", "date", "amount"]
+    /// Fields only the whole transaction has, which its splits cannot set.
+    static let parentOnlyFields: Set<String> = ["amount", "cleared", "account", "date"]
+
+    /// The fields an action can set, as Actual's editor offers them. Like Actual without its
+    /// templating feature, payee name is offered only to an action that already sets it.
+    static func actionFields(split: Int, current: String? = nil) -> [String] {
+        actionFields.filter { (split == 0 || !parentOnlyFields.contains($0)) && ($0 != "payee_name" || $0 == current) }
+    }
+
+    /// Actual's split allocation methods, less formulas.
+    static let splitMethods = ["fixed-amount", "fixed-percent", "remainder"]
     /// Fields Actual's filter menu offers for reports (FiltersMenu.tsx); its category filter also matches by group.
     static let filterFields = ["date", "account", "payee", "notes", "category", "category_group", "amount",
                                "cleared", "reconciled", "transfer"]
@@ -84,9 +146,17 @@ struct RuleItem: Decodable, Sendable, Equatable, Identifiable {
                               "value": defaultValue(field: field, op: op)])
     }
 
-    static func action(field: String) -> RuleItem {
+    static func action(field: String, split: Int = 0) -> RuleItem {
         RuleItem(raw: ["field": .string(field), "op": .string("set"), "type": .string(type(of: field)),
-                       "value": defaultValue(field: field, op: "set"), "options": .object(["splitIndex": .number(0)])])
+                       "value": defaultValue(field: field, op: "set"), "options": .object(["splitIndex": .number(split)])])
+    }
+
+    /// A split's share of the amount, as Actual's editor starts one: an equal part of the remainder.
+    static func splitAmount(split: Int, method: String = "remainder") -> RuleItem {
+        var item = RuleItem(raw: ["op": .string("set-split-amount"),
+                                  "options": .object(["splitIndex": .number(split), "method": .string(method)])])
+        if method != "remainder" { item.raw["value"] = .number(0) }
+        return item
     }
 
     static func defaultValue(field: String, op: String) -> JSONValue {
@@ -122,15 +192,28 @@ struct RuleItem: Decodable, Sendable, Equatable, Identifiable {
     }
 
     /// An action with another operation: setting a field, adding to notes, or deleting the transaction.
+    /// Keeps the action's split, and its identity, so an editor showing it keeps editing it.
     func withActionOp(_ op: String) -> RuleItem {
-        switch op {
-        case "set": return RuleItem.action(field: RuleItem.actionFields.contains(field) ? field : "category")
+        let split = splitIndex
+        var item = switch op {
+        case "set":
+            RuleItem.action(field: RuleItem.actionFields(split: split).contains(field) ? field : "category", split: split)
         case "delete-transaction":
-            return RuleItem(raw: ["op": .string(op), "options": .object(["splitIndex": .number(0)])])
+            RuleItem(raw: ["op": .string(op), "options": .object(["splitIndex": .number(split)])])
         default:
-            return RuleItem(raw: ["op": .string(op), "field": .string("notes"), "type": .string("string"),
-                                  "value": .string(""), "options": .object(["splitIndex": .number(0)])])
+            RuleItem(raw: ["op": .string(op), "field": .string("notes"), "type": .string("string"),
+                           "value": .string(""), "options": .object(["splitIndex": .number(split)])])
         }
+        item.id = id
+        return item
+    }
+
+    /// A split's share with another allocation method. A fixed amount or percent starts at zero.
+    func withSplitMethod(_ method: String) -> RuleItem {
+        guard method != splitMethod else { return self }
+        var item = RuleItem.splitAmount(split: splitIndex, method: method)
+        item.id = id
+        return item
     }
 
     var isAction: Bool { ["set", "prepend-notes", "append-notes", "delete-transaction", "link-schedule", "set-split-amount"].contains(op) }
@@ -159,11 +242,14 @@ struct RuleItem: Decodable, Sendable, Equatable, Identifiable {
     }
 
     var isEditableAction: Bool {
-        // Split actions and templated values are edited in Actual.
-        if case .number(let split) = options["splitIndex"], split != 0 { return false }
+        // Templated values and formulas are edited in Actual.
+        if op == "set-split-amount" {
+            return splitIndex > 0 && Self.splitMethods.contains(splitMethod)
+                && !options.keys.contains { !["splitIndex", "method"].contains($0) }
+        }
         if options.keys.contains(where: { $0 != "splitIndex" }) { return false }
         switch op {
-        case "set": return Self.actionFields.contains(field)
+        case "set": return Self.actionFields(split: splitIndex, current: field).contains(field)
         case "prepend-notes", "append-notes", "delete-transaction": return true
         default: return false
         }
@@ -231,15 +317,41 @@ struct RuleDescriber {
         case "append-notes": "append \(value(item.value, field: "notes")) to notes"
         case "delete-transaction": "delete the transaction"
         case "link-schedule": "link to a schedule"
-        case "set-split-amount": "split the transaction"
+        case "set-split-amount": "allocate \(splitAmount(item))"
         default: item.op
+        }
+    }
+
+    /// A split's share, as Actual's editor names its allocation methods.
+    func splitAmount(_ item: RuleItem) -> String {
+        switch item.splitMethod {
+        case "fixed-amount":
+            if case .number(let amount) = item.value { return "a fixed amount of \(Money.formatted(amount, currency: currency))" }
+            return "a fixed amount"
+        case "fixed-percent":
+            let percent = switch item.value {
+            case .number(let value): String(value)
+            case .double(let value): value.formatted()
+            default: "0"
+            }
+            return "\(percent)% of the remainder"
+        case "formula": return "an amount based on a formula"
+        default: return "an equal portion of the remainder"
         }
     }
 
     func describe(_ rule: Rule) -> String {
         let joiner = rule.conditionsOp == "or" ? " or " : " and "
         let conditions = rule.conditions.map(condition).joined(separator: joiner)
-        let actions = rule.actions.map(action).joined(separator: ", ")
+        var parts = rule.actionIndices(split: 0).map { action(rule.actions[$0]) }
+        if rule.splitCount > 0 {
+            // As Actual's rules list shows split rules: each split's actions in turn.
+            let splits = (1...rule.splitCount).map { split in
+                "split \(split): " + rule.actionIndices(split: split).map { action(rule.actions[$0]) }.joined(separator: ", ")
+            }
+            parts.append("split into " + splits.joined(separator: "; "))
+        }
+        let actions = parts.joined(separator: ", ")
         return conditions.isEmpty ? "Always \(actions)" : "If \(conditions), then \(actions)"
     }
 }

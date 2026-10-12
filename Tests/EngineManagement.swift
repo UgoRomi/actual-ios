@@ -211,9 +211,9 @@ extension EngineSmoke {
     let grocer = try await categorizeThree("Native Grocer")
     check(grocer.learnCategories && grocer.ruleCount == 1, "Learning adds a category rule: \(grocer)")
     // "View rules" lists the rules that use a payee.
-    let grocerRules = try await engine.call("payeeRules", arguments: ["id": .string(grocer.id)], as: [String].self)
-    check(grocerRules.count == 1, "A payee's rules are listed: \(grocerRules)")
-    check(try await engine.call("payeeRules", arguments: ["id": .string(accountPayee.id)], as: [String].self).isEmpty)
+    let grocerRules = try await engine.call("rules", arguments: ["payeeId": .string(grocer.id)], as: [Rule].self)
+    check(grocerRules.count == 1, "A payee's rules are listed: \(grocerRules.map(\.id))")
+    check(try await engine.call("rules", arguments: ["payeeId": .string(accountPayee.id)], as: [Rule].self).isEmpty)
     _ = try await engine.call("saveTransaction", arguments: [
       "accountId": .string(keep), "date": .string("2026-09-04"), "amount": .number(-500),
       "payeeName": .string("Native Baker"), "notes": .string(""), "cleared": .bool(false),

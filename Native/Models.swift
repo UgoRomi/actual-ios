@@ -370,6 +370,8 @@ struct Transaction: Decodable, Identifiable, Sendable {
     var transferInSplit: Bool? = nil
     /// A split's parts, for its parent only.
     var splits: [SplitPart]? = nil
+    /// The schedule this transaction is linked to.
+    var scheduleId: String? = nil
 
     /// Reconciled transactions, transfers, and splits can be edited too, after any warning.
     /// A transfer linked to part of a split is edited from the split, as Actual does.
@@ -386,6 +388,18 @@ struct Transaction: Decodable, Identifiable, Sendable {
     var detail: String {
         if isParent { return "Split" + ((splits?.count).map { " · \($0) parts" } ?? "") }
         return transferAccountId != nil && categoryId == nil ? "Transfer" : categoryName ?? "Uncategorized"
+    }
+
+    /// What deleting this transaction does, as the confirmation explains it.
+    var deleteMessage: String {
+        switch (isReconciled, transferReconciled == true) {
+        case (true, true): "This transaction and its linked transaction in another account are reconciled. Deleting them may bring their reconciliations out of balance."
+        case (true, false): "Deleting reconciled transactions may bring your reconciliation out of balance."
+        case (false, true): "This transfer has a linked transaction in another account that is reconciled. Deleting it may bring that account’s reconciliation out of balance."
+        case (false, false): transferId == nil
+            ? "This removes the transaction from your budget and updates your balances."
+            : "This removes the transfer from both accounts and updates your balances."
+        }
     }
 
     /// The notes Actual gives the adjustment a reconciliation creates; it marks one no other way.
@@ -418,6 +432,29 @@ struct SplitPart: Decodable, Identifiable, Sendable, Equatable {
 /// A transaction edit shown before the engine saves it, as Actual's mobile app
 /// shows edits right away. It applies to the register and balances as last
 /// loaded, so applying it where the engine has already saved it changes nothing.
+/// A category balance that a saved transaction changed, shown for a moment after saving.
+struct CategoryBalanceChange: Identifiable, Hashable, Sendable {
+    let id: String
+    let name: String
+    let before: Int
+    let after: Int
+
+    /// Expense categories whose balance differs between two loads of a month, in the budget's order.
+    static func changes(from before: BudgetMonth, to after: BudgetMonth) -> [CategoryBalanceChange] {
+        let previous = Dictionary(before.expenseCategories.map { ($0.id, $0.balance) }) { first, _ in first }
+        return after.expenseCategories.compactMap { category in
+            guard let balance = previous[category.id], balance != category.balance else { return nil }
+            return CategoryBalanceChange(id: category.id, name: category.name, before: balance, after: category.balance)
+        }
+    }
+}
+
+/// The category balances one saved transaction changed.
+struct BalanceFeedback: Identifiable, Equatable, Sendable {
+    let id = UUID()
+    let changes: [CategoryBalanceChange]
+}
+
 enum TransactionChange: Sendable {
     /// Adds a transaction, or replaces the one with its ID.
     case save(Transaction)

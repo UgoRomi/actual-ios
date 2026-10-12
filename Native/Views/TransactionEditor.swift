@@ -23,6 +23,7 @@ struct TransactionEditor: View {
     @State private var splits: [SplitDraft] = []
     /// A payee a rule chose, which should not run rules again.
     @State private var ruledPayee: String?
+    @State private var ruleDraft: RuleEditRoute?
 
     private var editable: Bool { transaction?.canEdit ?? true }
     /// The latest load: this transaction, or a transfer's linked transaction,
@@ -121,6 +122,17 @@ struct TransactionEditor: View {
                 splitSection.disabled(!editable || model.isBusy)
                 if let validation { Section { Text(validation).foregroundStyle(ActualTheme.negative) } }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
+                if let transaction {
+                    // As Actual's register: a rule for transactions like this saved one.
+                    Section {
+                        Button("Create Rule from Transaction", systemImage: "wand.and.rays") {
+                            Task {
+                                do { ruleDraft = RuleEditRoute(rule: try await model.ruleDraft(transactionID: transaction.id)) }
+                                catch { validation = error.localizedDescription }
+                            }
+                        }.disabled(model.isBusy)
+                    }
+                }
                 if transaction != nil && editable {
                     Section {
                         Button("Delete transaction", role: .destructive) { showDeleteConfirmation = true }
@@ -146,6 +158,7 @@ struct TransactionEditor: View {
                 }
             }
             .interactiveDismissDisabled(model.isBusy)
+            .sheet(item: $ruleDraft) { route in RuleEditor(rule: route.rule) }
             .confirmationDialog("Delete this transaction?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
                 Button("Delete transaction", role: .destructive) {
                     if let transaction {
@@ -334,16 +347,7 @@ struct TransactionEditor: View {
         }
     }
 
-    private var deleteMessage: String {
-        switch (isReconciled, isTransferReconciled) {
-        case (true, true): "This transaction and its linked transaction in another account are reconciled. Deleting them may bring their reconciliations out of balance."
-        case (true, false): "Deleting reconciled transactions may bring your reconciliation out of balance."
-        case (false, true): "This transfer has a linked transaction in another account that is reconciled. Deleting it may bring that account’s reconciliation out of balance."
-        case (false, false): current?.transferId == nil
-            ? "This removes the transaction from your budget and updates your balances."
-            : "This removes the transfer from both accounts and updates your balances."
-        }
-    }
+    private var deleteMessage: String { current?.deleteMessage ?? "" }
 
     private func initialize() {
         guard !initialized else { return }
@@ -464,7 +468,7 @@ struct TransactionEditor: View {
             isParent: false, isChild: false, isTransfer: !transferAccount.isEmpty, reconciled: reconciled,
             transferAccountId: transferAccount.isEmpty ? nil : transferAccount,
             transferId: sameTransfer ? existing?.transferId : nil,
-            transferReconciled: sameTransfer ? existing?.transferReconciled : nil)
+            transferReconciled: sameTransfer ? existing?.transferReconciled : nil, scheduleId: existing?.scheduleId)
     }
 }
 

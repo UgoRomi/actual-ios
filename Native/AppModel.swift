@@ -36,6 +36,8 @@ final class AppModel {
     var reconciliation: Reconciliation?
     /// The result of applying targets to the month.
     var targetsMessage: String?
+    /// Category balances the latest saved transaction changed, shown for a moment over the app.
+    var balanceFeedback: BalanceFeedback?
     /// Changes whenever saved budget data may have changed, so reports reload.
     var dataRevision = 0
     /// The engine's latest register and accounts, before pending edits.
@@ -338,7 +340,7 @@ final class AppModel {
         errorMessage = nil
         defer { finishOperation() }
         let switchesBudget = ["open", "download", "demo"].contains(method)
-        let isEdit = ["saveTransaction", "deleteTransaction", "budget", "setCleared", "unlockTransaction",
+        let isEdit = ["saveTransaction", "deleteTransaction", "duplicateTransaction", "budget", "setCleared", "unlockTransaction",
                       "createReconciliationTransaction", "finishReconciliation", "saveTargets",
                       "applyTargets", "budgetAction", "commitImport", "saveReportWidget"].contains(method)
             || Self.managementMethods.contains(method)
@@ -408,6 +410,10 @@ final class AppModel {
         let id = editCount
         pendingEdits.append((id, change))
         showPendingEdits()
+        // A saved transaction shows how it changed its categories' balances in its month.
+        var feedbackMonth: String?
+        if case .save(let saved) = change { feedbackMonth = String(saved.date.prefix(7)) }
+        let balancesBefore = await balances(in: feedbackMonth)
         // Until the reload that includes it, or until it fails.
         defer {
             if generation == budgetGeneration {
@@ -427,6 +433,10 @@ final class AppModel {
         }
         guard generation == budgetGeneration else { return true }
         syncStatus = "Saved on this device"
+        if let balancesBefore, let balancesAfter = await balances(in: feedbackMonth), generation == budgetGeneration {
+            let changes = CategoryBalanceChange.changes(from: balancesBefore, to: balancesAfter)
+            if !changes.isEmpty { balanceFeedback = BalanceFeedback(changes: changes) }
+        }
         do { try await load(change.changesBudget ? BudgetPart.all : [.overview, .register]) }
         catch {
             // The write succeeded. Do not invite a duplicate transaction by reporting it as unsaved.
@@ -434,6 +444,12 @@ final class AppModel {
         }
         beginBudgetSync()
         return true
+    }
+
+    /// The month's category balances, or nil without a month or if they could not load.
+    private func balances(in month: String?) async -> BudgetMonth? {
+        guard let month else { return nil }
+        return try? await client().call("budgetMonth", arguments: ["month": .string(month)], as: BudgetMonth.self)
     }
 
     /// Accept that another device's discarded changes may show different
@@ -565,31 +581,32 @@ final class AppModel {
         "createCategoryGroup", "updateCategoryGroup", "deleteCategoryGroup", "createCategory", "updateCategory",
         "deleteCategory", "moveCategory", "moveCategoryGroup", "saveNotes", "createAccount", "updateAccount",
         "closeAccount", "reopenAccount", "renamePayee", "deletePayees", "mergePayees", "savePreference",
-        "setPayeeLearning", "setPayeeFavorite", "saveRule", "deleteRule", "applyRule", "discoverTags", "createTag", "updateTag", "deleteTag",
+        "setPayeeLearning", "setPayeeFavorite", "saveRule", "deleteRule", "deleteRules", "applyRule", "discoverTags",
+        "createTag", "updateTag", "deleteTag",
         "linkScheduleTransactions",
         // Schedules: posting adds a transaction, and saving can add a payee.
         "saveSchedule", "deleteSchedule", "skipSchedule", "postSchedule", "completeSchedule",
     ]
 
-    /// Every rule, as Actual's rules page lists them.
-    func rules() async throws -> [Rule] {
-        try await client().call("rules", as: [Rule].self)
+    /// Every rule, or a payee's, as Actual's rules page lists them.
+    func rules(payeeID: String? = nil) async throws -> [Rule] {
+        try await client().call("rules", arguments: payeeID.map { ["payeeId": .string($0)] } ?? [:], as: [Rule].self)
     }
 
-    /// How many transactions a rule's conditions match now.
-    func ruleMatches(_ rule: Rule) async throws -> Int {
-        struct Count: Decodable { let count: Int }
-        return try await client().call("ruleMatches", arguments: rule.json, as: Count.self).count
+    /// The transactions a rule's conditions match now.
+    func ruleMatches(_ rule: Rule) async throws -> [RuleMatch] {
+        struct Matches: Decodable { let transactions: [RuleMatch] }
+        return try await client().call("ruleMatches", arguments: rule.json, as: Matches.self).transactions
+    }
+
+    /// A rule for transactions like this one, as Actual's register's "Create rule" drafts it.
+    func ruleDraft(transactionID: String) async throws -> Rule {
+        try await client().call("ruleFromTransaction", arguments: ["id": .string(transactionID)], as: Rule.self)
     }
 
     /// Payees with their rule counts, as Actual's payees page lists them.
     func managedPayees() async throws -> [ManagedPayee] {
         try await client().call("payees", as: [ManagedPayee].self)
-    }
-
-    /// The IDs of the rules that use a payee, as Actual's "View rules" lists them.
-    func payeeRuleIDs(_ payeeID: String) async throws -> Set<String> {
-        Set(try await client().call("payeeRules", arguments: ["id": .string(payeeID)], as: [String].self))
     }
 
     /// Every schedule with its status. Reading schedules changes nothing.
@@ -628,6 +645,12 @@ final class AppModel {
     /// The next dates a schedule's date falls on.
     func upcomingDates(_ date: ScheduleDate, count: Int = 5) async throws -> [String] {
         try await client().call("upcomingDates", arguments: ["date": date.json, "count": .number(count)], as: [String].self)
+    }
+
+    /// Adds a copy of a transaction and its split parts, uncleared, as Actual's Duplicate does.
+    @discardableResult
+    func duplicateTransaction(_ id: String) async -> Bool {
+        await perform("duplicateTransaction", arguments: ["id": .string(id)])
     }
 
     @discardableResult
