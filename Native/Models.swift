@@ -162,7 +162,8 @@ enum BudgetFilter: CaseIterable, Identifiable, Sendable {
     case all
     /// A negative balance, which the category's row shows in red.
     case overspent
-    /// Budgeted, or for a long-term goal saved, less than the targets ask for.
+    /// Budgeted less than the targets ask for. Long-term goals are left out, since
+    /// they are saved toward over many months.
     case underfunded
 
     var id: Self { self }
@@ -179,7 +180,7 @@ enum BudgetFilter: CaseIterable, Identifiable, Sendable {
         switch self {
         case .all: true
         case .overspent: category.balance < 0
-        case .underfunded: (category.goalDifference ?? 0) < 0
+        case .underfunded: !category.longGoal && (category.goalDifference ?? 0) < 0
         }
     }
 }

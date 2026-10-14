@@ -272,9 +272,10 @@ struct BudgetView: View {
         }.font(.subheadline).accessibilityElement(children: .combine)
     }
 
-    /// Quick filters, with how many categories each shows. Underfunded appears once targets set goals.
+    /// Quick filters, with how many categories each shows. Underfunded appears once targets set
+    /// goals other than long-term ones.
     private func filterBar(_ budget: BudgetMonth) -> some View {
-        let hasGoals = budget.categories.contains { !$0.isIncome && $0.goal != nil }
+        let hasGoals = budget.categories.contains { !$0.isIncome && !$0.longGoal && $0.goal != nil }
         return ScrollView(.horizontal) {
             HStack(spacing: 8) {
                 ForEach(BudgetFilter.allCases.filter { $0 != .underfunded || hasGoals || filter == $0 }) { option in
