@@ -441,3 +441,13 @@ Not verified end to end: merging several selected payees and deleting them in th
 ## Uncleared filter chip
 
 Validated on 2026-10-12. The **Uncleared** chip uses the same `FilterChip` as the budget's filters. The UI test `testDemoUnclearedFilter` passed on a new iPhone 17 Pro / iOS 27 simulator: it adds an uncleared transaction to a demo account, turns the chip on (cleared rows disappear, the new one stays), and turns it off again. Screenshots of both states were inspected.
+
+## Ledger and Manila themes (2026-10-14)
+
+Two presets join Actual, Sterling, and Payday. **Ledger** takes its colors from a bookkeeper's ledger: pale green paper, blue ruling ink as the accent, red ink for overspending, and a bottle-green summary card; in dark appearance, a green-black page with pale blue ink. **Manila** is a cash envelope: a kraft page and rows of envelope paper, a stamp-pad indigo accent, and a brown kraft summary card; in dark appearance the card turns to light kraft with black text, as Sterling's turns to silver.
+
+`./scripts/test-themes.sh` passed with both presets: in each appearance, iOS's text reaches 7:1 on the page and rows, the accent and amount colors 4.5:1 on rows, the accent 4.5:1 on the page, and black or white text 4.5:1 on the accent and on both ends of the summary card.
+
+On a new iPhone 17 Pro / iOS 27 simulator, Budget, Accounts, and the theme list were captured and inspected for both themes in light and dark appearance. `docs/screenshots/12-theme-ledger.png` to `15-theme-manila-dark.png` show Budget in each. `testDemoThemes` now also chooses Ledger and Manila; those selections passed, but on this simulator the test then fails while deleting the theme it made: the confirmation's **Delete Theme** button is not hittable. It fails the same way with only Sterling and Payday chosen, so the failure predates these themes.
+
+Not verified end to end: the widget in either theme, the positive and negative summary card states, iPad, VoiceOver, and increased contrast.
