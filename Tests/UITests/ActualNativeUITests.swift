@@ -740,7 +740,7 @@ final class ActualNativeUITests: XCTestCase {
         scroll(app, to: setting)
         setting.tap()
         XCTAssertTrue(app.navigationBars["Theme"].waitForExistence(timeout: 10))
-        for name in ["Sterling", "Payday"] {
+        for name in ["Sterling", "Payday", "Ledger", "Manila"] {
             app.buttons[name].tap()
             XCTAssertTrue(app.buttons[name].isSelected)
             XCTAssertFalse(app.buttons["Actual"].isSelected)
