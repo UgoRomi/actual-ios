@@ -56,6 +56,12 @@ final class AppModel {
     private var isAppActive = true
     @ObservationIgnored private var openingSyncWait: CheckedContinuation<Void, Never>?
     private var openingSyncWaits = 0
+    /// Why the last start failed, as when iOS launched the app in the background before the device was unlocked.
+    private var startError: String?
+
+    /// The last start failed and its error is still shown, so opening the app should start again.
+    /// Anything the person did since replaced or cleared the error.
+    var startNeedsRetry: Bool { startError != nil && startError == errorMessage && !isBudgetOpen }
 
     /// Returning to the app this soon after a successful sync skips the opening sync.
     static let recentSyncInterval: TimeInterval = 5 * 60
@@ -68,7 +74,7 @@ final class AppModel {
     /// Opens the last budget if needed and syncs it, as opening the app does. For background refresh.
     func backgroundRefresh() async {
         guard !isBusy else { return }
-        if !hasStarted { await start(); return }
+        if !hasStarted || startNeedsRetry { await start(); return }
         guard canSyncBudget, let task = beginBudgetSync() else { return }
         _ = await task.value
     }
@@ -94,7 +100,7 @@ final class AppModel {
     }
 
     func start() async {
-        guard !hasStarted, !isBusy else { return }
+        guard !hasStarted || startNeedsRetry, !isBusy else { return }
         isBusy = true
         isOpeningBudget = true
         defer { hasStarted = true; finishOperation() }
@@ -107,7 +113,11 @@ final class AppModel {
                 await awaitOpeningSync()
             }
             errorMessage = nil
-        } catch { errorMessage = error.localizedDescription }
+            startError = nil
+        } catch {
+            errorMessage = error.localizedDescription
+            startError = errorMessage
+        }
     }
 
     /// Loads the requested parts concurrently and decodes them off the main thread.
@@ -181,7 +191,14 @@ final class AppModel {
 
     func activate() async {
         isAppActive = true
-        if !hasStarted { await start(); return }
+        if !hasStarted || startNeedsRetry {
+            guard !isBusy else { return }
+            // Starting syncs the budget it opens. Clearing this also keeps a failed
+            // start from retrying itself when its operation finishes.
+            needsForegroundSync = false
+            await start()
+            return
+        }
         guard needsForegroundSync, !isBusy else { return }
         needsForegroundSync = false
         guard canSyncBudget, !syncedRecently else { return }

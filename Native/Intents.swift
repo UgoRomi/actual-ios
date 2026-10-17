@@ -27,7 +27,7 @@ enum IntentSupport {
     /// The app's model with its last budget open, as opening the app does.
     static func openBudget() async throws -> AppModel {
         guard let model = AppModel.current else { throw IntentError.notReady }
-        if !model.hasStarted { await model.start() }
+        if !model.hasStarted || model.startNeedsRetry { await model.start() }
         guard model.isBudgetOpen else { throw IntentError.noBudget }
         return model
     }

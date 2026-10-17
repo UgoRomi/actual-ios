@@ -451,3 +451,11 @@ Two presets join Actual, Sterling, and Payday. **Ledger** takes its colors from 
 On a new iPhone 17 Pro / iOS 27 simulator, Budget, Accounts, and the theme list were captured and inspected for both themes in light and dark appearance. `docs/screenshots/12-theme-ledger.png` to `15-theme-manila-dark.png` show Budget in each. `testDemoThemes` now also chooses Ledger and Manila; those selections passed, but on this simulator the test then fails while deleting the theme it made: the confirmation's **Delete Theme** button is not hittable. It fails the same way with only Sterling and Payday chosen, so the failure predates these themes.
 
 Not verified end to end: the widget in either theme, the positive and negative summary card states, iPad, VoiceOver, and increased contrast.
+
+## Starting while the device is locked (2026-10-17)
+
+Opening the app sometimes showed an error on the welcome screen that **Try again** cleared. iOS can launch the app in the background for a refresh while the device is locked. Credentials were saved readable only while unlocked, so starting failed, and the app kept that failure until the person tapped **Try again**. Credentials are now readable after the first unlock, as the settings file is; items saved by earlier builds move to this when next read. A failed start whose error is still shown starts again when the app next becomes active, from background refresh, or from Shortcuts. A failed retry does not repeat on its own.
+
+`./scripts/test-engine.sh`, `./scripts/build.sh`, and `./scripts/test-auto-sync.sh` passed. The automatic sync test makes the saved credentials unreadable, then checks that a background start shows the error, a retry that fails again does not repeat on its own, and opening the app after the credentials are readable starts with no error.
+
+Not verified end to end: a locked device, and moving Keychain items saved by an earlier build. Both need a physical device.

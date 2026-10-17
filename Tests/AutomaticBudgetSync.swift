@@ -36,6 +36,7 @@ private struct RemoteTransaction: Decodable {
         try await verifyRestartAndSwitch(fixture)
         try await verifyFailedSnapshotUpload()
         try await verifyBankRefreshSyncsFirst(fixture)
+        try await verifyFailedStartRetries()
     }
 
     static func engine() throws -> EngineClient {
@@ -207,6 +208,30 @@ private struct RemoteTransaction: Decodable {
         try require(try await control("state").uploadAttempts == attempts + 2, "The snapshot upload was not retried")
         try require(try lastUploaded() != "2000-01-01", "A successful upload did not advance the upload date")
         print("PASS: a rejected snapshot upload does not fail budget sync and retries on the next sync")
+    }
+
+    /// iOS can start the app in the background while saved credentials cannot be read,
+    /// as before the device is unlocked. Opening the app later must start again.
+    @MainActor private static func verifyFailedStartRetries() async throws {
+        let secretsURL = directory.appendingPathComponent("test-secrets.json")
+        let secrets = try Data(contentsOf: secretsURL)
+        defer { try? secrets.write(to: secretsURL) }
+        try Data("unreadable".utf8).write(to: secretsURL)
+        let model = AppModel(engine: try engine())
+        await model.backgroundRefresh()
+        try require(model.hasStarted && !model.isBusy && model.errorMessage != nil && model.startNeedsRetry,
+                    "A failed start must show its error and allow a retry")
+        // Still unreadable: the retry fails once, without retrying itself.
+        model.enteredBackground()
+        await model.activate()
+        try await Task.sleep(for: .milliseconds(300))
+        try require(!model.isBusy && model.startNeedsRetry, "A failed retry must not repeat on its own")
+        try secrets.write(to: secretsURL)
+        model.enteredBackground()
+        await model.activate()
+        try require(model.errorMessage == nil && !model.startNeedsRetry && !model.localBudgets.isEmpty,
+                    "Opening the app did not start again: \(model.errorMessage ?? "no budgets")")
+        print("PASS: a failed start, as in a locked background launch, starts again when the app opens")
     }
 
     @MainActor private static func verifyBankRefreshSyncsFirst(_ fixture: AutoSyncFixture) async throws {
