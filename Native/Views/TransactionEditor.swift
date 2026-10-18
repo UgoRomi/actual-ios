@@ -109,7 +109,7 @@ struct TransactionEditor: View {
                     }.accessibilityIdentifier("payee-row")
                     if splits.isEmpty {
                         NavigationLink {
-                            CategoryPicker(selection: $category, groups: model.budget?.visibleGroups ?? [])
+                            CategoryPicker(selection: $category, groups: model.budget?.visibleGroups ?? [], month: BudgetDate.month(date))
                         } label: {
                             LabeledContent("Category", value: categoryName)
                         }.disabled(isOffBudget || isBudgetTransfer).accessibilityIdentifier("category-row")
@@ -246,7 +246,8 @@ struct TransactionEditor: View {
                         LabeledContent("Payee", value: partPayeeLabel(part))
                     }
                     NavigationLink {
-                        CategoryPicker(selection: $part.category, groups: model.budget?.visibleGroups ?? [])
+                        CategoryPicker(selection: $part.category, groups: model.budget?.visibleGroups ?? [],
+                                       month: BudgetDate.month(date))
                     } label: {
                         LabeledContent("Category", value: isOffBudget ? "Off budget"
                                        : partIsBudgetTransfer(part) ? "Transfer" : name(ofCategory: part.category))
@@ -603,12 +604,28 @@ struct PayeePicker: View {
     }
 }
 
-/// Search categories by their own or their group's name.
+/// Search categories by their own or their group's name. As in Actual, each
+/// category shows its balance for the month: the transaction's, or the open one.
 struct CategoryPicker: View {
     @Binding var selection: String
     let groups: [CategoryGroup]
+    var month: String? = nil
+    @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
+    /// Another month than the open one, loaded when the picker appears.
+    @State private var loadedMonth: BudgetMonth?
+
+    private var balanceMonth: BudgetMonth? {
+        if let budget = model.budget, month == nil || budget.month == month { return budget }
+        return loadedMonth?.month == month ? loadedMonth : nil
+    }
+    private var balances: [String: Int] {
+        guard let balanceMonth else { return [:] }
+        // Envelope income categories have no balance, so Actual shows none.
+        let categories = balanceMonth.budgetType == .envelope ? balanceMonth.expenseCategories : balanceMonth.categories
+        return Dictionary(categories.map { ($0.id, $0.balance) }, uniquingKeysWith: { first, _ in first })
+    }
 
     private var query: String { search.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var matches: [CategoryGroup] {
@@ -632,6 +649,10 @@ struct CategoryPicker: View {
         .overlay { if matches.isEmpty && !query.isEmpty { ContentUnavailableView.search(text: query) } }
         .navigationTitle("Category").navigationBarTitleDisplayMode(.inline)
         .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search categories")
+        .task(id: month) {
+            guard let month, model.budget?.month != month else { return }
+            loadedMonth = await model.balances(in: month)
+        }
     }
 
     private func choice(_ title: String, id: String) -> some View {
@@ -639,7 +660,16 @@ struct CategoryPicker: View {
             selection = id
             dismiss()
         } label: {
-            CheckRow(title: title, selected: selection == id)
+            HStack {
+                Text(title).foregroundStyle(Color.primary)
+                Spacer()
+                if let balance = balances[id] {
+                    MoneyText(value: balance, currency: model.currency, positiveColor: ActualTheme.positive)
+                        .font(.subheadline)
+                }
+                if selection == id { Image(systemName: "checkmark").foregroundStyle(ActualTheme.accent) }
+            }
         }
+        .accessibilityAddTraits(selection == id ? .isSelected : [])
     }
 }
