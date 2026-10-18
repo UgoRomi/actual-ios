@@ -464,7 +464,7 @@ final class AppModel {
     }
 
     /// The month's category balances, or nil without a month or if they could not load.
-    private func balances(in month: String?) async -> BudgetMonth? {
+    func balances(in month: String?) async -> BudgetMonth? {
         guard let month else { return nil }
         return try? await client().call("budgetMonth", arguments: ["month": .string(month)], as: BudgetMonth.self)
     }
