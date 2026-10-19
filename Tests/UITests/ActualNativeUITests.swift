@@ -1290,7 +1290,10 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["Transaction"].waitForExistence(timeout: 10))
         XCTAssertTrue(describes(payeeRow, "Transfer from Capital One Checking"))
         XCTAssertEqual(app.textFields["Amount"].value as? String, "43\(decimalSeparator)21", "The calculated amount should save")
-        app.buttons["Delete transaction"].firstMatch.tap()
+        // Below the rule section, so off screen until scrolled to.
+        let delete = app.buttons["Delete transaction"].firstMatch
+        scroll(app, to: delete)
+        delete.tap()
         XCTAssertTrue(app.staticTexts["This removes the transfer from both accounts and updates your balances."]
             .waitForExistence(timeout: 5))
         capture("17-transfer-delete")
