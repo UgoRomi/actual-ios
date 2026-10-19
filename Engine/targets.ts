@@ -2,12 +2,16 @@
 // Reading, validation, and migration are ported from desktop-client's
 // BudgetAutomationsModal and budget/goals, which Actual runs in its client.
 import { lib } from "@actual/core";
+import { getSheetValue, isTrackingBudget, setGoal } from "@actual/source/server/budget/actions.ts";
+import { CategoryTemplateContext } from "@actual/source/server/budget/category-template-context.ts";
+import { distributeRemainder } from "@actual/source/server/budget/goal-template.ts";
 import { parse } from "@actual/source/server/budget/goal-template.pegjs";
 import {
   getActiveSchedules,
   getCategoriesWithTemplateNotes,
 } from "@actual/source/server/budget/statements.ts";
 import type { TemplateNotification } from "@actual/source/server/budget/template-notification.ts";
+import { runMutator } from "@actual/source/server/mutators.ts";
 import { getDecimalPlaces } from "@actual/source/shared/currencies.ts";
 import * as months from "@actual/source/shared/months.ts";
 import { amountToInteger, integerToAmount } from "@actual/source/shared/util.ts";
@@ -452,7 +456,40 @@ export async function parseTargets(categoryId: string, month: string, text: stri
   return { templates: native, errors: [], preview: await preview(month, categoryId, list, ctx) };
 }
 
-export async function saveTargets(categoryId: string, value: unknown) {
+// Actual compares a month with the goal stored when its targets were last
+// applied, so an edited target would show the old goal until then. Store the
+// goal that applying this category's targets would, as goal-template.ts
+// computeTemplates and processTemplate do, leaving its budget alone.
+async function refreshGoal(month: string, category: Obj, list: Template[]) {
+  const sheet = months.sheetForMonth(month);
+  const id = category.id as string;
+  if (!list.length) {
+    if ((await getSheetValue(sheet, `goal-${id}`)) !== null)
+      await setGoal({ month, category: id, goal: null, long_goal: null });
+    return;
+  }
+  const budgeted = await getSheetValue(sheet, `budget-${id}`);
+  let context: CategoryTemplateContext;
+  try {
+    context = await CategoryTemplateContext.init(list, category as never, month, budgeted);
+  } catch {
+    // Applying reports targets Actual cannot run; keep the stored goal.
+    return;
+  }
+  let available = await getSheetValue(sheet, isTrackingBudget() ? "total-saved" : "to-budget");
+  if (!context.isGoalOnly()) available += budgeted;
+  available += context.getLimitExcess();
+  for (const priority of [...new Set(context.getPriorities())].sort((a, b) => a - b)) {
+    const start = available;
+    available -= await context.runTemplatesForPriority(priority, available, start);
+  }
+  distributeRemainder([context], available);
+  const { goal, longGoal } = context.getValues();
+  await setGoal({ month, category: id, goal, long_goal: longGoal ? 1 : null });
+}
+
+export async function saveTargets(categoryId: string, month: string, value: unknown) {
+  checkMonth(month);
   const category = await expenseCategory(categoryId);
   const list = templates(value, await decimalPlaces());
   const ctx = await context();
@@ -465,6 +502,7 @@ export async function saveTargets(categoryId: string, value: unknown) {
     categoriesWithTemplates: [{ id: categoryId, templates: list }],
     source: "ui",
   });
+  await runMutator(() => refreshGoal(month, category, list));
 }
 
 // Applies targets as Actual's budget menus do: to one category, to categories

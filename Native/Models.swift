@@ -79,6 +79,8 @@ struct BudgetOverview: Decodable, Sendable {
     var format: BudgetFormat? = nil
     var accounts: [Account]
     let payees: [Payee]
+    /// Payees that pickers list first, as Actual's "Suggested Payees": favorites, then common payees.
+    var suggestedPayeeIds: [String] = []
     var tags: [Tag] = []
 
     var openAccounts: [Account] { accounts.filter { !$0.closed } }
@@ -160,7 +162,8 @@ enum BudgetFilter: CaseIterable, Identifiable, Sendable {
     case all
     /// A negative balance, which the category's row shows in red.
     case overspent
-    /// Budgeted, or for a long-term goal saved, less than the targets ask for.
+    /// Budgeted less than the targets ask for. Long-term goals are left out, since
+    /// they are saved toward over many months.
     case underfunded
 
     var id: Self { self }
@@ -177,7 +180,7 @@ enum BudgetFilter: CaseIterable, Identifiable, Sendable {
         switch self {
         case .all: true
         case .overspent: category.balance < 0
-        case .underfunded: (category.goalDifference ?? 0) < 0
+        case .underfunded: !category.longGoal && (category.goalDifference ?? 0) < 0
         }
     }
 }
@@ -368,6 +371,8 @@ struct Transaction: Decodable, Identifiable, Sendable {
     var transferInSplit: Bool? = nil
     /// A split's parts, for its parent only.
     var splits: [SplitPart]? = nil
+    /// The schedule this transaction is linked to.
+    var scheduleId: String? = nil
 
     /// Reconciled transactions, transfers, and splits can be edited too, after any warning.
     /// A transfer linked to part of a split is edited from the split, as Actual does.
@@ -384,6 +389,18 @@ struct Transaction: Decodable, Identifiable, Sendable {
     var detail: String {
         if isParent { return "Split" + ((splits?.count).map { " · \($0) parts" } ?? "") }
         return transferAccountId != nil && categoryId == nil ? "Transfer" : categoryName ?? "Uncategorized"
+    }
+
+    /// What deleting this transaction does, as the confirmation explains it.
+    var deleteMessage: String {
+        switch (isReconciled, transferReconciled == true) {
+        case (true, true): "This transaction and its linked transaction in another account are reconciled. Deleting them may bring their reconciliations out of balance."
+        case (true, false): "Deleting reconciled transactions may bring your reconciliation out of balance."
+        case (false, true): "This transfer has a linked transaction in another account that is reconciled. Deleting it may bring that account’s reconciliation out of balance."
+        case (false, false): transferId == nil
+            ? "This removes the transaction from your budget and updates your balances."
+            : "This removes the transfer from both accounts and updates your balances."
+        }
     }
 
     /// The notes Actual gives the adjustment a reconciliation creates; it marks one no other way.
@@ -416,6 +433,29 @@ struct SplitPart: Decodable, Identifiable, Sendable, Equatable {
 /// A transaction edit shown before the engine saves it, as Actual's mobile app
 /// shows edits right away. It applies to the register and balances as last
 /// loaded, so applying it where the engine has already saved it changes nothing.
+/// A category balance that a saved transaction changed, shown for a moment after saving.
+struct CategoryBalanceChange: Identifiable, Hashable, Sendable {
+    let id: String
+    let name: String
+    let before: Int
+    let after: Int
+
+    /// Expense categories whose balance differs between two loads of a month, in the budget's order.
+    static func changes(from before: BudgetMonth, to after: BudgetMonth) -> [CategoryBalanceChange] {
+        let previous = Dictionary(before.expenseCategories.map { ($0.id, $0.balance) }) { first, _ in first }
+        return after.expenseCategories.compactMap { category in
+            guard let balance = previous[category.id], balance != category.balance else { return nil }
+            return CategoryBalanceChange(id: category.id, name: category.name, before: balance, after: category.balance)
+        }
+    }
+}
+
+/// The category balances one saved transaction changed.
+struct BalanceFeedback: Identifiable, Equatable, Sendable {
+    let id = UUID()
+    let changes: [CategoryBalanceChange]
+}
+
 enum TransactionChange: Sendable {
     /// Adds a transaction, or replaces the one with its ID.
     case save(Transaction)
@@ -487,7 +527,7 @@ enum TransactionChange: Sendable {
     }
 }
 
-struct Payee: Decodable, Identifiable, Sendable { let id: String; let name: String }
+struct Payee: Decodable, Identifiable, Sendable { let id: String; let name: String; var favorite = false }
 
 /// A tag for #tags in notes, as Actual's tags page lists them.
 struct Tag: Decodable, Identifiable, Sendable, Hashable {
@@ -530,6 +570,13 @@ struct ManagedPayee: Decodable, Identifiable, Sendable, Hashable {
     let unused: Bool
     /// Whether categorizing this payee's transactions updates its category rule, as Actual's payee menu sets.
     let learnCategories: Bool
+    /// Favorites lead payee pickers' suggestions.
+    let favorite: Bool
+    /// A transfer payee stands for an account: only its rules are managed here.
+    let isTransfer: Bool
+
+    /// As Actual's payees page labels transfer payees.
+    var label: String { isTransfer ? "Transfer: \(name)" : name }
 }
 
 /// A new transaction's fields after Actual's rules ran on it.
@@ -602,11 +649,14 @@ struct TransactionSection: Identifiable {
 
     /// Filter once, then group once. Section rendering must never rescan the full register.
     /// `limit` keeps only the first matching transactions of the newest-first register, and stops filtering once it has them.
+    /// `unclearedOnly` keeps those Actual counts in an account's uncleared balance (`cleared: false`).
     static func grouped(_ transactions: [Transaction], accountID: String? = nil, search: String = "",
-                        currency: String = "", locale: Locale = Money.locale, limit: Int = .max) -> [Self] {
+                        unclearedOnly: Bool = false, currency: String = "", locale: Locale = Money.locale,
+                        limit: Int = .max) -> [Self] {
         let formatter = search.isEmpty ? nil : Money.formatter(currency: currency, locale: locale)
         let matching = transactions.lazy.filter { transaction in
-            guard !transaction.isChild, accountID == nil || transaction.accountId == accountID else { return false }
+            guard !transaction.isChild, accountID == nil || transaction.accountId == accountID,
+                  !unclearedOnly || !transaction.cleared else { return false }
             guard let formatter else { return true }
             return transaction.title.localizedCaseInsensitiveContains(search)
                 || transaction.detail.localizedCaseInsensitiveContains(search)
@@ -690,12 +740,12 @@ enum Money {
         return formatter.string(from: NSDecimalNumber(decimal: Decimal(minorUnits) / 100)) ?? "—"
     }
 
+    /// An amount for an amount field, with thousands separators as Actual's amount inputs show it.
     static func editable(_ minorUnits: Int, locale: Locale = Money.locale) -> String {
         let formatter = FormatterCache.shared.formatter("editable", "", locale) {
             let formatter = NumberFormatter()
             formatter.locale = locale
             formatter.numberStyle = .decimal
-            formatter.usesGroupingSeparator = false
             formatter.minimumFractionDigits = 2
             formatter.maximumFractionDigits = 2
             return formatter

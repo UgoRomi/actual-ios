@@ -23,6 +23,7 @@ struct TransactionEditor: View {
     @State private var splits: [SplitDraft] = []
     /// A payee a rule chose, which should not run rules again.
     @State private var ruledPayee: String?
+    @State private var ruleDraft: RuleEditRoute?
 
     private var editable: Bool { transaction?.canEdit ?? true }
     /// The latest load: this transaction, or a transfer's linked transaction,
@@ -106,7 +107,7 @@ struct TransactionEditor: View {
                     }.accessibilityIdentifier("payee-row")
                     if splits.isEmpty {
                         NavigationLink {
-                            CategoryPicker(selection: $category, groups: model.budget?.visibleGroups ?? [])
+                            CategoryPicker(selection: $category, groups: model.budget?.visibleGroups ?? [], month: BudgetDate.month(date))
                         } label: {
                             LabeledContent("Category", value: categoryName)
                         }.disabled(isOffBudget || isBudgetTransfer).accessibilityIdentifier("category-row")
@@ -119,6 +120,17 @@ struct TransactionEditor: View {
                 splitSection.disabled(!editable || model.isBusy)
                 if let validation { Section { Text(validation).foregroundStyle(ActualTheme.negative) } }
                 if let error = model.errorMessage { Section { ErrorNotice(message: error) } }
+                if let transaction {
+                    // As Actual's register: a rule for transactions like this saved one.
+                    Section {
+                        Button("Create Rule from Transaction", systemImage: "wand.and.rays") {
+                            Task {
+                                do { ruleDraft = RuleEditRoute(rule: try await model.ruleDraft(transactionID: transaction.id)) }
+                                catch { validation = error.localizedDescription }
+                            }
+                        }.disabled(model.isBusy)
+                    }
+                }
                 if transaction != nil && editable {
                     Section {
                         Button("Delete transaction", role: .destructive) { showDeleteConfirmation = true }
@@ -144,6 +156,7 @@ struct TransactionEditor: View {
                 }
             }
             .interactiveDismissDisabled(model.isBusy)
+            .sheet(item: $ruleDraft) { route in RuleEditor(rule: route.rule) }
             .confirmationDialog("Delete this transaction?", isPresented: $showDeleteConfirmation, titleVisibility: .visible) {
                 Button("Delete transaction", role: .destructive) {
                     if let transaction {
@@ -231,7 +244,8 @@ struct TransactionEditor: View {
                         LabeledContent("Payee", value: partPayeeLabel(part))
                     }
                     NavigationLink {
-                        CategoryPicker(selection: $part.category, groups: model.budget?.visibleGroups ?? [])
+                        CategoryPicker(selection: $part.category, groups: model.budget?.visibleGroups ?? [],
+                                       month: BudgetDate.month(date))
                     } label: {
                         LabeledContent("Category", value: isOffBudget ? "Off budget"
                                        : partIsBudgetTransfer(part) ? "Transfer" : name(ofCategory: part.category))
@@ -332,16 +346,7 @@ struct TransactionEditor: View {
         }
     }
 
-    private var deleteMessage: String {
-        switch (isReconciled, isTransferReconciled) {
-        case (true, true): "This transaction and its linked transaction in another account are reconciled. Deleting them may bring their reconciliations out of balance."
-        case (true, false): "Deleting reconciled transactions may bring your reconciliation out of balance."
-        case (false, true): "This transfer has a linked transaction in another account that is reconciled. Deleting it may bring that account’s reconciliation out of balance."
-        case (false, false): current?.transferId == nil
-            ? "This removes the transaction from your budget and updates your balances."
-            : "This removes the transfer from both accounts and updates your balances."
-        }
-    }
+    private var deleteMessage: String { current?.deleteMessage ?? "" }
 
     private func initialize() {
         guard !initialized else { return }
@@ -462,7 +467,7 @@ struct TransactionEditor: View {
             isParent: false, isChild: false, isTransfer: !transferAccount.isEmpty, reconciled: reconciled,
             transferAccountId: transferAccount.isEmpty ? nil : transferAccount,
             transferId: sameTransfer ? existing?.transferId : nil,
-            transferReconciled: sameTransfer ? existing?.transferReconciled : nil)
+            transferReconciled: sameTransfer ? existing?.transferReconciled : nil, scheduleId: existing?.scheduleId)
     }
 }
 
@@ -548,12 +553,18 @@ struct PayeePicker: View {
     /// The choice for no payee of its own.
     var noneLabel = "No payee"
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var model
     @State private var search = ""
     @FocusState private var searchFocused: Bool
 
     private var query: String { search.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var matches: [Payee] {
         query.isEmpty ? payees : payees.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+    /// As Actual's payee autocomplete: favorites and common payees first, under "Suggested Payees".
+    private var suggested: [Payee] {
+        let byID = Dictionary(matches.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+        return (model.overview?.suggestedPayeeIds ?? []).compactMap { byID[$0] }
     }
     private var matchingAccounts: [Account] {
         query.isEmpty ? accounts : accounts.filter { $0.name.localizedCaseInsensitiveContains(query) }
@@ -571,6 +582,11 @@ struct PayeePicker: View {
                 }
             }
             if query.isEmpty { Section { choice(noneLabel, value: "") } }
+            if !suggested.isEmpty {
+                Section("Suggested Payees") {
+                    ForEach(suggested) { payee in choice(payee.name, value: payee.name, favorite: payee.favorite) }
+                }
+            }
             // Before payees: the account list is short, and payees can number in the hundreds.
             if !matchingAccounts.isEmpty {
                 Section("Transfer to/from") {
@@ -588,8 +604,9 @@ struct PayeePicker: View {
                     }
                 }
             }
-            if !matches.isEmpty {
-                Section("Payees") { ForEach(matches) { payee in choice(payee.name, value: payee.name) } }
+            let others = matches.filter { payee in !suggested.contains { $0.id == payee.id } }
+            if !others.isEmpty {
+                Section("Payees") { ForEach(others) { payee in choice(payee.name, value: payee.name) } }
             }
         }
         .navigationTitle("Payee").navigationBarTitleDisplayMode(.inline)
@@ -598,8 +615,17 @@ struct PayeePicker: View {
         .onAppear { searchFocused = true }
     }
 
-    private func choice(_ title: String, value: String) -> some View {
-        Button { choose(value) } label: { CheckRow(title: title, selected: transferAccount.isEmpty && selection == value) }
+    /// A favorite shows a bookmark, as in Actual's payee autocomplete.
+    private func choice(_ title: String, value: String, favorite: Bool = false) -> some View {
+        Button { choose(value) } label: {
+            HStack {
+                if favorite {
+                    Image(systemName: "bookmark.fill").font(.caption).foregroundStyle(ActualTheme.accent)
+                        .accessibilityLabel("Favorite")
+                }
+                CheckRow(title: title, selected: transferAccount.isEmpty && selection == value)
+            }
+        }
     }
 
 
@@ -610,12 +636,28 @@ struct PayeePicker: View {
     }
 }
 
-/// Search categories by their own or their group's name.
+/// Search categories by their own or their group's name. As in Actual, each
+/// category shows its balance for the month: the transaction's, or the open one.
 struct CategoryPicker: View {
     @Binding var selection: String
     let groups: [CategoryGroup]
+    var month: String? = nil
+    @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var search = ""
+    /// Another month than the open one, loaded when the picker appears.
+    @State private var loadedMonth: BudgetMonth?
+
+    private var balanceMonth: BudgetMonth? {
+        if let budget = model.budget, month == nil || budget.month == month { return budget }
+        return loadedMonth?.month == month ? loadedMonth : nil
+    }
+    private var balances: [String: Int] {
+        guard let balanceMonth else { return [:] }
+        // Envelope income categories have no balance, so Actual shows none.
+        let categories = balanceMonth.budgetType == .envelope ? balanceMonth.expenseCategories : balanceMonth.categories
+        return Dictionary(categories.map { ($0.id, $0.balance) }, uniquingKeysWith: { first, _ in first })
+    }
 
     private var query: String { search.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var matches: [CategoryGroup] {
@@ -639,6 +681,10 @@ struct CategoryPicker: View {
         .overlay { if matches.isEmpty && !query.isEmpty { ContentUnavailableView.search(text: query) } }
         .navigationTitle("Category").navigationBarTitleDisplayMode(.inline)
         .searchable(text: $search, placement: .navigationBarDrawer(displayMode: .always), prompt: "Search categories")
+        .task(id: month) {
+            guard let month, model.budget?.month != month else { return }
+            loadedMonth = await model.balances(in: month)
+        }
     }
 
     private func choice(_ title: String, id: String) -> some View {
@@ -646,7 +692,16 @@ struct CategoryPicker: View {
             selection = id
             dismiss()
         } label: {
-            CheckRow(title: title, selected: selection == id)
+            HStack {
+                Text(title).foregroundStyle(Color.primary)
+                Spacer()
+                if let balance = balances[id] {
+                    MoneyText(value: balance, currency: model.currency, positiveColor: ActualTheme.positive)
+                        .font(.subheadline)
+                }
+                if selection == id { Image(systemName: "checkmark").foregroundStyle(ActualTheme.accent) }
+            }
         }
+        .accessibilityAddTraits(selection == id ? .isSelected : [])
     }
 }

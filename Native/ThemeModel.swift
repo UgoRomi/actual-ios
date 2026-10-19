@@ -147,7 +147,7 @@ struct Theme: Codable, Identifiable, Equatable, Sendable {
 }
 
 extension Theme {
-    static let presets = [actual, sterling, payday]
+    static let presets = [actual, sterling, payday, ledger, manila]
 
     /// Actual's purple and navy, on iOS's own backgrounds and status colors.
     static let actual = Theme(
@@ -180,6 +180,32 @@ extension Theme {
             accent: "#FF70B8", card: "#0A7F86", cardEnd: "#2A44CC",
             background: "#061D27", surface: "#0E2E3B",
             positive: "#4ADE9A", warning: "#FFB84D", negative: "#FF5C3D"))
+
+    /// A bookkeeper's ledger: pale green paper, blue ruling ink, red ink for overspending,
+    /// and a bottle-green cloth cover for the summary card.
+    static let ledger = Theme(
+        id: "ledger", name: "Ledger",
+        light: ThemeColors(
+            accent: "#1F4FA8", card: "#2E5E45", cardEnd: "#163626",
+            background: "#DCE8DA", surface: "#F5F9F2",
+            positive: "#1D6B3B", warning: "#875400", negative: "#B0201A"),
+        dark: ThemeColors(
+            accent: "#8DB4FF", card: "#2F6A4C", cardEnd: "#163A28",
+            background: "#0A1510", surface: "#13231A",
+            positive: "#72D69D", warning: "#E8B45E", negative: "#FF7B6F"))
+
+    /// A cash envelope: kraft manila with rubber-stamp indigo. In dark appearance
+    /// the summary card turns to kraft under a lamp.
+    static let manila = Theme(
+        id: "manila", name: "Manila",
+        light: ThemeColors(
+            accent: "#2E3A8C", card: "#7B5A35", cardEnd: "#4A311B",
+            background: "#E3CFA6", surface: "#FBF6EA",
+            positive: "#2F6A2A", warning: "#8A4B00", negative: "#B8241C"),
+        dark: ThemeColors(
+            accent: "#AEB8FF", card: "#D2B07A", cardEnd: "#A07E49",
+            background: "#15100A", surface: "#241C12",
+            positive: "#93D48D", warning: "#F0B65E", negative: "#FF8070"))
 }
 
 /// The theme in use and the themes made on this device. Like Actual's theme,

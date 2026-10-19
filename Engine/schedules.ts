@@ -177,8 +177,19 @@ async function save(args: Obj) {
   ].filter((c) => c != null);
 
   const schedule = { name, posts_transaction: args.postsTransaction === true };
-  if (existing) await lib.send("schedule/update", { schedule: { id, ...schedule }, conditions } as never);
-  else await lib.send("schedule/create", { schedule, conditions } as never);
+  if (existing) {
+    await lib.send("schedule/update", { schedule: { id, ...schedule }, conditions } as never);
+    return;
+  }
+  const created = await lib.send("schedule/create", { schedule, conditions } as never);
+  // As Actual's editor, a schedule created from a transaction links it.
+  const linked = Array.isArray(args.linkTransactionIds)
+    ? args.linkTransactionIds.map((transactionId) => text(transactionId)).filter(Boolean)
+    : [];
+  if (linked.length)
+    await lib.send("transactions-batch-update", {
+      updated: linked.map((transactionId) => ({ id: transactionId, schedule: created })),
+    } as never);
 }
 
 export async function scheduleCommand(method: string, args: Obj): Promise<unknown> {

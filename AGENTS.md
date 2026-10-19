@@ -11,3 +11,8 @@
 
 - Before starting a task, check the relevant documentation in `docs/` and `README.md`. Update affected documentation when the work changes what it describes.
 - Keep plans and responses concise.
+
+# Releases
+
+- To ship a TestFlight build, run `scripts/release-testflight.sh`. Never push `testflight/*` tags otherwise; each one uploads a build to testers.
+- The `/merge-worktree` and `/release-testflight` skills in `.claude/skills/` wrap merging a worktree into `main` and releasing.

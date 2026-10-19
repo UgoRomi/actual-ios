@@ -35,7 +35,8 @@ extension EngineSmoke {
     }
     func save(_ id: String, _ templates: [TargetTemplate]) async throws {
       _ = try await engine.call(
-        "saveTargets", arguments: ["categoryId": .string(id), "templates": .array(templates.map(\.json))])
+        "saveTargets",
+        arguments: ["categoryId": .string(id), "month": .string(month), "templates": .array(templates.map(\.json))])
     }
     func apply(_ id: String? = nil, overwrite: Bool = false) async throws -> String {
       var arguments: [String: JSONValue] = ["month": .string(month), "overwrite": .bool(overwrite)]
@@ -74,7 +75,9 @@ extension EngineSmoke {
 
     // Invalid targets are not saved; valid ones are stored in Actual's decimal format.
     try await expectFailure(
-      "saveTargets", ["categoryId": .string(edited.id), "templates": .array([refill.json])], "Add a balance cap")
+      "saveTargets",
+      ["categoryId": .string(edited.id), "month": .string(month), "templates": .array([refill.json])],
+      "Add a balance cap")
     var cap = TargetTemplate(kind: .limit)
     // Actual budgets no more than the cap less the carried-over balance; keep it out of the way.
     cap.amount = 10_000_000
@@ -102,6 +105,19 @@ extension EngineSmoke {
     var applied = try await category(edited.id)
     check(applied.budgeted == 12_345 && applied.goal == 12_345 && !applied.longGoal, "\(applied)")
     check(applied.goalDifference == 0)
+    // Saving an edited target updates the month's goal at once, leaving the budget alone.
+    var smaller = fixed
+    smaller.amount = 5_000
+    try await save(edited.id, [smaller, cap])
+    applied = try await category(edited.id)
+    check(applied.budgeted == 12_345 && applied.goal == 5_000, "\(applied)")
+    var larger = fixed
+    larger.amount = 50_000
+    try await save(edited.id, [larger, cap])
+    applied = try await category(edited.id)
+    check(applied.budgeted == 12_345 && applied.goal == 50_000 && applied.goalDifference == -37_655, "\(applied)")
+    try await save(edited.id, [fixed, cap])
+    check(try await category(edited.id).goal == 12_345)
     var goal = TargetTemplate(kind: .goal)
     goal.amount = 100_000
     try await save(edited.id, [fixed, cap, goal])
@@ -109,12 +125,13 @@ extension EngineSmoke {
     applied = try await category(edited.id)
     check(applied.goal == 100_000 && applied.longGoal && applied.budgeted == 12_345, "\(applied)")
     check(applied.goalDifference == applied.balance - 100_000)
-    // The Budget screen's Underfunded filter shows a long-term goal until the balance reaches it.
+    // The Budget screen's Underfunded filter leaves out long-term goals, even short of the goal.
     let funding = try await snapshot(engine, month: month).budget
     let underfunded = funding.expenseGroups(.underfunded).flatMap(\.categories)
-    check(underfunded.contains { $0.id == edited.id } == (applied.balance < 100_000), "\(applied)")
+    check(applied.balance < 100_000, "\(applied)")
+    check(!underfunded.contains { $0.id == edited.id }, "\(applied)")
     check(underfunded.count == funding.count(.underfunded))
-    check(underfunded.allSatisfy { ($0.goalDifference ?? 0) < 0 })
+    check(underfunded.allSatisfy { !$0.longGoal && ($0.goalDifference ?? 0) < 0 })
 
     // Notes targets are read without changing the category, as the web editor shows them.
     _ = try await engine.call("close")
@@ -195,6 +212,12 @@ extension EngineSmoke {
     check(invalid.errors[1].message.contains("adjustment"), invalid.errors[1].message)
     // Problems are reported as the form reports them.
     check(try await parse(edited.id, "#template schedule Missing").preview?.problems == ["No schedule named “Missing”"])
+
+    // Removing every target clears the month's goal.
+    check(try await category(noted.id).goal != nil)
+    try await save(noted.id, [])
+    let cleared = try await category(noted.id)
+    check(cleared.goal == nil && cleared.budgeted == 777 && !cleared.hasTargets, "\(cleared)")
     print("PASS: category targets preview, validation, save, apply, goals, notes, and source")
   }
 }

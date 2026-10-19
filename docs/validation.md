@@ -35,7 +35,9 @@ xcodebuild test \
   CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-
 ```
 
-Choose a new result bundle path if one already exists. UI tests use only the app's demo budget. Screenshot attachments are stored in the `.xcresult` bundle.
+Choose a new result bundle path if one already exists. UI tests use only the app's demo budget. Screenshot attachments are stored in the `.xcresult` bundle. With `TEST_RUNNER_SCREENSHOT_DIR=/absolute/path` set, the tests also save them there as PNG files.
+
+On an iPad simulator, `testDemoIPadLayouts` captures each section in landscape and portrait, to review the sidebar and the wide Budget, register, and Reports layouts; it skips on iPhone. On 2026-10-08 it passed on iPad Air 13-inch (M4), and the demo navigation, schedules, and reports tests passed on iPhone 17 Pro with the tab bar unchanged. The demo navigation test expects the welcome screen, so run it on a simulator where no budget was left open.
 
 ## Remaining validation
 
@@ -61,7 +63,7 @@ Run the standalone regression without the Actual checkout or simulator:
 ./scripts/test-transactions.sh /absolute/path/to/db.sqlite --baseline
 ```
 
-Checks cover newest-first dates, stable same-day order, account scoping, hidden split children, visible split parents/transfers, empty results, payee/category/notes searches, and positive/negative amounts with US/Italian locales and EUR/no currency. A synthetic 10,000-transaction/10,000-date fixture guards against testing only a few date sections. No private budget data is committed.
+Checks cover newest-first dates, stable same-day order, account scoping, the uncleared filter, hidden split children, visible split parents/transfers, empty results, payee/category/notes searches, and positive/negative amounts with US/Italian locales and EUR/no currency. A synthetic 10,000-transaction/10,000-date fixture guards against testing only a few date sections. No private budget data is committed.
 
 On the supplied fixture, the macOS Swift debug harness measured 10.777 seconds for the old per-section preparation versus 0.008 seconds for grouping and 0.047 seconds for a full no-match search. The synthetic fixture took 0.023 seconds to group and 0.050 seconds to search. These measure data preparation, not total screen presentation time. The signed iOS simulator build passed.
 
@@ -230,7 +232,7 @@ With `engine.js` replaced by a stale file, both a full and an incremental simula
 
 Transaction, budget, and reconcile amounts use a calculator keypad instead of the system keyboard. Upstream's mobile keypad (`CalculatorButtons`, behind the experimental `mobileCalculator` flag) set the layout: AC ( ) ÷ / 7 8 9 × / 4 5 6 − / 1 2 3 + / ⌫ 0 . =. Its keys show the locale's digits and decimal separator. `Money.parse` follows loot-core's `evalArithmetic`: + - * / with the usual precedence, parentheses, and signs. Like the keypad, it omits `^`. Arithmetic uses exact decimals rather than JavaScript floats. The result is rounded to the cent with `Math.round`'s rule, so halves round upward. A lone number keeps the earlier limit of two decimal places, and division by zero is invalid. As in Actual, **=** and leaving the field replace the entry with its result. Upstream's + / −, Reset, Dismiss, and Apply row is left out: the sheets already have Save and Cancel, and the transaction editor has Payment/Deposit.
 
-`./scripts/test-amounts.sh` covers lone numbers, operators, precedence, parentheses, signs, rounding, invalid input, and US, German, French, Swiss, and Egyptian Arabic formats, with round trips of `Money.editable`. The UI tests enter amounts with the keypad: `120+30` for Food's budget, `0` for the reconcile balance, and `40+3,21` for a transfer. They check **=**, then the saved budget row and the linked transfer's amount. All three passed on a new iPhone 17 Pro / iOS 26.5 simulator set to Italian. The first run found no keypad: the input view had zero height, so it now has an explicit frame. Screenshots of each editor in light appearance, and of the transaction editor in dark appearance, were inspected. Entry with a hardware keyboard, and the keypad on a physical device or iPad, were not verified.
+`./scripts/test-amounts.sh` covers lone numbers, operators, precedence, parentheses, signs, rounding, invalid input, and US, German, French, Swiss, Indian, and Egyptian Arabic formats, with round trips of `Money.editable`. Since 2026-10-12, `Money.editable` groups thousands, as upstream's `CalculatorAmountInput` shows `amountToCurrency`, so the reconcile balance and other amount fields read `1,234.56` rather than `1234.56`. The UI tests enter amounts with the keypad: `120+30` for Food's budget, `0` for the reconcile balance, and `40+3,21` for a transfer. They check **=**, then the saved budget row and the linked transfer's amount. All three passed on a new iPhone 17 Pro / iOS 26.5 simulator set to Italian. The first run found no keypad: the input view had zero height, so it now has an explicit frame. Screenshots of each editor in light appearance, and of the transaction editor in dark appearance, were inspected. Entry with a hardware keyboard, and the keypad on a physical device or iPad, were not verified.
 
 ## Faster transaction entry and optimistic edits (2026-09-27)
 
@@ -244,10 +246,12 @@ Adding, editing, deleting, clearing, and unlocking a transaction show immediatel
 
 Targets follow Actual's budget automations editor (`desktop-client/src/components/modals/BudgetAutomationsModal` and `components/budget/goals`) and its `budget/*` template handlers. `Engine/targets.ts` ports the client-side parts: reading `#template` notes, migrating legacy templates, and the editor's validation messages. It saves with `budget/set-category-automations` using the `ui` source, previews with `budget/dry-run-category-template`, and applies with `budget/apply-single-template`, `budget/apply-goal-template`, and `budget/overwrite-goal-template`. Template amounts are decimal currency units in Actual, and integer minor units across the bridge, converted with the budget currency's decimal places as upstream does. Unlike the web editor, opening a category with notes templates does not store them; only saving writes. As on the web, saving first stores the category's `#cleanup` lines, which Actual ignores once the editor manages it.
 
+Actual compares a month with the goal stored when its targets were last applied, so on the web an edited target keeps showing the old goal until targets are applied again. After saving, this app stores the goal that applying the category's targets would for the month being viewed (as `goal-template.ts` `computeTemplates` does for one category), without changing its budgeted amount; removing every target clears that goal. Other months keep their goals until targets are applied there.
+
 `./scripts/test-engine.sh` exercises targets on the demo budget:
 - It previews a fixed amount exactly and flags a refill without a cap.
 - It flags percentages over 100%, accepts a fractional percentage, and refuses to save invalid targets.
-- It stores decimal amounts with the `ui` source, reads them back in minor units, and applies one category's target, so its budgeted amount and goal match.
+- It stores decimal amounts with the `ui` source, reads them back in minor units, and applies one category's target, so its budgeted amount and goal match. Saving a smaller or larger target then updates the goal at once and leaves the budgeted amount alone; removing every target clears the goal.
 - With a long-term goal added, it checks the goal and the balance comparison.
 - It reads notes templates, with descriptions and a `#cleanup` line, without writing `goal_def`, and reports unreadable notes lines.
 - Saving migrated targets keeps the notes. Overwriting the month budgets every category with targets, skipping unreadable lines as Actual does. Applying without overwrite leaves budgeted categories alone.
@@ -313,9 +317,9 @@ Not verified end to end: rules with every operator on real budgets, merging paye
 
 The Budget screen follows Actual's mobile budget at the pinned revision (`desktop-client/src/components/mobile/budget`). Category rows fit on one line, with **Budgeted** and **Balance** columns as in `BudgetTable.tsx`. Group headers show Actual's `group-budget` and `group-leftover` sheet values, which `api/budget-month` returns with each group, as `ExpenseGroupListItem.tsx` does. Like Actual, these include the group's hidden categories. The month switcher, budget name, and summary card take about half their previous height.
 
-The **Overspent** filter lists every expense category with a negative balance, as its red row shows. Actual's mobile overspending banner (`useOverspentCategories`) leaves out categories that roll over overspending, because it offers to cover them; this filter lists them too. **Underfunded** lists categories whose goal difference is negative, which the row shows in orange unless the category is also overspent.
+The **Overspent** filter lists every expense category with a negative balance, as its red row shows. Actual's mobile overspending banner (`useOverspentCategories`) leaves out categories that roll over overspending, because it offers to cover them; this filter lists them too. **Underfunded** lists categories whose goal difference is negative, which the row shows in orange unless the category is also overspent. It leaves out long-term goals, though their rows are still orange until the balance reaches the goal, as in Actual.
 
-`./scripts/test-engine.sh` checks, in the demo's envelope budget and again as a tracking budget, that every expense group's budgeted, spent, and balance totals equal the sums of its categories; the demo hides none. It also checks that the Overspent filter shows exactly the negative-balance categories, in budget order, and keeps each group's full totals. The targets test checks that a long-term goal is listed as Underfunded until the balance reaches it. Strict bridge type checking passed.
+`./scripts/test-engine.sh` checks, in the demo's envelope budget and again as a tracking budget, that every expense group's budgeted, spent, and balance totals equal the sums of its categories; the demo hides none. It also checks that the Overspent filter shows exactly the negative-balance categories, in budget order, and keeps each group's full totals. The targets test checks that a long-term goal short of its goal is not listed as Underfunded. Strict bridge type checking passed.
 
 `testDemoBudgetNavigationAndTransactionEditor` and `testDemoTargets` passed on a new iPhone 17 Pro / iOS 26.0 simulator. The first now selects **Overspent** and checks that every listed row is overspent. Rows keep an accessibility label with the category's name, budgeted amount, balance, and funding status, which the targets test reads. Screenshots were inspected in light and dark appearance, with the Overspent filter selected, with a funded target, and at an accessibility text size. At accessibility sizes, the summary, group headers, and rows stack their amounts under the name, and the filters scroll sideways. `docs/screenshots/02-budget.png` and `06-budget-dark.png` show the new layout.
 
@@ -417,3 +421,41 @@ Against a dedicated 26.10.0 checkout with core, API, and sync server built: `./s
 Two checks failed for reasons unrelated to the upgrade and were corrected. The rules preview check looked for a transaction with the previewed amount, which the demo budget's random amounts sometimes contain; it now compares the number of transactions. The sync check expected a monthly schedule starting 2026-10-01 to be next due that day, which stopped being true once the date passed; the schedule now starts in 2099.
 
 Not verified end to end: the simulator UI tests and a physical device.
+
+## Rule management (2026-10-11)
+
+Split rules, category group conditions, applying to chosen matches, deleting several rules, a payee's rules, and drafting a rule from a transaction were compared with Actual 26.10.0's `RuleEditor.tsx`, `ManageRules.tsx`, `MobileRulesPage.tsx`, and the register's `onCreateRule`. `./scripts/test-engine.sh` passed: the rules check saves and describes a two-split rule, applies it to one chosen match and checks the parts' amounts and categories, drafts rules from a split and an ordinary transaction, lists a payee's rules, hides a completed schedule's rule, and deletes several rules while a schedule keeps its own. `node Engine/typecheck.mjs` and `./scripts/build.sh` passed.
+
+`testDemoPayeesRulesAndFormatting` passed on a fresh iPhone 17 Pro (iOS 26.0) simulator. Screenshots of the split sections, the split amount editor, and the matching transactions page were inspected. The run found that changing an action's kind or a split's method gave the item a new identity, which left its pushed editor showing the old value; items now keep their identity. A menu-style picker did not open under XCUITest, so the split method is an inline list. The demo's rules all belong to schedules, so selecting rules is checked only when a budget has others. Not verified: applying to chosen transactions in the simulator (the demo's rules match none) and a physical device.
+
+## Payee management as in Actual's payees page (2026-10-11)
+
+Compared with Actual 26.10.0's `ManagePayees`, `PayeeMenu`, `PayeeTableRow`, `MobilePayeesPage`, and `PayeeAutocomplete`. The payees page adds favorites, selecting several payees to favorite, set learning for, merge, or delete together, **View Rules** and **Create Rule** for a payee, swipe and touch-and-hold menus, and transfer payees listed last for their rules only. Payee pickers open with **Suggested Payees**, built like upstream's `getPayeeSuggestions`: favorites by name, then `common-payees-get` (most used in the last 12 weeks), up to five. The overview now reads payees through `payees-get`, since `api/payees-get` drops `favorite`.
+
+`node Engine/typecheck.mjs`, `./scripts/build.sh`, and `./scripts/test-engine.sh` passed. The engine test checks that transfer payees are listed last and refused for favorites and renaming, favorites set for two payees at once and lead the suggestions, `setPayeeLearning` takes several payees, and a payee's rules (the rules page's `payeeId` filter from rule management, which **View Rules** opens) include the rule category learning added.
+
+`testDemoPayeesRulesAndFormatting` now also selects Kroger, checks that Merge needs two payees, favorites it, sees the favorite on its page, and starts a rule that matches it. It passed on a new iPhone 17 Pro / iOS 26.0 simulator; screenshots of the list, selection, and payee page were inspected. Earlier runs failed in the test and showed two fixes: a disabled `NavigationLink` dimmed rows while selecting and could swallow the tap, so selecting shows plain rows; and the new actions ignored taps while the app was busy, so they are now disabled while busy, as other actions are, and the test waits for them to be enabled. The test also waits for a rule sheet to close before going back.
+
+Not verified end to end: merging several selected payees and deleting them in the UI (merging and deleting are covered by the engine test), transfer payees' rules from the UI, the iPad layout, and a physical device.
+
+## Uncleared filter chip
+
+Validated on 2026-10-12. The **Uncleared** chip uses the same `FilterChip` as the budget's filters. The UI test `testDemoUnclearedFilter` passed on a new iPhone 17 Pro / iOS 27 simulator: it adds an uncleared transaction to a demo account, turns the chip on (cleared rows disappear, the new one stays), and turns it off again. Screenshots of both states were inspected.
+
+## Ledger and Manila themes (2026-10-14)
+
+Two presets join Actual, Sterling, and Payday. **Ledger** takes its colors from a bookkeeper's ledger: pale green paper, blue ruling ink as the accent, red ink for overspending, and a bottle-green summary card; in dark appearance, a green-black page with pale blue ink. **Manila** is a cash envelope: a kraft page and rows of envelope paper, a stamp-pad indigo accent, and a brown kraft summary card; in dark appearance the card turns to light kraft with black text, as Sterling's turns to silver.
+
+`./scripts/test-themes.sh` passed with both presets: in each appearance, iOS's text reaches 7:1 on the page and rows, the accent and amount colors 4.5:1 on rows, the accent 4.5:1 on the page, and black or white text 4.5:1 on the accent and on both ends of the summary card.
+
+On a new iPhone 17 Pro / iOS 27 simulator, Budget, Accounts, and the theme list were captured and inspected for both themes in light and dark appearance. `docs/screenshots/12-theme-ledger.png` to `15-theme-manila-dark.png` show Budget in each. `testDemoThemes` now also chooses Ledger and Manila; those selections passed, but on this simulator the test then fails while deleting the theme it made: the confirmation's **Delete Theme** button is not hittable. It fails the same way with only Sterling and Payday chosen, so the failure predates these themes.
+
+Not verified end to end: the widget in either theme, the positive and negative summary card states, iPad, VoiceOver, and increased contrast.
+
+## Starting while the device is locked (2026-10-17)
+
+Opening the app sometimes showed an error on the welcome screen that **Try again** cleared. iOS can launch the app in the background for a refresh while the device is locked. Credentials were saved readable only while unlocked, so starting failed, and the app kept that failure until the person tapped **Try again**. Credentials are now readable after the first unlock, as the settings file is; items saved by earlier builds move to this when next read. A failed start whose error is still shown starts again when the app next becomes active, from background refresh, or from Shortcuts. A failed retry does not repeat on its own.
+
+`./scripts/test-engine.sh`, `./scripts/build.sh`, and `./scripts/test-auto-sync.sh` passed. The automatic sync test makes the saved credentials unreadable, then checks that a background start shows the error, a retry that fails again does not repeat on its own, and opening the app after the credentials are readable starts with no error.
+
+Not verified end to end: a locked device, and moving Keychain items saved by an earlier build. Both need a physical device.
