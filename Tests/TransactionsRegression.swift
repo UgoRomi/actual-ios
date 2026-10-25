@@ -38,6 +38,16 @@ import SQLite3
         precondition(ids(TransactionSection.grouped(clearing, unclearedOnly: true)) == ["pending", "pending-b"])
         precondition(ids(TransactionSection.grouped(clearing, accountID: "b", unclearedOnly: true)) == ["pending-b"])
         precondition(ids(TransactionSection.grouped(clearing, search: "pharmacy", unclearedOnly: true)) == ["pending"])
+        // The uncategorized filter keeps what the register marks, so it skips transfers, reconciliation
+        // adjustments, and off-budget accounts, and combines with the uncleared filter.
+        let categorizing = [transaction("food", categoryID: "food"), transaction("none"),
+                            transaction("none-pending", cleared: false), transaction("moved", transfer: true),
+                            transaction("adjustment", notes: Transaction.reconciliationNotes),
+                            transaction("off", account: "off")]
+        precondition(ids(TransactionSection.grouped(categorizing, uncategorizedOnly: true, offBudget: ["off"]))
+                         == ["none", "none-pending"])
+        precondition(ids(TransactionSection.grouped(categorizing, unclearedOnly: true, uncategorizedOnly: true,
+                                                    offBudget: ["off"])) == ["none-pending"])
         // A page keeps the first matches of the newest-first register, skipping split parts and other accounts.
         let newestFirst = Array(rows.dropFirst()) + [rows[0]]
         precondition(ids(TransactionSection.grouped(newestFirst, limit: 2)) == ["parent", "transfer"])

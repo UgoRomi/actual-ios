@@ -1165,6 +1165,56 @@ final class ActualNativeUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Mark uncleared"].firstMatch.waitForExistence(timeout: 10), "Cleared transactions return")
     }
 
+    /// The Uncategorized chip shows only transactions missing a category, leaving out reconciliation adjustments.
+    @MainActor
+    func testDemoUncategorizedFilter() {
+        let app = XCUIApplication()
+        app.launch()
+        let demoButton = app.buttons["Explore a demo budget"]
+        let accountsTab = app.tabBars.buttons["Accounts"]
+        if demoButton.waitForExistence(timeout: 15) { demoButton.tap() }
+        XCTAssertTrue(accountsTab.waitForExistence(timeout: 60), "The demo budget should open")
+        accountsTab.tap()
+        app.staticTexts["Capital One Checking"].tap()
+        let checking = app.navigationBars["Capital One Checking"]
+        XCTAssertTrue(checking.waitForExistence(timeout: 10))
+        // A new transaction starts without a category.
+        checking.buttons["Add transaction"].tap()
+        XCTAssertTrue(app.navigationBars["New transaction"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Clear"].waitForExistence(timeout: 5), "The amount should be focused")
+        tapKeys(app, "56")
+        app.navigationBars["New transaction"].buttons["Save"].tap()
+        XCTAssertTrue(wait(forAbsence: app.navigationBars["New transaction"]), "The transaction should save")
+
+        // Reconciling to another balance adds an adjustment without a category.
+        checking.buttons["Reconcile"].tap()
+        XCTAssertTrue(app.navigationBars["Reconcile"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["Clear"].waitForExistence(timeout: 5))
+        app.buttons["Clear"].tap()
+        tapKeys(app, "9")
+        app.navigationBars["Reconcile"].buttons["Reconcile"].tap()
+        let create = app.buttons["Create reconciliation transaction"]
+        if create.waitForExistence(timeout: 10) { create.tap() }
+        XCTAssertTrue(app.buttons["Lock transactions"].waitForExistence(timeout: 10), "The adjustment should balance the account")
+        let adjustment = app.staticTexts["Reconciliation balance adjustment"].firstMatch
+        XCTAssertTrue(adjustment.waitForExistence(timeout: 10))
+
+        let chip = app.buttons["transactions.uncategorized"]
+        XCTAssertTrue(chip.waitForExistence(timeout: 10), "The register shows the Uncategorized chip")
+        XCTAssertFalse(chip.isSelected)
+        capture("register-uncategorized-off")
+        chip.tap()
+        XCTAssertTrue(chip.isSelected, "The chip turns on")
+        XCTAssertTrue(wait(forAbsence: adjustment), "Reconciliation adjustments are not listed")
+        let added = app.descendants(matching: .any)
+            .matching(NSPredicate(format: "label CONTAINS %@ AND label CONTAINS %@", "No payee", "56")).firstMatch
+        XCTAssertTrue(added.waitForExistence(timeout: 10), "The new uncategorized transaction stays listed")
+        capture("register-uncategorized-on")
+        chip.tap()
+        XCTAssertFalse(chip.isSelected, "The chip turns off")
+        XCTAssertTrue(adjustment.waitForExistence(timeout: 10), "Every transaction returns")
+    }
+
     /// As in Actual, categorizing a payee's transactions learns its category, and choosing
     /// that payee for a new transaction fills the category in before saving.
     @MainActor

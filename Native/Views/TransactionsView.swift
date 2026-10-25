@@ -10,6 +10,7 @@ struct TransactionsView: View {
     @Environment(AppModel.self) private var model
     @State private var search = ""
     @State private var unclearedOnly = false
+    @State private var uncategorizedOnly = false
     @State private var shownCount = TransactionSection.pageSize
     @State private var selectedTransaction: Transaction?
     @State private var isAdding = false
@@ -41,22 +42,28 @@ struct TransactionsView: View {
         let listed = tag.map { tag in model.transactions.filter { transaction in
             ([transaction.notes ?? ""] + (transaction.splits ?? []).map(\.notes)).contains { NoteTags.extract($0).contains(tag) }
         } } ?? model.transactions
-        let sections = TransactionSection.grouped(listed, accountID: accountID, search: search,
-                                                  unclearedOnly: unclearedOnly, currency: model.currency, limit: shownCount)
-        let hasMore = sections.reduce(0) { $0 + $1.transactions.count } == shownCount
         let offBudget = Set((model.overview?.accounts ?? []).filter(\.offbudget).map(\.id))
-        let unclearedCount = listed.reduce(0) { count, transaction in
-            !transaction.isChild && !transaction.cleared && (accountID == nil || transaction.accountId == accountID) ? count + 1 : count
+        let sections = TransactionSection.grouped(listed, accountID: accountID, search: search,
+                                                  unclearedOnly: unclearedOnly, uncategorizedOnly: uncategorizedOnly,
+                                                  offBudget: offBudget, currency: model.currency, limit: shownCount)
+        let hasMore = sections.reduce(0) { $0 + $1.transactions.count } == shownCount
+        var unclearedCount = 0, uncategorizedCount = 0
+        for transaction in listed where !transaction.isChild && (accountID == nil || transaction.accountId == accountID) {
+            if !transaction.cleared { unclearedCount += 1 }
+            if transaction.missingCategories(offBudget: offBudget) > 0 { uncategorizedCount += 1 }
         }
+        let filtering = unclearedOnly || uncategorizedOnly
         return ThemedList {
             if let account { AccountBalanceHeader(account: account, currency: model.currency) }
-            if unclearedOnly || !listed.isEmpty { filterBar(unclearedCount: unclearedCount) }
+            if filtering || !listed.isEmpty {
+                filterBar(unclearedCount: unclearedCount, uncategorizedCount: uncategorizedCount)
+            }
             if let error = model.errorMessage { Section { ErrorNotice(message: error) { Task { await model.refresh() } } } }
             if let accountID { BankSyncNotice(accountID: accountID) }
             if let account, let reconciliation { ReconcilingBanner(account: account, reconciliation: reconciliation) }
-            // Scheduled transactions are not in the register yet, so the uncleared filter leaves them out.
+            // Scheduled transactions are not in the register yet, so the quick filters leave them out.
             let upcoming = model.upcoming.filter { scheduled in
-                tag == nil && !unclearedOnly && (accountID == nil || scheduled.accountId == accountID)
+                tag == nil && !filtering && (accountID == nil || scheduled.accountId == accountID)
                     && (search.isEmpty || scheduled.title.localizedCaseInsensitiveContains(search)
                         || (scheduled.categoryName ?? "").localizedCaseInsensitiveContains(search))
             }
@@ -69,13 +76,19 @@ struct TransactionsView: View {
                     }
                 }
             }
-            if sections.isEmpty && upcoming.isEmpty && unclearedOnly && search.isEmpty {
+            if sections.isEmpty && upcoming.isEmpty && filtering && search.isEmpty {
                 ContentUnavailableView {
-                    Label("All cleared", systemImage: "checkmark.circle")
+                    if uncategorizedOnly && !unclearedOnly { Label("All categorized", systemImage: "tag") }
+                    else if unclearedOnly && !uncategorizedOnly { Label("All cleared", systemImage: "checkmark.circle") }
+                    else { Label("No matching transactions", systemImage: "line.3.horizontal.decrease.circle") }
                 } description: {
-                    Text("Every transaction here has cleared.")
+                    if uncategorizedOnly && !unclearedOnly { Text("Every transaction here has a category.") }
+                    else if unclearedOnly && !uncategorizedOnly { Text("Every transaction here has cleared.") }
+                    else { Text("No uncleared transaction here is missing a category.") }
                 } actions: {
-                    Button("Show All Transactions") { withAnimation(.snappy) { unclearedOnly = false } }
+                    Button("Show All Transactions") {
+                        withAnimation(.snappy) { unclearedOnly = false; uncategorizedOnly = false }
+                    }
                 }
             } else if sections.isEmpty && upcoming.isEmpty {
                 ContentUnavailableView(search.isEmpty ? "A fresh start" : "No matching transactions", systemImage: search.isEmpty ? "list.bullet.rectangle" : "magnifyingglass", description: Text(search.isEmpty ? "Your transactions will appear here. Add one to keep your budget up to date." : "Try a different payee, category, or amount."))
@@ -106,6 +119,7 @@ struct TransactionsView: View {
         }
         .onChange(of: search) { shownCount = TransactionSection.pageSize }
         .onChange(of: unclearedOnly) { shownCount = TransactionSection.pageSize }
+        .onChange(of: uncategorizedOnly) { shownCount = TransactionSection.pageSize }
         .navigationTitle(accountName ?? "Transactions")
         .searchable(text: $search, prompt: "Payee, category, or amount")
         .toolbar {
@@ -237,8 +251,9 @@ struct TransactionsView: View {
     }
 
     /// Actual's mobile account menu.
-    /// Quick filters, as the budget shows them. Uncleared turns on and off, with how many transactions it shows.
-    private func filterBar(unclearedCount: Int) -> some View {
+    /// Quick filters, as the budget shows them. Each turns on and off, with how many transactions it shows,
+    /// and together they show transactions matching both. Off-budget accounts never need categories.
+    private func filterBar(unclearedCount: Int, uncategorizedCount: Int) -> some View {
         Section {
             ScrollView(.horizontal) {
                 HStack(spacing: 8) {
@@ -247,6 +262,13 @@ struct TransactionsView: View {
                         withAnimation(.snappy) { unclearedOnly.toggle() }
                     }
                     .accessibilityIdentifier("transactions.uncleared")
+                    if account?.offbudget != true {
+                        FilterChip(title: "Uncategorized", count: uncategorizedCount, isSelected: uncategorizedOnly,
+                                   countLabel: Text("^[\(uncategorizedCount) transaction](inflect: true)")) {
+                            withAnimation(.snappy) { uncategorizedOnly.toggle() }
+                        }
+                        .accessibilityIdentifier("transactions.uncategorized")
+                    }
                 }
             }
             .scrollIndicators(.hidden).scrollBounceBehavior(.basedOnSize, axes: .horizontal)

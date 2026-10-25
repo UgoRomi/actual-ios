@@ -442,6 +442,12 @@ Not verified end to end: merging several selected payees and deleting them in th
 
 Validated on 2026-10-12. The **Uncleared** chip uses the same `FilterChip` as the budget's filters. The UI test `testDemoUnclearedFilter` passed on a new iPhone 17 Pro / iOS 27 simulator: it adds an uncleared transaction to a demo account, turns the chip on (cleared rows disappear, the new one stays), and turns it off again. Screenshots of both states were inspected.
 
+## Uncategorized filter chip
+
+Added on 2026-10-25 beside **Uncleared**. It keeps the transactions `Transaction.missingCategories` marks, so the chip, its count, and the register's **Uncategorized** badges agree: transfers, reconciliation adjustments (notes `Reconciliation balance adjustment`, as `Engine/reconcile.ts` writes them), and off-budget accounts are left out, and off-budget registers do not show the chip. With both chips on, a transaction must match both.
+
+Not yet run: written on a Linux container without Swift, so neither `./scripts/test-transactions.sh` (new cases for the filter alone and combined with Uncleared) nor the UI test `testDemoUncategorizedFilter` (adds a transaction without a category and a reconciliation adjustment, then checks the chip hides only the adjustment) has been run.
+
 ## Ledger and Manila themes (2026-10-14)
 
 Two presets join Actual, Sterling, and Payday. **Ledger** takes its colors from a bookkeeper's ledger: pale green paper, blue ruling ink as the accent, red ink for overspending, and a bottle-green summary card; in dark appearance, a green-black page with pale blue ink. **Manila** is a cash envelope: a kraft page and rows of envelope paper, a stamp-pad indigo accent, and a brown kraft summary card; in dark appearance the card turns to light kraft with black text, as Sterling's turns to silver.
