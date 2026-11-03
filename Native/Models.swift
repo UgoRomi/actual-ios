@@ -529,6 +529,26 @@ enum TransactionChange: Sendable {
 
 struct Payee: Decodable, Identifiable, Sendable { let id: String; let name: String; var favorite = false }
 
+/// The payee picker's lists for a search. It runs on every keystroke, so each list
+/// is built once in linear time; a budget can hold thousands of payees.
+struct PayeeSearch {
+    /// As Actual's payee autocomplete: favorites and common payees first, under "Suggested Payees".
+    let suggested: [Payee]
+    /// The other matching payees, in their order.
+    let others: [Payee]
+    /// Actual reuses a payee whose name differs only in case, so do not offer to add one.
+    let canAdd: Bool
+
+    init(payees: [Payee], suggestedIDs: [String], query: String) {
+        let matches = query.isEmpty ? payees : payees.filter { $0.name.localizedCaseInsensitiveContains(query) }
+        let byID = Dictionary(matches.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        suggested = suggestedIDs.compactMap { byID[$0] }
+        let suggestedIDs = Set(suggested.map(\.id))
+        others = matches.filter { !suggestedIDs.contains($0.id) }
+        canAdd = !query.isEmpty && !payees.contains { $0.name.compare(query, options: .caseInsensitive) == .orderedSame }
+    }
+}
+
 /// A tag for #tags in notes, as Actual's tags page lists them.
 struct Tag: Decodable, Identifiable, Sendable, Hashable {
     let id: String
