@@ -128,6 +128,8 @@ Simulator UI checks are in `Tests/UITests`. See [docs/validation.md](docs/valida
 
 Run `./scripts/test-amounts.sh` for amount entry: localized numbers, calculations, rounding, and invalid input.
 
+Run `./scripts/test-payees.sh` for the payee picker's search: suggestions, the add choice, and that searching 5,000 payees stays fast.
+
 Run `./scripts/test-goal-description.sh` on a Mac with Apple Intelligence turned on to evaluate described targets against the on-device model with 21 phrasings, from yearly bills and percentages of income to caps and schedules; elsewhere it reports SKIP. The model's answers can change with its version, so the output names each case.
 
 Run `./scripts/test-themes.sh` for themes: color parsing and contrast, that every preset keeps text, amounts, and its accent legible in both appearances, and adding, editing, saving, and deleting your own themes.

@@ -558,33 +558,24 @@ struct PayeePicker: View {
     @FocusState private var searchFocused: Bool
 
     private var query: String { search.trimmingCharacters(in: .whitespacesAndNewlines) }
-    private var matches: [Payee] {
-        query.isEmpty ? payees : payees.filter { $0.name.localizedCaseInsensitiveContains(query) }
-    }
-    /// As Actual's payee autocomplete: favorites and common payees first, under "Suggested Payees".
-    private var suggested: [Payee] {
-        let byID = Dictionary(matches.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
-        return (model.overview?.suggestedPayeeIds ?? []).compactMap { byID[$0] }
-    }
     private var matchingAccounts: [Account] {
         query.isEmpty ? accounts : accounts.filter { $0.name.localizedCaseInsensitiveContains(query) }
     }
-    /// Actual reuses a payee whose name differs only in case, so do not offer to add one.
-    private var canAdd: Bool {
-        !query.isEmpty && !payees.contains { $0.name.compare(query, options: .caseInsensitive) == .orderedSame }
-    }
 
     var body: some View {
+        let query = self.query
+        let found = PayeeSearch(payees: payees, suggestedIDs: model.overview?.suggestedPayeeIds ?? [], query: query)
+        let matchingAccounts = self.matchingAccounts
         ThemedList {
-            if canAdd {
+            if found.canAdd {
                 Section {
                     Button { choose(query) } label: { Label("Add “\(query)”", systemImage: "plus.circle") }
                 }
             }
             if query.isEmpty { Section { choice(noneLabel, value: "") } }
-            if !suggested.isEmpty {
+            if !found.suggested.isEmpty {
                 Section("Suggested Payees") {
-                    ForEach(suggested) { payee in choice(payee.name, value: payee.name, favorite: payee.favorite) }
+                    ForEach(found.suggested) { payee in choice(payee.name, value: payee.name, favorite: payee.favorite) }
                 }
             }
             // Before payees: the account list is short, and payees can number in the hundreds.
@@ -604,9 +595,8 @@ struct PayeePicker: View {
                     }
                 }
             }
-            let others = matches.filter { payee in !suggested.contains { $0.id == payee.id } }
-            if !others.isEmpty {
-                Section("Payees") { ForEach(others) { payee in choice(payee.name, value: payee.name) } }
+            if !found.others.isEmpty {
+                Section("Payees") { ForEach(found.others) { payee in choice(payee.name, value: payee.name) } }
             }
         }
         .navigationTitle("Payee").navigationBarTitleDisplayMode(.inline)
