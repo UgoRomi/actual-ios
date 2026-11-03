@@ -30,10 +30,10 @@
 		54A2091B7FBAD00DDF959F31 /* ActualWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14762814060BC0D9E4BB90EF /* ActualWidget.swift */; };
 		5C1A7E0B9D2F4A6E8B3C1D20 /* Native/Views/AmountField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E4B2C7A1F6D3E8B5A0C4F21 /* Native/Views/AmountField.swift */; };
 		5C1A7E0B9D2F4A6E8B3C1E31 /* Native/Views/BalanceFeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E4B2C7A1F6D3E8B5A0C4E32 /* Native/Views/BalanceFeedbackView.swift */; };
-		6292B24D93154C6A25CA48FB /* Native/Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0AAF66868F872CE43E775077 /* Native/Assets.xcassets */; };
-		6773E3F2849B62EF2317BF27 /* Native/ActualNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3D9589739A3279854188C92 /* Native/ActualNativeApp.swift */; };
 		5E1A9C3D7B2F4E6A8C0D1E21 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 5E1A9C3D7B2F4E6A8C0D1E20 /* PrivacyInfo.xcprivacy */; };
 		5E1A9C3D7B2F4E6A8C0D1E23 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 5E1A9C3D7B2F4E6A8C0D1E22 /* PrivacyInfo.xcprivacy */; };
+		6292B24D93154C6A25CA48FB /* Native/Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 0AAF66868F872CE43E775077 /* Native/Assets.xcassets */; };
+		6773E3F2849B62EF2317BF27 /* Native/ActualNativeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3D9589739A3279854188C92 /* Native/ActualNativeApp.swift */; };
 		6E1558E6E4ED0F4EB6464BCC /* ActualNativeWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 88C2D1F425FD0D4B7ADC3B2E /* ActualNativeWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		6E1F6E9757C9755493C9A6A3 /* Native/Views/TargetsEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4E7BEFC3B3FF10A7AD58AF0 /* Native/Views/TargetsEditor.swift */; };
 		6E739054A39D46758AFA85A3 /* Native/Views/RulesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4125543F935A49B49486C33E /* Native/Views/RulesView.swift */; };
@@ -123,6 +123,8 @@
 		443F99244216BE707150CE77 /* Native/Views/AccountsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/AccountsView.swift; sourceTree = "<group>"; };
 		4BE2ABA870DD3012B1FCB4CE /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
 		50EE63C13CD64073B3C0A282 /* Native/Views/SchedulesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/SchedulesView.swift; sourceTree = "<group>"; };
+		5E1A9C3D7B2F4E6A8C0D1E20 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Native/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		5E1A9C3D7B2F4E6A8C0D1E22 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Widget/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		66177DE593ACD3F7FBE818F7 /* Native/Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Models.swift; sourceTree = "<group>"; };
 		6A24D3505F8B4997956B4A63 /* Native/Views/ReportsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ReportsView.swift; sourceTree = "<group>"; };
 		6D5D76757B1F406481F8379E /* Native/Views/ReportComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ReportComponents.swift; sourceTree = "<group>"; };
@@ -139,8 +141,8 @@
 		90A8172AA7B91566B2A3FB6A /* WidgetSupport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = WidgetSupport.swift; path = Native/WidgetSupport.swift; sourceTree = "<group>"; };
 		9A70C3736FC9438A8E9E43FF /* Native/Views/CategoryTransactionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/CategoryTransactionsView.swift; sourceTree = "<group>"; };
 		9B5E55D034124E4FA7708A32 /* Native/Views/ManageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/ManageViews.swift; sourceTree = "<group>"; };
-		9E4B2C7A1F6D3E8B5A0C4F21 /* Native/Views/AmountField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/AmountField.swift; sourceTree = "<group>"; };
 		9E4B2C7A1F6D3E8B5A0C4E32 /* Native/Views/BalanceFeedbackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/BalanceFeedbackView.swift; sourceTree = "<group>"; };
+		9E4B2C7A1F6D3E8B5A0C4F21 /* Native/Views/AmountField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/AmountField.swift; sourceTree = "<group>"; };
 		A1BB505D4A3C7BD92A98DA78 /* Intents.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = Intents.swift; path = Native/Intents.swift; sourceTree = "<group>"; };
 		AB9A221DDF49480E9A44C372 /* Native/Importing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Importing.swift; sourceTree = "<group>"; };
 		B7166B33BC754AD2B0247743 /* Native/Schedules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Schedules.swift; sourceTree = "<group>"; };
@@ -151,8 +153,6 @@
 		D8ECE5380F8A47469DB342D8 /* Native/Views/BudgetActionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/BudgetActionsView.swift; sourceTree = "<group>"; };
 		E3D9589739A3279854188C92 /* Native/ActualNativeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/ActualNativeApp.swift; sourceTree = "<group>"; };
 		E4E7BEFC3B3FF10A7AD58AF0 /* Native/Views/TargetsEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/TargetsEditor.swift; sourceTree = "<group>"; };
-		5E1A9C3D7B2F4E6A8C0D1E20 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Native/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
-		5E1A9C3D7B2F4E6A8C0D1E22 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = Widget/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		EB6B237153F43152E6F44E9A /* Info.plist */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.plist.xml; name = Info.plist; path = Widget/Info.plist; sourceTree = "<group>"; };
 		F19188F7225770AF6FD525C0 /* Native/Views/TransactionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Native/Views/TransactionsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -573,6 +573,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Native/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Actual Native";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -622,7 +623,7 @@
 				DEVELOPMENT_TEAM = DXQYB82U9V;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				PRODUCT_BUNDLE_IDENTIFIER = org.actualnative.ios.uitests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ugoromi.actualnative.ios.uitests;
 				PRODUCT_NAME = ActualNativeUITests;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 6.0;
@@ -642,6 +643,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Native/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Actual Native";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -673,7 +675,7 @@
 				DEVELOPMENT_TEAM = DXQYB82U9V;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
-				PRODUCT_BUNDLE_IDENTIFIER = org.actualnative.ios.uitests;
+				PRODUCT_BUNDLE_IDENTIFIER = com.ugoromi.actualnative.ios.uitests;
 				PRODUCT_NAME = ActualNativeUITests;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SWIFT_VERSION = 6.0;
